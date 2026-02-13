@@ -118,3 +118,7 @@ returns:
 {
   "seed": "E-0,0DtN-1,0FxN-2,0HzN-2,1LuN-1,1KvR-0,1GwN-0,2CyN-1,2HuF-2,2AwS"
 }
+
+## get user profile
+
+## Load map

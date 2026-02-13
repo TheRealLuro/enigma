@@ -29,7 +29,7 @@ def create_user(request: Request, username: str, passwd: str, token: str):
     user = {
         "username": username,
         "password": hashed_password,
-        "maps_discovered":maps_discovered,
+        "maps_discovered": maps_discovered,
         "number_of_maps_played": number_of_maps_played,
         "maps_completed": maps_completed,
         "maps_lost": maps_lost
