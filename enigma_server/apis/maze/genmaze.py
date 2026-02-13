@@ -8,7 +8,7 @@ router = APIRouter(prefix="/maze")
 
 
 @router.get("/genseed")
-@limiter.limit(limit_value="1/minute")
+@limiter.limit("1/minute")
 def return_seed(request: Request, difficulty: str, size: int, token: str):
 
     if token != app_token:
