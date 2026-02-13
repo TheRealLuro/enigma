@@ -2,6 +2,8 @@
 # how to request to api.
 replace anything with {} with that value by itself, so ?map_name={map_name} becomes ?map_name=randomname
 
+docs url: https://https://nonelastic-prorailroad-gillian.ngrok-free.dev/docs
+
 ## add new map 
 https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/maps/add?map_name={map_name}&seed={seed}&size={size}&difficulty={difficulty}&founder={founders username}&time_completed={formatted 00:00:00:00}first_rating={rating}
 
