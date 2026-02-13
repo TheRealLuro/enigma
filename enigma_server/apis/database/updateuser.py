@@ -7,13 +7,13 @@ router = APIRouter(prefix="/database/users")
 
 @router.put("/update_progress")
 def update_user_progress(
-    user_id: str,
+    username: str,
     map_seed: str,
     seed_existed: bool = True,
     map_lost: bool = False
 ):
     # Find user
-    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    user = users_collection.find_one({"username": username})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -35,6 +35,6 @@ def update_user_progress(
     if not seed_existed:
         update_query["$addToSet"] = {"maps_discovered": map_id}
 
-    result = users_collection.update_one({"_id": ObjectId(user_id)}, update_query)
+    result = users_collection.update_one({"username": username}, update_query)
 
     return {"status": "success", "modified_count": result.modified_count}

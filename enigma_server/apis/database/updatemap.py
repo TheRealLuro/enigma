@@ -46,7 +46,7 @@ def update_map(
             raise HTTPException(status_code=400, detail="Rating must be 1-10")
 
         update_query.setdefault("$push", {})
-        update_query["$push"]["ratings"] = rating
+        update_query["$push"]["rating"] = rating
 
     # ⭐ Check best time
     if time_to_compare is not None:
