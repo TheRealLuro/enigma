@@ -1,13 +1,15 @@
 from fastapi import APIRouter, HTTPException
-from .db import maps_collection, users_collection
+from .db import maps_collection, users_collection, app_token
 from datetime import datetime
 from bson import ObjectId
+from slowapi import limiter
+
 
 router = APIRouter(prefix="/database/maps")
 
-## only call when its a new seed
 
 @router.post("/add")
+@limiter.limit("1/minute")
 def add_map(
     map_name: str,
     seed: str,
@@ -15,26 +17,31 @@ def add_map(
     difficulty: str,
     founder: str,
     time_completed: str,
-    first_rating: int
+    first_rating: int,
+    token: str,
 ):
-    # Check if map already exists by name or seed
+    import hmac
+    if not hmac.compare_digest(token, app_token):
+        raise HTTPException(401)
+
+    
+
     if maps_collection.find_one({"map_name": map_name}) or maps_collection.find_one({"seed": seed}):
         raise HTTPException(status_code=400, detail="Map already exists")
 
-    # Parse completion time
+
     try:
         hours, minutes, seconds, milliseconds = map(int, time_completed.split(":"))
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid time format. Use HH:MM:SS:MS")
 
-    # Validate rating
+
     if first_rating is not None:
         if first_rating < 1 or first_rating > 10:
             raise HTTPException(status_code=400, detail="Rating must be 1-10")
 
     rating = [first_rating]
 
-    # Insert map
     result = maps_collection.insert_one({
         "map_name": map_name,
         "seed": seed,
@@ -55,7 +62,6 @@ def add_map(
 
     map_id = result.inserted_id
 
-    # Add map ObjectId to founder's maps_discovered
     update_result = users_collection.update_one(
         {"username": founder},
         {"$addToSet": {"maps_discovered": map_id}}

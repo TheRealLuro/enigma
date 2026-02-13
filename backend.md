@@ -2,10 +2,12 @@
 # how to request to api.
 replace anything with {} with that value by itself, so ?map_name={map_name} becomes ?map_name=randomname
 
+# YOU CANNOT USE THESE APIS WITHOUT THE TOKEN I HAVE. # 
+
 docs url: https://https://nonelastic-prorailroad-gillian.ngrok-free.dev/docs
 
 ## add new map 
-https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/maps/add?map_name={map_name}&seed={seed}&size={size}&difficulty={difficulty}&founder={founders username}&time_completed={formatted 00:00:00:00}first_rating={rating}
+https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/maps/add?map_name={map_name}&seed={seed}&size={size}&difficulty={difficulty}&founder={founders username}&time_completed={formatted 00:00:00:00}&first_rating={rating}&token={token}
 
 returns 
 {
@@ -25,7 +27,7 @@ can sort by {
     "map_name"
 }
 
-https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/leaderboard/leaderboard?sort_by={sorter}&order={order}
+https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/leaderboard/leaderboard?token={token}&sort_by={sorter}&order={order}
 
 returns
 {
@@ -55,7 +57,7 @@ returns
 
 ## login 
 
-request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/users/login?username={username}&passwd={password}
+request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/users/login?username={username}&passwd={password}&token={token}
 
 returns 
 {
@@ -76,7 +78,7 @@ returns
 
 
 ## Sign up
-request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/users/new?username={username}&passwd={password}
+request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/users/new?username={username}&passwd={password}&token={}
 
 return 
 {
@@ -89,7 +91,7 @@ return
 ## Update map (updates best time if needed and adds the rating)
 !! ONLY CALL THIS IF THE SEED IS LOADED OR EXISTS !!
 
-request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/maps/update_map?seed={seed}&username={username}&completion_time={formatted 00:00:00:00}rating={rating}
+request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/maps/update_map?seed={seed}&username={username}&completion_time={formatted 00:00:00:00}&token={token}rating={rating}
 
 returns 
 {
@@ -99,7 +101,7 @@ returns
 
 ## update user stats
 
-request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/users/update_progress?username={username}&map_seed={seed they just played}&seed_existed={did it exist, true or false}&map_lost={did they win, true or false}
+request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/users/update_progress?username={username}&map_seed={seed_they_just_played}&token={token}&seed_existed={did_it_exist,_true_or_false}&map_lost={did_they_win,_true_or_false}
 
 returns
 {
@@ -110,7 +112,7 @@ returns
 
 ## Generate seed
 
-request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/maze/genseed?difficulty={difficulty}&size={size}
+request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/maze/genseed?difficulty={difficulty}&size={size}&token={}
 
 returns:
 {

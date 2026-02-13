@@ -4,3 +4,4 @@ pyngrok
 python-dotenv
 pymongo
 bcrypt
+slowapi

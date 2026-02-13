@@ -1,11 +1,18 @@
 from fastapi import APIRouter, HTTPException
-from .db import users_collection
+from .db import users_collection, app_token
 import bcrypt
+from slowapi import limiter
 
 router = APIRouter(prefix="/database/users")
 
 @router.post("/new")
-def create_user(username: str, passwd: str):
+@limiter.limit("2/minute")
+def create_user(username: str, passwd: str, token: str):
+
+    import hmac
+    if not hmac.compare_digest(token, app_token):
+        raise HTTPException(401)
+    
     if users_collection.find_one({"username": username}):
         raise HTTPException(status_code=400, detail="User already exists")
     
