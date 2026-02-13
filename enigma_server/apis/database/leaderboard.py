@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from .db import maps_collection, app_token
+from decoder import decode
 
 router = APIRouter(prefix="/database/leaderboard")
 
@@ -20,7 +21,7 @@ def get_maps_leaderboard(
     ]
 
     import hmac
-    if not hmac.compare_digest(token, app_token):
+    if not hmac.compare_digest(decode(token), app_token):
         raise HTTPException(401)
 
     if sort_by not in allowed_fields:

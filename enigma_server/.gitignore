@@ -1,2 +1,5 @@
 .env
 Dockerfile
+decoder.py
+encoder.py
+something.txt

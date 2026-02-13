@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from .db import maps_collection, app_token
-from slowapi import limiter
+from main import limiter
+from decoder import decode
 
 
 router = APIRouter(prefix="/database/maps")
@@ -18,6 +19,7 @@ def time_obj_to_ms(time_obj):
 @router.put("/update_map")
 @limiter.limit("1/minute")
 def update_map(
+    request: Request,
     seed: str,
     username: str,
     completion_time: str, 
@@ -26,7 +28,7 @@ def update_map(
 ):
     
     import hmac
-    if not hmac.compare_digest(token, app_token):
+    if not hmac.compare_digest(decode(token), app_token):
         raise HTTPException(401)
     
     hours, minutes, seconds, milliseconds = map(int, completion_time.split(":"))

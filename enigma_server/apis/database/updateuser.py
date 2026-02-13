@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from .db import users_collection, maps_collection, app_token
-from bson import ObjectId
-from slowapi import limiter
+from main import limiter
+from decoder import decode
 
 router = APIRouter(prefix="/database/users")
 
@@ -9,6 +9,7 @@ router = APIRouter(prefix="/database/users")
 @router.put("/update_progress")
 @limiter.limit("1/minute")
 def update_user_progress(
+    request: Request,
     username: str,
     map_seed: str,
     token: str,
@@ -17,7 +18,7 @@ def update_user_progress(
 ):
 
     import hmac
-    if not hmac.compare_digest(token, app_token):
+    if not hmac.compare_digest(decode(token), app_token):
         raise HTTPException(401)
 
 

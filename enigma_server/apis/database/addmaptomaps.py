@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from .db import maps_collection, users_collection, app_token
 from datetime import datetime
-from bson import ObjectId
-from slowapi import limiter
+from main import limiter
+from decoder import decode
 
 
 router = APIRouter(prefix="/database/maps")
@@ -11,6 +11,7 @@ router = APIRouter(prefix="/database/maps")
 @router.post("/add")
 @limiter.limit("1/minute")
 def add_map(
+    request: Request,
     map_name: str,
     seed: str,
     size: int,
@@ -21,7 +22,7 @@ def add_map(
     token: str,
 ):
     import hmac
-    if not hmac.compare_digest(token, app_token):
+    if not hmac.compare_digest(decode(token), app_token):
         raise HTTPException(401)
 
     

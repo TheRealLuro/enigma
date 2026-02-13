@@ -10,7 +10,7 @@ def get_client_ip(request: Request):
     return request.client.host
 
 limiter = Limiter(key_func=get_client_ip)
-app = FastAPI()
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 
 app.state.limiter = limiter
