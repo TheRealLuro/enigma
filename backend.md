@@ -112,7 +112,7 @@ returns
 
 ## Generate seed
 
-request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/maze/genseed?difficulty={difficulty}&size={size}&token={}
+request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/maze/genseed?difficulty={difficulty}&size={size}&token={token}
 
 returns:
 {
@@ -120,5 +120,17 @@ returns:
 }
 
 ## get user profile
+request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/users/getuser?username={username}&passwd={password}&token={token}
+
+returns:
+{
+  All user data and their founded maps data
+}
 
 ## Load map
+request url: https://nonelastic-prorailroad-gillian.ngrok-free.dev/database/maps/load_map?map_name={mapname}&token={token}
+
+returns:
+{
+  "seed": seed
+}
