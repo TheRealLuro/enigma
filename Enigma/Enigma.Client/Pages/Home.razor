@@ -1,0 +1,24 @@
+﻿@page "/"
+
+<PageTitle>Start</PageTitle>
+
+<h1>Start Page</h1>
+<img class="img-title" src="favicon.png" />
+<button class="btn btn-primary" @onclick="OnPlayClick">Play Game</button>
+<button class="btn btn-primary" @onclick="OnLeaderboardsClick">Leaderboards</button>
+
+@code{
+    [Inject]
+    NavigationManager NavigationManager { get; set; }
+
+    void OnPlayClick()
+    {
+        NavigationManager.NavigateTo("/play");
+    }
+
+    void OnLeaderboardsClick()
+    {
+        NavigationManager.NavigateTo("/leaderboard");
+    }
+
+}

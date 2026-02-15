@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Enigma/Enigma.Client/Enigma.Client.csproj" />
+  <Project Path="Enigma/Enigma/Enigma.csproj" />
+</Solution>

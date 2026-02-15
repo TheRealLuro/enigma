@@ -1,0 +1,15 @@
+﻿@page "/leaderboard"
+
+<h1>Leaderboard</h1>
+
+<button class="btn btn-primary" @onclick="OnBackClick">Back</button>
+
+@code {
+    [Inject]
+    NavigationManager NavigationManager { get; set; }
+
+    private void OnBackClick()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+}

@@ -1,0 +1,76 @@
+﻿@page "/play"
+
+<PageTitle>Play Game</PageTitle>
+
+<h1>Play Game</h1>
+<br />
+<p>
+    <EditForm FormName="NewForm" OnValidSubmit="OnNewClick" Model="mapEnter">
+        <DataAnnotationsValidator />
+        <div>
+            <label for="difficulty">Difficulty:</label>
+            <InputSelect id="difficulty" @bind-Value="mapEnter.MapDifficulty">
+                @foreach (var difficulty in Enum.GetValues<Difficulty>())
+                {
+                    <option value="@difficulty">@difficulty</option>
+                }
+            </InputSelect>
+        </div>
+        <div>
+            <label for="size">Size:</label>
+            <InputNumber id="size" @bind-Value="mapEnter.MapSize" class="form-control" />
+            <ValidationMessage For="() => mapEnter.MapSize" />
+        </div>
+        <button class="btn btn-primary">Generate</button>
+    </EditForm>
+</p>
+<br />
+<p>
+    <EditForm FormName="FromNameForm" OnValidSubmit="OnSeedClick" Model="mapEnter">
+        <DataAnnotationsValidator />
+        <div>
+            <label for="map">From Name:</label>
+            <InputText id="map" @bind-Value="mapEnter.MapName" class="form-control" />
+            <ValidationMessage For="() => mapEnter.MapName" />
+        </div>
+        <button class="btn btn-primary">Go</button>
+    </EditForm>
+</p>
+<button class="btn btn-primary" @onclick="OnBackClick">Back</button>
+
+
+
+@code {
+    [Inject]
+    NavigationManager NavigationManager { get; set; }
+    [Inject]
+    HttpClient Http { get; set; }
+    private Map mapEnter = new Map();
+
+    private string Seed;
+
+    async Task OnNewClick()
+    {
+        await GetSeedNew(mapEnter.MapDifficulty.ToString().ToLower(), mapEnter.MapSize);
+    }
+
+    async Task OnSeedClick()
+    {
+        await GetSeedFromName(mapEnter.MapName);
+    }
+
+    private async Task GetSeedFromName(string name)
+    {
+        Seed = await Http.GetStringAsync($"/api/API/load?name={name}");
+    }
+
+    private async Task GetSeedNew(string difficulty, int size)
+    {
+        Seed = await Http.GetStringAsync($"/api/API/new?difficulty={difficulty}&size={size}");
+    }
+
+    private void OnBackClick()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+}

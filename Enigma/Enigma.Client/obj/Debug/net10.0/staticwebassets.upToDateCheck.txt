@@ -1,0 +1,4 @@
+wwwroot\appsettings.Development.json
+wwwroot\appsettings.json
+C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma.Client\wwwroot\appsettings.Development.json
+C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma.Client\wwwroot\appsettings.json
