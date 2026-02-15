@@ -3,3 +3,21 @@
 ################################################################################
 
 /.vs
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.idea/
+.vscode/
+appsettings.Development.json
+*.pfx
+Thumbs.db
+ehthumbs.db
+.DS_Store
+*.log
+node_modules/
+TestResults/
+Important/
+**/something.txt
