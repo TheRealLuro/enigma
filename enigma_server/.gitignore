@@ -1,0 +1,17 @@
+.env
+Dockerfile
+decoder.py
+encoder.py
+something.txt
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.DS_Store
+Thumbs.db
+*.pfx
+appsettings.Development.json
+Important/
