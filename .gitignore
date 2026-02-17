@@ -21,3 +21,4 @@ node_modules/
 TestResults/
 Important/
 **/something.txt
+.txt
