@@ -21,6 +21,7 @@ db = client[db_name]
 
 users_collection = db.users
 maps_collection = db.maps
-map_leaderboards_collection = db.map_leaderboards
-game_sessions_collection = db.game_sessions
-user_map_progress_collection = db.user_map_progress
+marketplace_collection = db.map_marketplace
+merchant = db.item_shop
+shop_state = db.shop_state
+item_inventory = db.item_inventory

@@ -3,12 +3,13 @@ from .db import users_collection, app_token
 import bcrypt
 from main import limiter
 from decoder import decode
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/database/users")
 
-@router.post("/new")
+@router.post("/signup")
 @limiter.limit("2/minute")
-def create_user(request: Request, username: str, passwd: str, token: str):
+def create_user(request: Request, username: str, email: str, passwd: str, token: str):
 
     import hmac
     if not hmac.compare_digest(decode(token), app_token):
@@ -21,18 +22,22 @@ def create_user(request: Request, username: str, passwd: str, token: str):
     hashed_bytes = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
     hashed_password = hashed_bytes.decode('utf-8')  
 
-    maps_discovered = []
-    number_of_maps_played = 0
-    maps_completed = 0
-    maps_lost = 0
 
     user = {
         "username": username,
+        "email": email,
         "password": hashed_password,
-        "maps_discovered": maps_discovered,
-        "number_of_maps_played": number_of_maps_played,
-        "maps_completed": maps_completed,
-        "maps_lost": maps_lost
+        "maze_nuggets": 0,
+        "friends" : [],
+        "friend_requests" : [],
+        "maps_discovered": [],
+        "maps_owned" : [],
+        "owned_cosmetics": [],
+        "item_counts": {},
+        "number_of_maps_played": 0,
+        "maps_completed": 0,
+        "maps_lost": 0,
+        "last_login_at": datetime.now(timezone.utc)
     }
     
     result = users_collection.insert_one(user)

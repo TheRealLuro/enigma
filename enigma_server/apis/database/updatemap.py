@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request
 from .db import maps_collection, app_token
 from main import limiter
 from decoder import decode
+import random
 
 
 router = APIRouter(prefix="/database/maps")
@@ -24,7 +25,7 @@ def update_map(
     username: str,
     completion_time: str, 
     token: str, 
-    rating: int = None, 
+    rating: int = random.randint(0,10), 
 ):
     
     import hmac

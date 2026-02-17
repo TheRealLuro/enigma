@@ -2,6 +2,9 @@ from fastapi import FastAPI, Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
+import asyncio
+
+from apis.database.item_shop_stocker import ensure_shop_seeded, shop_restock_scheduler
 
 def get_client_ip(request: Request):
     x_forwarded_for = request.headers.get("X-Forwarded-For")
@@ -32,3 +35,16 @@ def load_routers(package):
             app.include_router(module.router)
 
 load_routers(apis)
+
+
+@app.on_event("startup")
+async def startup_jobs():
+    ensure_shop_seeded()
+    app.state.shop_restock_task = asyncio.create_task(shop_restock_scheduler())
+
+
+@app.on_event("shutdown")
+async def shutdown_jobs():
+    task = getattr(app.state, "shop_restock_task", None)
+    if task:
+        task.cancel()
