@@ -1,0 +1,121 @@
+﻿@page "/register"
+
+<div class="content" style="max-width: 480px; margin-top: 60px;">
+    <div class="card p-4 shadow-sm">
+
+        <h3 class="mb-4 text-center">Create Account</h3>
+
+        <EditForm Model="newUser" OnValidSubmit="OnRegisterClick">
+            <DataAnnotationsValidator />
+
+            <div class="mb-3">
+                <label class="form-label">Display Name</label>
+                <InputText class="form-control"
+                           @bind-Value="newUser.DisplayName"
+                           placeholder="MazeMaster42" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <InputText class="form-control"
+                           @bind-Value="newUser.Email"
+                           placeholder="you@example.com" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText type="password"
+                           class="form-control"
+                           @bind-Value="password"
+                           placeholder="••••••••" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Confirm Password</label>
+                <InputText type="password"
+                           class="form-control"
+                           @bind-Value="confirmPassword"
+                           placeholder="••••••••" />
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+                Sign Up
+            </button>
+        </EditForm>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-3">
+                @errorMessage
+            </div>
+        }
+
+        <div class="mt-4 text-center text-muted">
+            Already have an account?
+            <button class="btn btn-link p-0"
+                    @onclick="OnLoginClick">
+                Sign In
+            </button>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    [Inject]
+    NavigationManager NavigationManager { get; set; } = default!;
+
+    [Inject]
+    HttpClient Http { get; set; }
+
+    RegisterUser newUser = new();
+    string password = string.Empty;
+    string confirmPassword = string.Empty;
+
+    string? errorMessage;
+
+    async Task OnRegisterClick()
+    {
+        errorMessage = null;
+
+        if (password != confirmPassword)
+        {
+            errorMessage = "Passwords do not match.";
+            return;
+        }
+
+        var url =
+            $"api/auth/signUp?username={newUser.DisplayName}" +
+            $"&email={newUser.Email}" +
+            $"&password={password}";
+
+        try
+        {
+            var response =
+                await Http.GetFromJsonAsync<SignUpResponse>(url);
+
+            if (response == null || response.Status != "success")
+            {
+                errorMessage = "Sign up failed.";
+                return;
+            }
+
+            // Success 🎉
+            NavigationManager.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+    }
+
+    void OnLoginClick()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+
+    public class RegisterUser
+    {
+        public string DisplayName { get; set; } = "";
+        public string Email { get; set; } = "";
+    }
+}

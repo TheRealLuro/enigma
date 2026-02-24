@@ -40,6 +40,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcR2FtZS5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Neumont/WebProjects/Enigma/Enigma/Enigma/Enigma.Client/Pages/GameEnd.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcR2FtZUVuZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Neumont/WebProjects/Enigma/Enigma/Enigma/Enigma.Client/Pages/Home.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcSG9tZS5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
@@ -48,8 +52,20 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcTGVhZGVyYm9hcmQucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/Neumont/WebProjects/Enigma/Enigma/Enigma/Enigma.Client/Pages/Login.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcTG9naW4ucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/Neumont/WebProjects/Enigma/Enigma/Enigma/Enigma.Client/Pages/Play.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUGxheS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Neumont/WebProjects/Enigma/Enigma/Enigma/Enigma.Client/Pages/Profile.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcUHJvZmlsZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Neumont/WebProjects/Enigma/Enigma/Enigma/Enigma.Client/Pages/SignUp.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcU2lnblVwLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/Neumont/WebProjects/Enigma/Enigma/Enigma/Enigma.Client/_Imports.razor]

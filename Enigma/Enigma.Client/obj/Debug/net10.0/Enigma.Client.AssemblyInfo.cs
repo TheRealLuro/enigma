@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Enigma.Client")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b6e05cf73574da1d6698f82a3adadf66c0813d43")]
 [assembly: System.Reflection.AssemblyProductAttribute("Enigma.Client")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Enigma.Client")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,0 +1,66 @@
+﻿@page "/gameend/{Result}"
+
+@inject NavigationManager Nav
+
+<h1 class="mb-4">
+    @(IsWin ? "🎉 You Escaped the Maze!" : "💀 You Were Lost...")
+</h1>
+
+@if (IsWin)
+{
+    <div class="card p-4 shadow-sm mb-4">
+        <h3>Add Your Score to the Leaderboard</h3>
+
+        <div class="mb-3">
+            <label class="form-label">Player Name</label>
+            <input class="form-control" @bind="PlayerName" maxlength="20" />
+        </div>
+
+        <button class="btn btn-success" @onclick="SubmitScore">
+            Submit Score
+        </button>
+    </div>
+}
+else
+{
+    <div class="card p-4 shadow-sm mb-4">
+        <h3>Better luck next time.</h3>
+        <p>Want to try again?</p>
+
+        <button class="btn btn-danger me-2" @onclick="Retry">
+            Retry Maze
+        </button>
+    </div>
+}
+
+<hr />
+
+<button class="btn btn-secondary me-2" @onclick="GoHome">
+    Main Menu
+</button>
+
+@code {
+    [Parameter] public string? Result { get; set; }
+
+    private string PlayerName = string.Empty;
+
+    private bool IsWin =>
+        string.Equals(Result, "win", StringComparison.OrdinalIgnoreCase);
+
+    private void SubmitScore()
+    {
+        // TODO: Leaderboard logic later
+        Console.WriteLine($"Score submitted by {PlayerName}");
+        Nav.NavigateTo("/");
+    }
+
+    private void Retry()
+    {
+        //Nav.NavigateTo("/maze");
+    }
+
+    private void GoHome()
+    {
+        //Nav.NavigateTo("/");
+    }
+}
