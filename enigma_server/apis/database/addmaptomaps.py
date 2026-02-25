@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Request
 from .db import maps_collection, users_collection, app_token
-from datetime import datetime
+from datetime import datetime, timezone
 from main import limiter
 from decoder import decode
 from .map_audit import map_audit
+from imagegen import generate_map_image_payload
 
 
 router = APIRouter(prefix="/database/maps")
@@ -44,8 +45,29 @@ def add_map(
     rating = [first_rating]
     value = map_audit(seed)
 
+    max_image_attempts = 12
+    map_image = None
+    map_theme = None
+    try:
+        for _ in range(max_image_attempts):
+            payload = generate_map_image_payload(seed)
+            map_image = payload["map_image"]
+            map_theme = payload["theme"]
+            if maps_collection.find_one({"map_image": map_image}) is None:
+                break
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail="Could not generate a unique map image after multiple attempts.",
+            )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
     result = maps_collection.insert_one({
         "map_name": map_name,
+        "map_image": map_image,
+        "theme": map_theme,
         "seed": seed,
         "value":  value,
         "size": size,
@@ -54,7 +76,7 @@ def add_map(
         "owner": founder,
         "last_bought": None,
         "founder": founder, 
-        "time_founded": datetime.now(datetime.timezone.utc),
+        "time_founded": datetime.now(timezone.utc),
         "best_time": {
             "hours": hours,
             "minutes": minutes,
@@ -70,8 +92,10 @@ def add_map(
 
     update_result = users_collection.update_one(
         {"username": founder},
-        {"$addToSet": {"maps_discovered": map_id}},
-        {"$inc": {"maze_nuggets": value}}
+        {
+            "$addToSet": {"maps_discovered": map_id},
+            "$inc": {"maze_nuggets": value},
+        },
     )
 
     return {

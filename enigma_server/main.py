@@ -3,6 +3,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 import asyncio
+import diffusionengine
 
 from apis.database.item_shop_stocker import ensure_shop_seeded, shop_restock_scheduler
 
@@ -39,6 +40,7 @@ load_routers(apis)
 
 @app.on_event("startup")
 async def startup_jobs():
+    diffusionengine.preload_pipe()
     ensure_shop_seeded()
     app.state.shop_restock_task = asyncio.create_task(shop_restock_scheduler())
 

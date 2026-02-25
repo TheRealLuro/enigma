@@ -3,3 +3,5 @@ Dockerfile
 decoder.py
 encoder.py
 something.txt
+.png
+.PNG
