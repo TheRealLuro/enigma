@@ -1,9 +1,13 @@
 from fastapi import FastAPI, Request
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import asyncio
 import diffusionengine
+from fastapi.middleware.cors import CORSMiddleware
 
 from apis.database.item_shop_stocker import ensure_shop_seeded, shop_restock_scheduler
 
@@ -14,12 +18,42 @@ def get_client_ip(request: Request):
     return request.client.host
 
 limiter = Limiter(key_func=get_client_ip)
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, default_response_class=JSONResponse)
 
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+origins = [
+    "https://pro150enigma-dfd8aqh7g4cuaxee.canadacentral-01.azurewebsites.net",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # or ["*"] for testing
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_json_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_json_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_json_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(Exception)
+async def fallback_json_handler(request: Request, exc: Exception):
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 import importlib

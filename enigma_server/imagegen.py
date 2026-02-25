@@ -8,7 +8,6 @@ from typing import List, Tuple
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
-import torch
 
 from diffusionengine import get_pipe
 from fetchprompt import get_prompt_pack
@@ -93,12 +92,23 @@ _pending_jobs_lock = threading.Lock()
 _pending_jobs = 0
 
 # Performance/quality balance tuned for SDXL Turbo on modern NVIDIA GPUs.
-DIFFUSE_BASE_STEPS = 18
+DIFFUSE_BASE_STEPS = 24
 DIFFUSE_REFINER_STEPS = 10
-DIFFUSE_CHARACTER_STEPS = 24
+DIFFUSE_CARTOON_BASE_STEPS = 38
+DIFFUSE_CARTOON_REFINER_STEPS = 16
+DIFFUSE_CARTOON_CHARACTER_STEPS = 22
 DIFFUSE_CARTOON_DETAIL_STEPS = 14
-WORK_IMAGE_SIZE = 950
+DIFFUSE_DUNGEON_BASE_STEPS = 36
+DIFFUSE_DUNGEON_REFINER_STEPS = 16
+WORK_IMAGE_SIZE = 1080
 FINAL_IMAGE_SIZE = 2160
+
+# Conservative prompt word caps to stay below SDXL CLIP 77-token limit.
+CLIP_MAIN_WORDS = 28
+CLIP_REFINER_WORDS = 14
+CLIP_NEGATIVE_WORDS = 24
+CLIP_DETAIL_WORDS = 24
+CLIP_LOCAL_WORDS = 24
 
 
 def _upscale_to_target(image: Image.Image, target_size: int = 2160) -> Image.Image:
@@ -118,10 +128,6 @@ def _seed_to_int(seed: str) -> int:
     return int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16], 16)
 
 
-def _rng_for(seed: str, salt: int = 0) -> np.random.Generator:
-    return np.random.default_rng(_seed_to_int(f"{seed}:{salt}"))
-
-
 def _pick_prompt_fragment(rng: np.random.Generator, primary: List[str], secondary: List[str], secondary_weight: float = 0.35) -> str:
     if secondary and rng.random() < secondary_weight:
         return secondary[rng.integers(0, len(secondary))]
@@ -129,8 +135,8 @@ def _pick_prompt_fragment(rng: np.random.Generator, primary: List[str], secondar
 
 
 def _build_prompt(seed: str) -> str:
-    # Seed-coherent prompt assembly for style stability per seed.
-    rng = _rng_for(seed, salt=11)
+    # Non-deterministic style choices each run, while still steering from seed layout features.
+    rng = np.random.default_rng()
     _, _, points, grid_w, grid_h = _seed_context(seed)
 
     mean_x = sum(p[0] for p in points) / max(1, len(points))
@@ -150,10 +156,6 @@ def _build_prompt(seed: str) -> str:
         CORE_PROMPTS[0],
         CORE_PROMPTS[1],
     ]
-    is_cartoon_pack = "cartoon" in PROMPT_PACK_NAME
-    if not is_cartoon_pack:
-        # Keep membrane/default packs tunnel-locked.
-        core.append("first-person tunnel interior, clear central passage, receding layered chambers")
     optional = [
         structure_short,
         glow_short,
@@ -168,7 +170,7 @@ def _build_prompt(seed: str) -> str:
         "no architecture, no rough rock texture, no geometric floor",
     ]
     # Effective occasional organic matter (kept subtle).
-    if rng.random() < 0.22:
+    if rng.random() < 0.18:
         optional.insert(0, ORGANIC_SHORT[rng.integers(0, len(ORGANIC_SHORT))])
     if rng.random() < 0.5:
         optional.append("vector-like smoothness and retina-sharp clean gradients")
@@ -176,68 +178,25 @@ def _build_prompt(seed: str) -> str:
     assembled = list(core)
     for fragment in optional:
         candidate = ", ".join(assembled + [fragment])
-        if len(candidate.split()) > 42:
+        if len(candidate.split()) > 40:
             break
         assembled.append(fragment)
 
     return ", ".join(assembled)
 
 
-def _build_character_prompt(seed: str) -> str:
-    rng = _rng_for(seed, salt=19)
-    subject = _clip_prompt_words(
-        NEURAL_CAVE_SUBJECT[rng.integers(0, len(NEURAL_CAVE_SUBJECT))],
-        max_words=8,
-    )
-    mood = _clip_prompt_words(
-        NEURAL_CAVE_MOOD[rng.integers(0, len(NEURAL_CAVE_MOOD))],
-        max_words=6,
-    )
-    if "cartoon" in PROMPT_PACK_NAME:
-        cues = [
-            "1930s rubber hose cartoon style, vintage animation look",
-            "thick confident black outlines, clean flat cel fills",
-            "single dominant color per character, colored to match scene palette",
-            "strong color contrast between living subjects and background environment",
-            "high saturation on characters with calmer background tones for clear visual hierarchy",
-            "rubber hose limbs, white gloves, big expressive eyes, clean facial layout",
-            "coherent anatomy and consistent species design",
-            "characters grounded on floor with simple cast shadows and edge lighting",
-            "uniform scale by perspective depth, no floating limbs, no melted faces",
-            subject,
-            mood,
-        ]
-    else:
-        cues = [
-            "coherent character anatomy and readable silhouettes",
-            "distinct foreground characters with clean outlines and stable proportions",
-            "clear facial features and limb structure, no melted linework",
-            subject,
-            mood,
-        ]
-    return ", ".join(cues)
-
-
-def _build_cartoon_detail_prompt(seed: str) -> str:
-    rng = _rng_for(seed, salt=101)
-    structure = _clip_prompt_words(
-        NEURAL_CAVE_STRUCTURE[rng.integers(0, len(NEURAL_CAVE_STRUCTURE))],
-        max_words=8,
-    )
-    return ", ".join(
-        [
-            "hand-drawn 1930s rubber hose tunnel scene",
-            "clean inked contour lines with subtle line wobble",
-            "coherent cel-shaded characters and props",
-            "toy-like tunnel depth with readable arches and shelves",
-            "high detail character expressions and polished linework",
-            structure,
-        ]
-    )
-
-
 def _clip_prompt_words(text: str, max_words: int = 24) -> str:
     return " ".join(text.split()[:max_words])
+
+
+def _clip_prompt_safe(text: str, max_words: int, max_chars: int = 220) -> str:
+    # Conservative cap for SDXL CLIP context (prevents >77 token warnings).
+    clipped = _clip_prompt_words(text, max_words=max_words)
+    if len(clipped) > max_chars:
+        clipped = clipped[:max_chars]
+        if " " in clipped:
+            clipped = clipped.rsplit(" ", 1)[0]
+    return clipped.strip(" ,")
 
 
 @lru_cache(maxsize=2048)
@@ -308,7 +267,7 @@ def _apply_neural_composition(image: Image.Image, seed: str) -> Image.Image:
     # Stage 4 trance: depth recession and recursive-like continuity.
     _, _, pts, grid_w, grid_h = _seed_context(seed)
 
-    rng = _rng_for(seed, salt=23)
+    rng = np.random.default_rng()
     mean_x = sum(p[0] for p in pts) / max(1, len(pts))
     mean_y = sum(p[1] for p in pts) / max(1, len(pts))
 
@@ -372,7 +331,6 @@ def _apply_neural_composition(image: Image.Image, seed: str) -> Image.Image:
 def _imprint_cave_depth(image: Image.Image, seed: str) -> Image.Image:
     # Force tunnel-like depth so outputs stay cave-like instead of flat lattices.
     rng = np.random.default_rng(_seed_to_int(seed))
-    is_cartoon_pack = "cartoon" in PROMPT_PACK_NAME
     arr = np.array(image.convert("RGB"), dtype=np.float32)
     h, w = arr.shape[:2]
     yy, xx = np.mgrid[0:h, 0:w]
@@ -381,21 +339,16 @@ def _imprint_cave_depth(image: Image.Image, seed: str) -> Image.Image:
 
     cx = float(rng.uniform(0.44, 0.58))
     cy = float(rng.uniform(0.54, 0.68))
-    if is_cartoon_pack:
-        rx = float(rng.uniform(0.24, 0.34))
-        ry = float(rng.uniform(0.21, 0.31))
-    else:
-        # Slightly tighter opening for stronger tunnel read in membrane/default theme.
-        rx = float(rng.uniform(0.19, 0.28))
-        ry = float(rng.uniform(0.17, 0.25))
+    rx = float(rng.uniform(0.23, 0.34))
+    ry = float(rng.uniform(0.20, 0.31))
 
     d = np.sqrt(((nx - cx) / rx) ** 2 + ((ny - cy) / ry) ** 2)
-    opening = np.exp(-(d**2) * (1.55 if is_cartoon_pack else 2.15)).astype(np.float32)
+    opening = np.exp(-(d**2) * 1.7).astype(np.float32)
 
     edge = np.minimum.reduce([nx, 1.0 - nx, ny, 1.0 - ny])
     edge_vignette = np.clip(edge / 0.23, 0.0, 1.0).astype(np.float32)
-    wall_dark = (0.56 + (0.44 * edge_vignette)) if is_cartoon_pack else (0.50 + (0.50 * edge_vignette))
-    depth_gain = (0.68 + (0.58 * opening)) if is_cartoon_pack else (0.60 + (0.74 * opening))
+    wall_dark = 0.56 + (0.44 * edge_vignette)
+    depth_gain = 0.68 + (0.58 * opening)
 
     shaped = arr * wall_dark[:, :, None] * depth_gain[:, :, None]
 
@@ -403,8 +356,8 @@ def _imprint_cave_depth(image: Image.Image, seed: str) -> Image.Image:
     theta = np.arctan2(ny - cy, nx - cx)
     radial = np.sqrt((nx - cx) ** 2 + (ny - cy) ** 2)
     ribs = 0.5 + (0.5 * np.sin((radial * 42.0) + (theta * 2.8) + float(rng.uniform(0.0, 2.0 * np.pi))))
-    rib_mask = np.clip(1.10 - d, 0.0, 1.0).astype(np.float32) * (0.10 if is_cartoon_pack else 0.14)
-    shaped += (ribs[:, :, None] * rib_mask[:, :, None] * (26.0 if is_cartoon_pack else 32.0))
+    rib_mask = np.clip(1.10 - d, 0.0, 1.0).astype(np.float32) * 0.10
+    shaped += (ribs[:, :, None] * rib_mask[:, :, None] * 26.0)
 
     shaped = np.clip(shaped, 0, 255)
     out = Image.fromarray(shaped.astype(np.uint8), mode="RGB")
@@ -413,7 +366,7 @@ def _imprint_cave_depth(image: Image.Image, seed: str) -> Image.Image:
 
 def _apply_spectral_grade(image: Image.Image, seed: str) -> Image.Image:
     # Non-deterministic HSV perturbation with seed-layout-informed color direction.
-    rng = _rng_for(seed, salt=29)
+    rng = np.random.default_rng()
     _, _, points, grid_w, grid_h = _seed_context(seed)
 
     mean_x = sum(p[0] for p in points) / max(1, len(points))
@@ -519,7 +472,7 @@ def _apply_cartoon_toon_finish(image: Image.Image) -> Image.Image:
 
 
 def _cartoon_palette_separation(image: Image.Image, seed: str) -> Image.Image:
-    # Palette-aware subject/background separation for stronger character pop.
+    # Full-spectrum cartoon palette with gentle foreground/background hue separation.
     rng = np.random.default_rng(_seed_to_int(seed))
     hsv = np.array(image.convert("HSV"), dtype=np.float32)
     h = hsv[:, :, 0]
@@ -528,7 +481,7 @@ def _cartoon_palette_separation(image: Image.Image, seed: str) -> Image.Image:
     hh, ww = h.shape
     yy, xx = np.mgrid[0:hh, 0:ww]
 
-    # Broad full-spectrum drift to avoid pack color lock-in.
+    # Broad full-spectrum drift (avoid green/blue bias).
     phase_a = float(rng.uniform(0.0, 2.0 * np.pi))
     phase_b = float(rng.uniform(0.0, 2.0 * np.pi))
     regional = (
@@ -537,7 +490,7 @@ def _cartoon_palette_separation(image: Image.Image, seed: str) -> Image.Image:
     ) * rng.uniform(12.0, 24.0)
     h = (h + regional + rng.uniform(0.0, 255.0)) % 256.0
 
-    # Foreground-biased mask (characters/organic subjects): edges + saturation + spatial priors.
+    # Foreground-biased mask (characters/props): edges + saturation + lower-frame prior.
     edge = np.array(image.convert("RGB").filter(ImageFilter.FIND_EDGES).convert("L"), dtype=np.float32) / 255.0
     edge = np.array(Image.fromarray((edge * 255).astype(np.uint8), mode="L").filter(ImageFilter.GaussianBlur(1.0)), dtype=np.float32) / 255.0
     sat_n = s / 255.0
@@ -548,39 +501,14 @@ def _cartoon_palette_separation(image: Image.Image, seed: str) -> Image.Image:
     fg = np.clip((edge * 1.28) + (sat_n * 0.24) + (val_n * 0.12) + (spatial * 0.30) - 0.52, 0.0, 1.0)
     fg = np.array(Image.fromarray((fg * 255).astype(np.uint8), mode="L").filter(ImageFilter.GaussianBlur(1.2)), dtype=np.float32) / 255.0
 
-    # Analyze background palette (dominant hue/value/saturation excluding subject mask).
-    bg = 1.0 - fg
-    bg_w_sum = float(np.sum(bg))
-    if bg_w_sum > 1e-6:
-        bg_h_rad = (h / 255.0) * (2.0 * np.pi)
-        bg_sin = float(np.sum(np.sin(bg_h_rad) * bg) / bg_w_sum)
-        bg_cos = float(np.sum(np.cos(bg_h_rad) * bg) / bg_w_sum)
-        bg_hue = (np.arctan2(bg_sin, bg_cos) / (2.0 * np.pi)) % 1.0
-        bg_hue = bg_hue * 255.0
-        bg_sat = float(np.sum(s * bg) / bg_w_sum)
-        bg_val = float(np.sum(v * bg) / bg_w_sum)
-    else:
-        bg_hue = float(np.mean(h))
-        bg_sat = float(np.mean(s))
-        bg_val = float(np.mean(v))
+    # Separate character hues from environment hues.
+    fg_shift = float(rng.choice([52.0, 68.0, 84.0, 96.0]))
+    bg_shift = float(rng.choice([-22.0, -16.0, -10.0, 8.0]))
+    h = (h + (fg * fg_shift) + ((1.0 - fg) * bg_shift)) % 256.0
 
-    # Target subject hue is complementary (high hue contrast) with slight seed jitter.
-    subj_hue = (bg_hue + 128.0 + float(rng.uniform(-10.0, 10.0))) % 256.0
-    hue_delta = ((subj_hue - h + 128.0) % 256.0) - 128.0
-    hue_strength = np.clip((fg * 0.72) + 0.08, 0.0, 0.85)
-    h = (h + (hue_delta * hue_strength)) % 256.0
-
-    # Value/saturation contrast: vivid subjects vs calmer background.
-    subj_sat_target = float(np.clip(max(bg_sat + 62.0, 178.0), 160.0, 246.0))
-    subj_val_target = float(np.clip(bg_val + 48.0 if bg_val < 138.0 else bg_val - 54.0, 92.0, 236.0))
-    s = (s * (1.0 - (fg * 0.64))) + (subj_sat_target * (fg * 0.64))
-    v = (v * (1.0 - (fg * 0.58))) + (subj_val_target * (fg * 0.58))
-    s = np.clip((s * (1.0 - (bg * 0.10))), 0.0, 255.0)
-    v = np.clip((v * (1.0 - (bg * 0.06))), 0.0, 255.0)
-
-    # Enforce minimum luminance contrast for immediate subject/background separation.
-    contrast_need = np.clip((42.0 - np.abs(v - bg_val)) / 42.0, 0.0, 1.0)
-    v = np.clip(v + (fg * contrast_need * 22.0), 0.0, 255.0)
+    # Keep colors solid and vivid.
+    s = np.clip((s * 1.18) + 18.0 + (fg * 18.0), 0.0, 255.0)
+    v = np.clip((v * 1.05) + (fg * 10.0), 0.0, 255.0)
 
     out = np.stack([h, s, v], axis=-1).astype(np.uint8)
     return Image.fromarray(out, mode="HSV").convert("RGB")
@@ -639,12 +567,17 @@ def _lift_deep_blacks(image: Image.Image) -> Image.Image:
     return Image.fromarray(arr.astype(np.uint8), mode="RGB")
 
 
-def _apply_liquid_glass_finish(image: Image.Image, border_size: int, seed: str, intensity: float = 0.44) -> Image.Image:
+def _apply_liquid_glass_finish(
+    image: Image.Image,
+    border_size: int,
+    seed: str | None = None,
+    intensity: float = 0.44,
+) -> Image.Image:
     # Unified polished-glass finish across the inner artwork area (smooth, not muddy).
     base = image.convert("RGB")
     base_arr = np.array(base, dtype=np.float32)
     h, w = base_arr.shape[:2]
-    rng = _rng_for(seed, salt=41)
+    rng = np.random.default_rng(_seed_to_int(seed) if seed else None)
     yy, xx = np.mgrid[0:h, 0:w]
 
     # Inner frame (inside border) defines where glass applies.
@@ -747,8 +680,7 @@ def _final_clean_smooth(image: Image.Image) -> Image.Image:
 
 def _build_base_image(seed: str, image_size: int = 1080) -> Image.Image:
     _, parsed_rooms, _, grid_w, grid_h = _seed_context(seed)
-    rng = _rng_for(seed, salt=53)
-    is_cartoon_pack = "cartoon" in PROMPT_PACK_NAME
+    rng = np.random.default_rng()
 
     _, border_size = _get_border_params(seed, image_size)
     inner_size = image_size - (border_size * 2)
@@ -756,16 +688,10 @@ def _build_base_image(seed: str, image_size: int = 1080) -> Image.Image:
     cell_h = max(1, inner_size // grid_h)
 
     # Build aggressive multi-source noise so diffusion has more latent detail to transform.
-    if is_cartoon_pack:
-        uniform_weight = float(rng.uniform(0.28, 0.40))
-        gaussian_weight = float(rng.uniform(0.50, 0.62))
-        sp_weight = max(0.03, 1.0 - (uniform_weight + gaussian_weight))
-        gauss_sigma = float(rng.uniform(34.0, 52.0))
-    else:
-        uniform_weight = float(rng.uniform(0.42, 0.62))
-        gaussian_weight = float(rng.uniform(0.23, 0.43))
-        sp_weight = max(0.05, 1.0 - (uniform_weight + gaussian_weight))
-        gauss_sigma = float(rng.uniform(58.0, 88.0))
+    uniform_weight = float(rng.uniform(0.42, 0.62))
+    gaussian_weight = float(rng.uniform(0.23, 0.43))
+    sp_weight = max(0.05, 1.0 - (uniform_weight + gaussian_weight))
+    gauss_sigma = float(rng.uniform(58.0, 88.0))
 
     uniform_noise = rng.integers(0, 256, size=(inner_size, inner_size, 3), dtype=np.uint8).astype(np.int16)
     gaussian_noise = rng.normal(128, gauss_sigma, size=(inner_size, inner_size, 3)).astype(np.int16)
@@ -813,38 +739,24 @@ def _build_base_image(seed: str, image_size: int = 1080) -> Image.Image:
         blended = (patch * 0.82) + (tint * 0.18)
         inner[y0:y1, x0:x1] = np.clip(blended, 0, 255).astype(np.uint8)
 
-    if is_cartoon_pack:
-        inner = _wave_distort(
-            inner,
-            amp_x=int(rng.integers(8, 18)),
-            amp_y=int(rng.integers(5, 14)),
-            freq=float(rng.uniform(0.004, 0.008)),
-        )
-        inner = _wave_distort(
-            inner,
-            amp_x=int(rng.integers(4, 10)),
-            amp_y=int(rng.integers(8, 16)),
-            freq=float(rng.uniform(0.008, 0.013)),
-        )
-    else:
-        inner = _wave_distort(
-            inner,
-            amp_x=int(rng.integers(18, 36)),
-            amp_y=int(rng.integers(8, 20)),
-            freq=float(rng.uniform(0.004, 0.009)),
-        )
-        inner = _wave_distort(
-            inner,
-            amp_x=int(rng.integers(8, 20)),
-            amp_y=int(rng.integers(16, 30)),
-            freq=float(rng.uniform(0.009, 0.016)),
-        )
-        inner = _wave_distort(
-            inner,
-            amp_x=int(rng.integers(4, 12)),
-            amp_y=int(rng.integers(4, 12)),
-            freq=float(rng.uniform(0.03, 0.06)),
-        )
+    inner = _wave_distort(
+        inner,
+        amp_x=int(rng.integers(18, 36)),
+        amp_y=int(rng.integers(8, 20)),
+        freq=float(rng.uniform(0.004, 0.009)),
+    )
+    inner = _wave_distort(
+        inner,
+        amp_x=int(rng.integers(8, 20)),
+        amp_y=int(rng.integers(16, 30)),
+        freq=float(rng.uniform(0.009, 0.016)),
+    )
+    inner = _wave_distort(
+        inner,
+        amp_x=int(rng.integers(4, 12)),
+        amp_y=int(rng.integers(4, 12)),
+        freq=float(rng.uniform(0.03, 0.06)),
+    )
     inner_img = (
         Image.fromarray(inner)
         .filter(ImageFilter.GaussianBlur(0.7))
@@ -858,181 +770,285 @@ def _build_base_image(seed: str, image_size: int = 1080) -> Image.Image:
     return inner_img
 
 
-def _build_layout_condition(image: Image.Image, seed: str, is_cartoon_pack: bool) -> Image.Image:
-    # Light structural conditioning for perspective and focal hierarchy.
-    arr = np.array(image.convert("RGB"), dtype=np.float32)
-    h, w = arr.shape[:2]
-    yy, xx = np.mgrid[0:h, 0:w]
-    nx = xx / max(1, w - 1)
-    ny = yy / max(1, h - 1)
-    rng = _rng_for(seed, salt=61)
-
-    van_x = float(rng.uniform(0.42, 0.58))
-    van_y = float(rng.uniform(0.52, 0.74))
-    d = np.sqrt(((nx - van_x) / 0.56) ** 2 + ((ny - van_y) / 0.48) ** 2)
-    center_pull = np.exp(-(d**2) * (1.5 if is_cartoon_pack else 1.2)).astype(np.float32)
-
-    # Preserve negative space around the top side walls for readability.
-    side_mass = np.clip(np.abs(nx - 0.5) / 0.5, 0.0, 1.0)
-    top_open = np.clip(1.0 - (ny / 0.52), 0.0, 1.0)
-    flatten = (side_mass * top_open) * (0.12 if is_cartoon_pack else 0.06)
-
-    luma_boost = (center_pull * (24.0 if is_cartoon_pack else 14.0)) - (flatten * 36.0)
-    shaped = np.clip(arr + luma_boost[:, :, None], 0, 255)
-    out = Image.fromarray(shaped.astype(np.uint8), mode="RGB")
-    return out.filter(ImageFilter.UnsharpMask(radius=0.95, percent=105, threshold=2))
+def _build_cartoon_character_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    return ", ".join(
+        [
+            "1930s rubber hose cartoon style, coherent character anatomy",
+            "thick black outlines, clean cel shading, stable facial features",
+            "grounded characters with cast shadows and perspective-correct scale",
+            NEURAL_CAVE_SUBJECT[rng.integers(0, len(NEURAL_CAVE_SUBJECT))],
+            NEURAL_CAVE_MOOD[rng.integers(0, len(NEURAL_CAVE_MOOD))],
+        ]
+    )
 
 
-def _soft_focus_mask(size: Tuple[int, int], seed: str) -> Image.Image:
+def _build_cartoon_detail_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    return ", ".join(
+        [
+            "hand-drawn vintage cartoon line quality",
+            "clean contour edges and refined mascot details",
+            "toy-tunnel set dressing with readable props and depth",
+            NEURAL_CAVE_STRUCTURE[rng.integers(0, len(NEURAL_CAVE_STRUCTURE))],
+        ]
+    )
+
+
+def _build_dungeon_detail_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    accents = [
+        "frequent torch sconces, candles, and lanterns casting warm directional light and long shadows",
+        "multiple iron-banded wooden doors in side alcoves and passage turns",
+        "skeleton remains and bone piles near wall recesses and corners",
+        "spider webs and occasional tiny spiders in dark upper corners",
+        "mossy wet stones, ancient chains, and worn masonry details",
+    ]
+    return ", ".join(
+        [
+            "realistic medieval dungeon tunnel, ominous and mysterious atmosphere",
+            "low-key cinematic lighting driven only by torches, candles, and lanterns with deep shadows and warm falloff",
+            "stone vaults, rough masonry, damp textures, coherent perspective depth",
+            "clean realism with controlled texture noise and crisp structural edges",
+            accents[rng.integers(0, len(accents))],
+        ]
+    )
+
+
+def _build_dungeon_architecture_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    anchors = [
+        "realistic medieval dungeon tunnel with heavy stone masonry and vaulted arches",
+        "first-person descent through a fortress tunnel undercroft with carved stone ribs and alcoves",
+        "catacomb corridor tunnel with weathered blocks, buttressed walls, and deep perspective",
+    ]
+    props = [
+        "iron-banded wooden doors recessed into side walls",
+        "skeleton remains near wall niches and floor edges",
+        "torch sconces, candle clusters, and iron lanterns casting warm directional light and long shadows",
+        "spider webs with occasional tiny spiders in vaulted corners",
+        "chains, iron hardware, and worn stone relief details",
+    ]
+    return ", ".join(
+        [
+            anchors[rng.integers(0, len(anchors))],
+            props[rng.integers(0, len(props))],
+            props[rng.integers(0, len(props))],
+            "dark ominous atmosphere, realistic textures, torch-candle-lantern lit mood only, restrained color, no neon",
+            "clear architectural tunnel readability with coherent wall geometry",
+        ]
+    )
+
+
+def _soft_focus_mask(size: Tuple[int, int]) -> Image.Image:
     w, h = size
     yy, xx = np.mgrid[0:h, 0:w]
-    rng = _rng_for(seed, salt=71)
-    cx = float(rng.uniform(0.44, 0.56) * w)
-    cy = float(rng.uniform(0.66, 0.80) * h)
-    rx = float(rng.uniform(0.24, 0.34) * w)
-    ry = float(rng.uniform(0.16, 0.25) * h)
+    cx = 0.52 * w
+    cy = 0.73 * h
+    rx = 0.30 * w
+    ry = 0.23 * h
     d = np.sqrt(((xx - cx) / max(1.0, rx)) ** 2 + ((yy - cy) / max(1.0, ry)) ** 2)
     core = np.clip(1.0 - d, 0.0, 1.0)
-    soft = np.power(core, 0.72)
+    soft = np.power(core, 0.75)
     mask = Image.fromarray(np.clip(soft * 255.0, 0, 255).astype(np.uint8), mode="L")
-    return mask.filter(ImageFilter.GaussianBlur(22.0))
+    return mask.filter(ImageFilter.GaussianBlur(20.0))
 
 
-def _refine_character_region(
+def _refine_cartoon_character_region(
     pipe,
     image: Image.Image,
-    seed: str,
     prompt: str,
     negative_prompt: str,
 ) -> Image.Image:
-    # Secondary local pass: spend budget where characters usually appear.
     w, h = image.size
     x0 = int(w * 0.20)
-    y0 = int(h * 0.46)
+    y0 = int(h * 0.44)
     x1 = int(w * 0.84)
     y1 = int(h * 0.95)
     crop = image.crop((x0, y0, x1, y1)).convert("RGB")
     crop = crop.resize((512, 512), resample=Image.Resampling.LANCZOS)
-
-    has_cuda = torch.cuda.is_available()
-    generator = torch.Generator(device="cuda" if has_cuda else "cpu")
-    generator.manual_seed(_seed_to_int(f"{seed}:char"))
     refined_crop = pipe(
-        prompt=_clip_prompt_words(prompt, max_words=34),
-        negative_prompt=_clip_prompt_words(negative_prompt, max_words=34),
+        prompt=_clip_prompt_safe(prompt, max_words=CLIP_LOCAL_WORDS, max_chars=170),
+        negative_prompt=_clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170),
         image=crop,
         strength=0.34,
-        guidance_scale=6.9,
-        num_inference_steps=DIFFUSE_CHARACTER_STEPS,
-        generator=generator,
+        guidance_scale=6.8,
+        num_inference_steps=DIFFUSE_CARTOON_CHARACTER_STEPS,
     ).images[0].convert("RGB")
-
     refined_crop = refined_crop.resize((x1 - x0, y1 - y0), resample=Image.Resampling.LANCZOS)
-    mask = _soft_focus_mask((w, h), seed=seed)
+    mask = _soft_focus_mask((w, h))
     layer = Image.new("RGB", (w, h))
     layer.paste(refined_crop, (x0, y0))
     return Image.composite(layer, image.convert("RGB"), mask)
 
 
-def diffuse_abstract(image: Image.Image, seed: str) -> Image.Image:
-    pipe = get_pipe()
-
+def _diffuse_membrane_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
+    # Keep this function identical to the membrane behavior you stabilized.
     prompt = _build_prompt(seed)
-    character_prompt = _build_character_prompt(seed)
-    detail_prompt = _build_cartoon_detail_prompt(seed)
     refiner_prompt = BASE_REFINER_PROMPT
     negative_prompt = BASE_NEGATIVE_PROMPT
-    # Keep CLIP token length safely below SDXL's 77-token limit.
-    prompt = _clip_prompt_words(prompt, max_words=40)
-    refiner_prompt = _clip_prompt_words(refiner_prompt, max_words=22)
-    negative_prompt = _clip_prompt_words(negative_prompt, max_words=34)
+    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    refiner_prompt = _clip_prompt_safe(refiner_prompt, max_words=CLIP_REFINER_WORDS, max_chars=140)
+    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
 
-    is_cartoon_pack = "cartoon" in PROMPT_PACK_NAME
-    base_steps = DIFFUSE_BASE_STEPS + (14 if is_cartoon_pack else 2)
-    refiner_steps = DIFFUSE_REFINER_STEPS + (9 if is_cartoon_pack else 0)
-
-    has_cuda = torch.cuda.is_available()
-    generator = torch.Generator(device="cuda" if has_cuda else "cpu")
-    generator.manual_seed(_seed_to_int(f"{seed}:scene"))
-
-    conditioned = _build_layout_condition(image, seed=seed, is_cartoon_pack=is_cartoon_pack)
-
-    # Stage 1: scene render with composition conditioning.
     base = pipe(
         prompt=prompt,
         negative_prompt=negative_prompt,
-        image=conditioned.convert("RGB"),
-        strength=0.58 if is_cartoon_pack else 0.52,
-        guidance_scale=6.0 if is_cartoon_pack else 5.4,
-        num_inference_steps=base_steps,
-        generator=generator,
+        image=image.convert("RGB"),
+        strength=0.60,
+        guidance_scale=6.0,
+        num_inference_steps=DIFFUSE_BASE_STEPS,
     ).images[0]
 
-    # Stage 2: local character coherence pass (cartoon only).
-    if is_cartoon_pack:
-        character_negative = (
-            f"{negative_prompt}, inconsistent character sizes, white unshaded characters, floating figures, melted faces, "
-            "mismatched art styles, uncolored characters, clipping geometry, broken anatomy, blob figures, palette breaks, "
-            "realistic shading, thin outlines, painterly gradients, malformed eyes, deformed hands"
-        )
-        base = _refine_character_region(
-            pipe=pipe,
-            image=base,
-            seed=seed,
-            prompt=character_prompt,
-            negative_prompt=character_negative,
-        )
-        # Stage 2b: hand-drawn detail pass for cleaner ink-like structure.
-        generator.manual_seed(_seed_to_int(f"{seed}:toon_detail"))
-        base = pipe(
-            prompt=_clip_prompt_words(detail_prompt, max_words=34),
-            negative_prompt=negative_prompt,
-            image=base.convert("RGB"),
-            strength=0.16,
-            guidance_scale=5.8,
-            num_inference_steps=DIFFUSE_CARTOON_DETAIL_STEPS,
-            generator=generator,
-        ).images[0]
-
-    # Stage 3: global low-denoise refinement for line/lighting stability.
-    generator.manual_seed(_seed_to_int(f"{seed}:refine"))
     result = pipe(
         prompt=refiner_prompt,
         negative_prompt=negative_prompt,
         image=base,
-        strength=0.20 if is_cartoon_pack else 0.20,
-        guidance_scale=5.0 if is_cartoon_pack else 5.0,
-        num_inference_steps=refiner_steps,
-        generator=generator,
+        strength=0.20,
+        guidance_scale=5.2,
+        num_inference_steps=DIFFUSE_REFINER_STEPS,
     ).images[0]
 
-    # Keep generation at base resolution for speed; upscale happens after full composition.
     result = result.convert("RGB")
-    if is_cartoon_pack:
-        # Cartoon pack: keep solid fills and readable forms; avoid heavy global blur.
-        result = _cartoon_palette_separation(result, seed=seed)
-        result = _cartoon_degrain(result)
-        result = ImageEnhance.Color(result).enhance(1.15)
-        result = ImageEnhance.Contrast(result).enhance(1.06)
-        result = _apply_cartoon_toon_finish(result)
-        result = _refine_cartoon_characters(result)
-        result = ImageEnhance.Sharpness(result).enhance(1.06)
-    else:
-        result = _apply_spectral_grade(result, seed=seed)
-        # Keep non-cartoon outputs cleaner and less dotted.
-        result = _solidify_color_fields(result)
-        result = _lift_deep_blacks(result)
-        result = result.filter(ImageFilter.GaussianBlur(0.26))
-        result = ImageEnhance.Color(result).enhance(1.36)
-        result = ImageEnhance.Contrast(result).enhance(1.18)
-        result = ImageEnhance.Sharpness(result).enhance(1.02)
-
+    result = _apply_spectral_grade(result, seed=seed)
+    result = _solidify_color_fields(result)
+    result = _lift_deep_blacks(result)
+    result = result.filter(ImageFilter.GaussianBlur(0.34))
+    result = ImageEnhance.Color(result).enhance(1.36)
+    result = ImageEnhance.Contrast(result).enhance(1.18)
+    result = ImageEnhance.Sharpness(result).enhance(1.02)
     return result
+
+
+def _diffuse_cartoon_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
+    prompt = _build_prompt(seed)
+    refiner_prompt = BASE_REFINER_PROMPT
+    negative_prompt = BASE_NEGATIVE_PROMPT
+    character_prompt = _build_cartoon_character_prompt(seed)
+    detail_prompt = _build_cartoon_detail_prompt(seed)
+    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    refiner_prompt = _clip_prompt_safe(refiner_prompt, max_words=CLIP_REFINER_WORDS, max_chars=140)
+    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
+    base = pipe(
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        image=image.convert("RGB"),
+        strength=0.58,
+        guidance_scale=6.0,
+        num_inference_steps=DIFFUSE_CARTOON_BASE_STEPS,
+    ).images[0]
+
+    character_negative = (
+        f"{negative_prompt}, inconsistent character sizes, white unshaded characters, floating figures, melted faces, "
+        "mismatched art styles, uncolored characters, clipping geometry, broken anatomy, blob figures, palette breaks, "
+        "realistic shading, thin outlines, painterly gradients, malformed eyes, deformed hands"
+    )
+    base = _refine_cartoon_character_region(
+        pipe=pipe,
+        image=base,
+        prompt=character_prompt,
+        negative_prompt=character_negative,
+    )
+
+    base = pipe(
+        prompt=_clip_prompt_safe(detail_prompt, max_words=CLIP_DETAIL_WORDS, max_chars=170),
+        negative_prompt=negative_prompt,
+        image=base.convert("RGB"),
+        strength=0.16,
+        guidance_scale=5.8,
+        num_inference_steps=DIFFUSE_CARTOON_DETAIL_STEPS,
+    ).images[0]
+
+    result = pipe(
+        prompt=refiner_prompt,
+        negative_prompt=negative_prompt,
+        image=base,
+        strength=0.20,
+        guidance_scale=5.0,
+        num_inference_steps=DIFFUSE_CARTOON_REFINER_STEPS,
+    ).images[0]
+
+    result = result.convert("RGB")
+    result = _cartoon_palette_separation(result, seed=seed)
+    result = _cartoon_degrain(result)
+    result = ImageEnhance.Color(result).enhance(1.20)
+    result = ImageEnhance.Contrast(result).enhance(1.08)
+    result = _apply_cartoon_toon_finish(result)
+    result = _refine_cartoon_characters(result)
+    result = ImageEnhance.Sharpness(result).enhance(1.02)
+    return result
+
+
+def _diffuse_dungeon_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
+    prompt = _build_dungeon_architecture_prompt(seed)
+    refiner_prompt = BASE_REFINER_PROMPT
+    negative_prompt = BASE_NEGATIVE_PROMPT
+    detail_prompt = _build_dungeon_detail_prompt(seed)
+
+    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    refiner_prompt = _clip_prompt_safe(refiner_prompt, max_words=CLIP_REFINER_WORDS, max_chars=140)
+    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+    detail_prompt = _clip_prompt_safe(detail_prompt, max_words=CLIP_DETAIL_WORDS, max_chars=170)
+
+    dungeon_negative = _clip_prompt_safe((
+        f"{negative_prompt}, cartoon style, toy plastic look, neon psychedelic colors, flat cel shading, "
+        "clean modern architecture, bright daylight, skylight, sunlight, moonlight, window light, outdoor light, "
+        "open sky, sci-fi corridor, low contrast haze, big spiders, massive spiders"
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
+    base = pipe(
+        prompt=prompt,
+        negative_prompt=dungeon_negative,
+        image=image.convert("RGB"),
+        strength=0.58,
+        guidance_scale=6.6,
+        num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
+    ).images[0]
+
+    detail = pipe(
+        prompt=detail_prompt,
+        negative_prompt=dungeon_negative,
+        image=base.convert("RGB"),
+        strength=0.16,
+        guidance_scale=6.0,
+        num_inference_steps=12,
+    ).images[0]
+
+    result = pipe(
+        prompt=refiner_prompt,
+        negative_prompt=dungeon_negative,
+        image=detail,
+        strength=0.20,
+        guidance_scale=5.0,
+        num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
+    ).images[0]
+
+    result = result.convert("RGB")
+    # Realistic dark grading: restrained color, deep contrast, sharp structure.
+    result = _solidify_color_fields(result)
+    result = result.filter(ImageFilter.SMOOTH_MORE)
+    result = result.filter(ImageFilter.GaussianBlur(0.12))
+    result = ImageEnhance.Color(result).enhance(0.88)
+    result = ImageEnhance.Contrast(result).enhance(1.24)
+    result = ImageEnhance.Brightness(result).enhance(0.95)
+    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=96, threshold=2))
+    return result
+
+
+def diffuse_abstract(image: Image.Image, seed: str) -> Image.Image:
+    pipe = get_pipe()
+    if "cartoon" in PROMPT_PACK_NAME:
+        return _diffuse_cartoon_pipeline(pipe=pipe, image=image, seed=seed)
+    if "dungeon" in PROMPT_PACK_NAME or "castle" in PROMPT_PACK_NAME:
+        return _diffuse_dungeon_pipeline(pipe=pipe, image=image, seed=seed)
+    return _diffuse_membrane_pipeline(pipe=pipe, image=image, seed=seed)
 
 
 def generate_map_image(seed: str, use_diffusion: bool = True) -> Image.Image:
     is_cartoon_pack = "cartoon" in PROMPT_PACK_NAME
-    base_image_size = 1080 if is_cartoon_pack else WORK_IMAGE_SIZE
+    is_dungeon_pack = "dungeon" in PROMPT_PACK_NAME or "castle" in PROMPT_PACK_NAME
+    base_image_size = WORK_IMAGE_SIZE
     target_size = FINAL_IMAGE_SIZE
 
     inner_image = _build_base_image(seed, image_size=base_image_size)
@@ -1049,26 +1065,23 @@ def generate_map_image(seed: str, use_diffusion: bool = True) -> Image.Image:
     inner_resized = inner_image.resize((inner_target_size, inner_target_size), resample=Image.Resampling.LANCZOS)
     inner_resized = inner_resized.filter(
         ImageFilter.UnsharpMask(
-            radius=1.4 if is_cartoon_pack else 1.8,
-            percent=140 if is_cartoon_pack else 180,
+            radius=1.4 if is_cartoon_pack else (2.0 if is_dungeon_pack else 1.8),
+            percent=140 if is_cartoon_pack else (190 if is_dungeon_pack else 180),
             threshold=2,
         )
     )
     canvas.paste(inner_resized, (border_size, border_size))
-    # Pack-specific finishing strengths.
+    # Keep emboss subtle so frosted glass remains smooth and cohesive.
     embossed = _apply_emboss_pop(canvas)
-    canvas = Image.blend(canvas, embossed, alpha=0.14 if is_cartoon_pack else 0.28)
-    canvas = _apply_liquid_glass_finish(
-        canvas,
-        border_size=border_size,
-        seed=seed,
-        intensity=0.22 if is_cartoon_pack else 0.44,
-    )
+    emboss_alpha = 0.14 if is_cartoon_pack else (0.08 if is_dungeon_pack else 0.28)
+    canvas = Image.blend(canvas, embossed, alpha=emboss_alpha)
+    glass_intensity = 0.22 if is_cartoon_pack else (0.06 if is_dungeon_pack else 0.44)
+    canvas = _apply_liquid_glass_finish(canvas, border_size=border_size, seed=seed, intensity=glass_intensity)
     # Final upscale only after border + post effects.
     canvas = _upscale_to_target(canvas, target_size=target_size)
-    if is_cartoon_pack:
-        canvas = canvas.filter(ImageFilter.UnsharpMask(radius=0.9, percent=88, threshold=1))
-        canvas = ImageEnhance.Contrast(canvas).enhance(1.03)
+    if is_dungeon_pack:
+        canvas = canvas.filter(ImageFilter.UnsharpMask(radius=0.9, percent=82, threshold=2))
+        canvas = ImageEnhance.Contrast(canvas).enhance(1.04)
     else:
         canvas = _final_clean_smooth(canvas)
     return canvas

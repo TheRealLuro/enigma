@@ -204,18 +204,18 @@ PROMPT_PACKS: List[Dict[str, object]] = [
             "PROMPT_COMPOSITION_ELITE": [
                 "descending vaulted corridor with chained arches pulling into deep shadow",
                 "off-center dungeon passage with layered alcoves and receding vault ribs",
-                "catacomb tunnel composition with crossing web-strands and a distant lit chamber",
+                "catacomb tunnel composition with carved masonry ribs and a distant lit chamber",
             ],
             "PROMPT_COLORS_ELITE": [
-                "torchlit amber and crimson highlights in deep blue-black tunnel shadows",
-                "ancient stone palette with molten gold accents and eerie violet glows",
-                "warm firelight bleeding into cold subterranean darkness",
-                "muted obsidian and burgundy base with occasional spectral accents",
+                "torchlit amber and desaturated crimson highlights in deep blue-black tunnel shadows",
+                "ancient stone palette with subdued gold accents and restrained violet undertones",
+                "warm firelight bleeding into cold subterranean darkness with low saturation",
+                "muted obsidian and weathered burgundy base with occasional warm highlights",
             ],
             "SCIENCE_CUES_ELITE": [
                 "high-frequency stone texture against soft volumetric haze for depth tension",
                 "contrast islands around torch points with unresolved shadow geometry",
-                "repeating gothic rhythm interrupted by organic membrane drift",
+                "repeating gothic rhythm anchored by masonry blocks and buttressed wall mass",
                 "clear near-field detail with uncertain far-field vanishing space",
             ],
             "PROMPT_PAREIDOLIA_ELITE": [
@@ -226,12 +226,12 @@ PROMPT_PACKS: List[Dict[str, object]] = [
             "PROMPT_NEUROCHEM_ELITE": [
                 "progressive discovery through layered arches and hidden side chambers",
                 "near-symmetry in vault spacing that never fully resolves",
-                "smooth stone-to-web transitions that hold scanning attention",
+                "stone relief and carved joints that hold scanning attention",
             ],
             "PROMPT_TEMPORAL_ELITE": [
                 "recursive arch motifs that reveal secondary patterns over time",
-                "micro detail in mortar cracks and membrane threads",
-                "slow visual loop from foreground webs to distant corridor glow",
+                "micro detail in mortar cracks, damp stone, and iron fixtures",
+                "slow visual loop from foreground masonry to distant corridor glow",
             ],
             "PROMPT_EDGE_ELITE": [
                 "almost-symbolic relic forms embedded in dungeon walls",
@@ -245,14 +245,16 @@ PROMPT_PACKS: List[Dict[str, object]] = [
             ],
             "PROMPT_SCALE_ELITE": [
                 "ambiguous scale between intimate corridor and monumental undercroft",
-                "cell-like web pockets nested inside fortress-scale architecture",
+                "small carved niches nested inside fortress-scale architecture",
                 "micro fissure detail embedded in vast subterranean space",
             ],
             "PROMPT_FLOW_RULES": [
                 "preserve strong tunnel perspective and vaulted rhythm",
                 "keep dark mass dominant with selective warm highlights",
-                "blend stone and organic webbing without flattening the passage depth",
-                "avoid broad pastel wash; prioritize moody cinematic contrast",
+                "emphasize stone wall geometry and structural depth over organic web motifs",
+                "lighting must come only from torches, candles, and lanterns with warm falloff and deep shadows",
+                "show dungeon props frequently: doors, skeletons, chains, spider webs, stone reliefs",
+                "avoid broad pastel wash or neon colors; prioritize moody cinematic contrast",
             ],
             "PROMPT_COMPOSITION_ELITE_DEFINED": [
                 "gothic vault sequence with staggered ribs and lateral alcoves",
@@ -265,9 +267,9 @@ PROMPT_PACKS: List[Dict[str, object]] = [
                 "cold blue subsurface tones beneath torchlit upper planes",
             ],
             "SCIENCE_CUES_ELITE_DEFINED": [
-                "multi-scale texture from rough stone grain to fine membrane filaments",
+                "multi-scale texture from rough stone grain to fine chisel and mortar detail",
                 "luminance cliffs around torch points to direct eye traversal",
-                "gestalt interruption between rigid masonry rhythm and organic drift",
+                "gestalt tension between rigid masonry rhythm and broken ruin irregularities",
             ],
             "PROMPT_PAREIDOLIA_ELITE_DEFINED": [
                 "low-amplitude face geometry in stain and crack patterns",
@@ -305,29 +307,29 @@ PROMPT_PACKS: List[Dict[str, object]] = [
                 "keep web structures supportive of architecture, not replacing it",
             ],
             "NEURAL_CAVE_SUBJECT": [
-                "first-person descent through a castle dungeon tunnel with organic webbed vaults",
-                "ancient subterranean passage beneath fortress ruins with membrane-like arches",
-                "catacomb tunnel beneath a castle, layered with biological lattice growth",
+                "first-person descent through a castle dungeon tunnel with heavy vaulted masonry",
+                "ancient subterranean passage beneath fortress ruins with carved stone arches",
+                "catacomb tunnel beneath a castle with massive blocks and worn structural ribs",
             ],
             "NEURAL_CAVE_STRUCTURE": [
-                "webbed stone vaults and branching strands crossing gothic tunnel chambers",
-                "arched dungeon corridors fused with organic netted membranes",
-                "rough-hewn catacomb geometry wrapped in smooth connective web structures",
+                "heavy stone vaults with carved ribs crossing gothic tunnel chambers",
+                "arched dungeon corridors with buttressed walls and recessed alcoves",
+                "rough-hewn catacomb geometry built from stacked masonry and worn stone joints",
             ],
             "NEURAL_CAVE_GLOW": [
-                "low torchlike glow and ember highlights against deep shadowed hollows",
-                "faint bioluminescent threads tracing ancient tunnel walls",
-                "subtle warm-to-cool light transitions across layered dungeon arches",
+                "low torch and candle glow with ember highlights against deep shadowed hollows",
+                "iron lantern pools of warm light fading quickly into darkness",
+                "subtle warm torch-candle transitions across layered dungeon arches",
             ],
             "NEURAL_CAVE_MORPH": [
-                "interlaced vault ribs and membrane webs opening into deeper tunnel shafts",
-                "stone-meets-organic lattice chambers with branching side passages",
-                "nested dungeon hollows connected by fibrous arching strands",
+                "interlaced vault ribs and masonry spans opening into deeper tunnel shafts",
+                "stone chambers with branching side passages and carved lintels",
+                "nested dungeon hollows connected by heavy arching supports",
             ],
             "NEURAL_CAVE_DEPTH": [
                 "strong central tunnel pull with receding arches and distant chamber light",
                 "descending dungeon perspective with layered vault depth and side alcoves",
-                "long subterranean passage depth with foreground webbing and far voids",
+                "long subterranean passage depth with foreground stone detail and far voids",
             ],
             "NEURAL_CAVE_PAREIDOLIA": [
                 "face-like shadows implied by broken torchlight and arch joints",
@@ -345,28 +347,34 @@ PROMPT_PACKS: List[Dict[str, object]] = [
                 "depth cues engineered for prolonged corridor scanning behavior",
             ],
             "NEURAL_CAVE_ORGANIC_PRESENCE": [
-                "occasional spider webs and subtle crawling silhouettes in corners",
+                "frequent spider webs and occasional spiders in dark vaulted corners",
                 "rare distant human figure reading as explorer or sentinel",
                 "light fungal traces on damp stone seams, never dominant",
+                "frequent skeleton remains near wall alcoves or passage turns",
+                "regular torch-bearing doorways and heavy wooden dungeon doors in side recesses",
             ],
             "CORE_PROMPTS": [
                 "first-person castle dungeon tunnel with deep receding passage",
-                "layered stone arches fused with organic webs, strong depth perspective",
+                "layered stone arches and buttressed walls, strong depth perspective",
             ],
             "ORGANIC_SHORT": [
-                "occasional spider presence on tunnel web strands",
+                "spider webs near damp corner stones",
                 "rare distant human figure silhouette in torch haze",
                 "subtle organic growths in wall recesses",
                 "faint face-like shadows in old stone webbing",
+                "skeleton remains near doorway shadows",
+                "heavy iron-banded wooden doors lit by torch sconces",
             ],
             "BASE_REFINER_PROMPT": (
-                "enhance vaulted corridor depth, refine webbed stone linework, "
-                "clean torchlight gradients, sharpen subtle pareidolia in shadows"
+                "enhance realistic vaulted corridor depth, refine worn stone linework, "
+                "clean torchlight gradients, sharpen subtle pareidolia in shadows, "
+                "preserve ominous low-saturation medieval dungeon mood with clean realistic surfaces and torch-candle-lantern lighting only"
             ),
             "BASE_NEGATIVE_PROMPT": (
                 "modern architecture, bright city interiors, sci-fi metal corridors, "
                 "flat wallpaper pattern, toy plastic look, low detail clutter, text watermark logo, "
-                "cartoon bubble style dominance, insect swarm, crowd, gore"
+                "cartoon bubble style dominance, insect swarm, crowd, gore, neon glow, oversaturated fantasy colors, "
+                "sunlight, skylight, moonlight, window light, outdoor light, open sky"
             ),
         },
     ),
@@ -603,7 +611,7 @@ def _validate_prompt_pack_schema() -> None:
 # - Set ACTIVE_PROMPT_PACK to a pack name (recommended), e.g. "default_membrane_cave"
 # - Set ACTIVE_PROMPT_PACK to "random" for random pack each generation
 # - You may also set ACTIVE_PROMPT_PACK to an integer index
-ACTIVE_PROMPT_PACK: Union[str, int] = "default_membrane_cave"
+ACTIVE_PROMPT_PACK: Union[str, int] = "castle_dungeon_tunnel"
 
 # Backward-compatible index selector (used only when ACTIVE_PROMPT_PACK is None).
 ACTIVE_PROMPT_PACK_INDEX: Optional[int] = None
