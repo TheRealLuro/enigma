@@ -5,7 +5,7 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
   "mainAssemblyName": "Enigma.Client",
   "applicationEnvironment": "Development",
   "resources": {
-    "hash": "sha256-YxIO8jps956g3I1EV3vNufuSjpZdvJYWLHt7Oz52KmU=",
+    "hash": "sha256-0P8ze71Yn0QqdtiG1/ikV5oeDdPV4t7R6znROjGQCNA=",
     "jsModuleNative": [
       {
         "name": "dotnet.native.cs8mcre4gh.js"
@@ -1039,15 +1039,15 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
       },
       {
         "virtualPath": "Enigma.Client.wasm",
-        "name": "Enigma.Client.t8gw5eewos.wasm",
-        "integrity": "sha256-PRefNpIp+pZvnJVvhFFJSdliZ79rmNIY7t57mo+0F90="
+        "name": "Enigma.Client.fkbtjxjkmd.wasm",
+        "integrity": "sha256-Mdk/TRkdC1Wl/Bb0exDrlPxEKn45Yy03wGJiCcXEvLM="
       }
     ],
     "pdb": [
       {
         "virtualPath": "Enigma.Client.pdb",
-        "name": "Enigma.Client.6utk9ovu2m.pdb",
-        "integrity": "sha256-Dk2NgXOmxkwgf1FzJ4xgGZ5GHVSwl+bGJNVk7ATBLss="
+        "name": "Enigma.Client.u7eidf3uxs.pdb",
+        "integrity": "sha256-epHTSKFQJBEXGeyUZG80LGucekn7msbjbojObY5TCfs="
       }
     ],
     "libraryInitializers": [

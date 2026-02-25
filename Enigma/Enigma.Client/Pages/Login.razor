@@ -1,0 +1,105 @@
+﻿@page "/"
+@rendermode InteractiveWebAssembly
+
+<div class="content" style="max-width: 480px; margin-top: 60px;">
+    <div class="card p-4 shadow-sm">
+
+        <h3 class="mb-4 text-center">Sign In</h3>
+
+        <EditForm Model="user" OnValidSubmit="OnLoginClick">
+            <DataAnnotationsValidator />
+
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <InputText class="form-control"
+                           @bind-Value="user.Username"
+                           placeholder="you@example.com" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText type="password"
+                           class="form-control"
+                           @bind-Value="password"
+                           placeholder="••••••••" />
+            </div>
+
+            <div class="mb-3 d-flex justify-content-between align-items-center">
+                <div>
+                    <InputCheckbox @bind-Value="rememberMe"
+                                   class="form-check-input"
+                                   id="remember" />
+                    <label for="remember" class="form-check-label ms-1">
+                        Remember me
+                    </label>
+                </div>
+
+                <button type="button"
+                        class="btn btn-link p-0"
+                        @onclick="OnForgotPasswordClick">
+                    Forgot password?
+                </button>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+                Login
+            </button>
+        </EditForm>
+
+        <div class="mt-4 text-center text-muted">
+            Don’t have an account?
+            <button class="btn btn-link p-0"
+                    @onclick="OnRegisterClick">
+                Create one
+            </button>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    [Inject]
+    NavigationManager NavigationManager { get; set; } = default!;
+    
+    [Inject]
+    HttpClient Http { get; set; }
+    
+    User user = new();
+    string password = string.Empty;
+    bool rememberMe;
+
+    async Task OnLoginClick()
+    {
+        var url = $"api/auth/login?username={user.Username}&password={password}";
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<LoginResponse>(url);
+
+            if (response == null || response.Status != "success")
+            {
+                Console.WriteLine("Login failed.");
+                return;
+            }
+
+            Console.WriteLine($"Welcome {response.User?.Username}");
+            Console.WriteLine($"Daily reward granted: {response.DailyRewardGranted}");
+
+            NavigationManager.NavigateTo("/home");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Login error: {ex.Message}");
+        }
+    }
+
+    void OnRegisterClick()
+    {
+        NavigationManager.NavigateTo("/register");
+    }
+
+    void OnForgotPasswordClick()
+    {
+        NavigationManager.NavigateTo("/forgot-password");
+    }
+}

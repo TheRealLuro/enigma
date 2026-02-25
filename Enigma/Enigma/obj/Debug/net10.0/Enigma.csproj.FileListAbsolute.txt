@@ -102,4 +102,5 @@ C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma\obj\Debug\net10.0\Enigma.pdb
 C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma\obj\Debug\net10.0\Enigma.genruntimeconfig.cache
 C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma\obj\Debug\net10.0\ref\Enigma.dll
 C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma\obj\Debug\net10.0\compressed\17x2xvc4lr-{0}-cd9hg6ei75-cd9hg6ei75.gz
-C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma\obj\Debug\net10.0\compressed\ejx91sy4fn-{0}-vy15f32uni-vy15f32uni.gz
+C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma\obj\Debug\net10.0\Enigma.sourcelink.json
+C:\Neumont\WebProjects\Enigma\Enigma\Enigma\Enigma\obj\Debug\net10.0\compressed\ejx91sy4fn-{0}-j8r5fs0jpt-j8r5fs0jpt.gz

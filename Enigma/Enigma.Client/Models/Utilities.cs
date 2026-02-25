@@ -2,6 +2,14 @@
 
 namespace Enigma.Client.Models
 {
+    public enum RoomType
+    {
+        Normal,
+        Start,
+        Finish,
+        Reward
+    }
+
     public static class Utilities
     {
         public static int SeedGetDifficulty(string seed)
@@ -15,6 +23,10 @@ namespace Enigma.Client.Models
         }
 
         public static Room GetNextRoom(string seed, Vector2 currentRoom, string direction)
+        {
+            throw new NotImplementedException();
+        }
+        public static RoomType GetRoomType(string seed, Vector2 currentRoom)
         {
             throw new NotImplementedException();
         }

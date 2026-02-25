@@ -1,15 +1,50 @@
-﻿@page "/"
+﻿@page "/home"
 
-<PageTitle>Start</PageTitle>
+<div class="hero">
+    <h1>Welcome to Enigma</h1>
+    <p>
+        View options below:
+    </p>
+</div>
 
-<h1>Start Page</h1>
-<img class="img-title" src="favicon.png" />
-<button class="btn btn-primary" @onclick="OnPlayClick">Play Game</button>
-<button class="btn btn-primary" @onclick="OnLeaderboardsClick">Leaderboards</button>
+<div class="grid grid-auto">
 
-@code{
-    [Inject]
-    NavigationManager NavigationManager { get; set; }
+    <div class="game-card clickable" @onclick="OnPlayClick">
+        <div class="game-card-image"></div>
+        <div class="game-card-content">
+            <div class="game-card-title">Play</div>
+            <div class="game-card-meta">Generate or load a maze</div>
+        </div>
+    </div>
+
+    <div class="game-card clickable" @onclick="OnLeaderboardsClick">
+        <div class="game-card-image"></div>
+        <div class="game-card-content">
+            <div class="game-card-title">Leaderboard</div>
+            <div class="game-card-meta">See top mazes</div>
+        </div>
+    </div>
+
+    <div class="game-card clickable" @onclick="OnProfileClick">
+        <div class="game-card-image"></div>
+        <div class="game-card-content">
+            <div class="game-card-title">Profile</div>
+            <div class="game-card-meta">View your stats & history</div>
+        </div>
+    </div>
+
+    <div class="game-card clickable" @onclick="OnLogoutClick">
+        <div class="game-card-image"></div>
+        <div class="game-card-content">
+            <div class="game-card-title">Logout</div>
+            <div class="game-card-meta">Return to login screen</div>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    [Inject] NavigationManager NavigationManager { get; set; } = default!;
 
     void OnPlayClick()
     {
@@ -21,4 +56,13 @@
         NavigationManager.NavigateTo("/leaderboard");
     }
 
+    void OnProfileClick()
+    {
+        NavigationManager.NavigateTo("/profile");
+    }
+
+    void OnLogoutClick()
+    {
+        NavigationManager.NavigateTo("/");
+    }
 }
