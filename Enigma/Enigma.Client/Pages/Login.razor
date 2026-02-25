@@ -70,7 +70,9 @@
 
     async Task OnLoginClick()
     {
-        var url = $"api/auth/login?username={user.Username}&password={password}";
+        var url =
+            $"/api/auth/login?username={Uri.EscapeDataString(user.Username ?? string.Empty)}" +
+            $"&password={Uri.EscapeDataString(password)}";
 
         try
         {

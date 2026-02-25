@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Enigma")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b6e05cf73574da1d6698f82a3adadf66c0813d43")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4bc99f178d50f489417a5cb73934c592b3484ddb")]
 [assembly: System.Reflection.AssemblyProductAttribute("Enigma")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Enigma")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

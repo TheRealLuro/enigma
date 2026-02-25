@@ -82,11 +82,11 @@
             errorMessage = "Passwords do not match.";
             return;
         }
-
+        
         var url =
-            $"api/auth/signUp?username={newUser.DisplayName}" +
-            $"&email={newUser.Email}" +
-            $"&password={password}";
+            $"/api/auth/signUp?username={Uri.EscapeDataString(newUser.DisplayName ?? string.Empty)}" +
+            $"&email={Uri.EscapeDataString(newUser.Email ?? string.Empty)}" +
+            $"&password={Uri.EscapeDataString(password)}";
 
         try
         {

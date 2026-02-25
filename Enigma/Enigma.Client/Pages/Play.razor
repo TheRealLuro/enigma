@@ -79,12 +79,14 @@
 
     private async Task GetSeedFromName(string name)
     {
-        Seed = await Http.GetStringAsync($"/api/API/load?name={name}");
+        Seed = await Http.GetStringAsync($"/api/auth/loadMap?name={Uri.EscapeDataString(name)}");
     }
 
     private async Task GetSeedNew(string difficulty, int size)
     {
-        Seed = await Http.GetStringAsync($"/api/API/new?difficulty={difficulty}&size={size}");
+        Seed = await Http.GetStringAsync(
+            $"/api/auth/newMap?difficulty={Uri.EscapeDataString(difficulty)}&size={size}"
+        );
     }
 
     private void OnBackClick()
