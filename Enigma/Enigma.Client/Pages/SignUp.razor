@@ -67,6 +67,9 @@
     [Inject]
     HttpClient Http { get; set; }
 
+    [Inject]
+    IConfiguration Config { get; set; } = default!;
+
     RegisterUser newUser = new();
     string password = string.Empty;
     string confirmPassword = string.Empty;
@@ -82,16 +85,18 @@
             errorMessage = "Passwords do not match.";
             return;
         }
-        
+        var token = Config["Api:Token"] ?? string.Empty;
         var url =
-            $"/api/auth/signUp?username={Uri.EscapeDataString(newUser.DisplayName ?? string.Empty)}" +
+            $"database/users/signup?username={Uri.EscapeDataString(newUser.DisplayName ?? string.Empty)}" +
             $"&email={Uri.EscapeDataString(newUser.Email ?? string.Empty)}" +
-            $"&password={Uri.EscapeDataString(password)}";
+            $"&passwd={Uri.EscapeDataString(password)}" +
+            $"&token={Uri.EscapeDataString(token)}";
 
         try
         {
-            var response =
-                await Http.GetFromJsonAsync<SignUpResponse>(url);
+            using var httpResponse = await Http.PostAsync(url, content: null);
+            httpResponse.EnsureSuccessStatusCode();
+            var response = await httpResponse.Content.ReadFromJsonAsync<SignUpResponse>();
 
             if (response == null || response.Status != "success")
             {

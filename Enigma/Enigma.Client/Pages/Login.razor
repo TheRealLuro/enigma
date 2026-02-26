@@ -60,23 +60,30 @@
 @code {
     [Inject]
     NavigationManager NavigationManager { get; set; } = default!;
-    
+
     [Inject]
     HttpClient Http { get; set; }
-    
+
+    [Inject]
+    IConfiguration Config { get; set; } = default!;
+
     User user = new();
     string password = string.Empty;
     bool rememberMe;
 
     async Task OnLoginClick()
     {
+        var token = Config["Api:Token"] ?? string.Empty;
         var url =
-            $"/api/auth/login?username={Uri.EscapeDataString(user.Username ?? string.Empty)}" +
-            $"&password={Uri.EscapeDataString(password)}";
+            $"database/users/login?username={Uri.EscapeDataString(user.Username ?? string.Empty)}" +
+            $"&passwd={Uri.EscapeDataString(password)}" +
+            $"&token={Uri.EscapeDataString(token)}";
 
         try
         {
-            var response = await Http.GetFromJsonAsync<LoginResponse>(url);
+            using var httpResponse = await Http.PostAsync(url, content: null);
+            httpResponse.EnsureSuccessStatusCode();
+            var response = await httpResponse.Content.ReadFromJsonAsync<LoginResponse>();
 
             if (response == null || response.Status != "success")
             {

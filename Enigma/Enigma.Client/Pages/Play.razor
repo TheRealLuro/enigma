@@ -63,6 +63,7 @@
 @code {
     [Inject] NavigationManager NavigationManager { get; set; } = default!;
     [Inject] HttpClient Http { get; set; }
+    [Inject] IConfiguration Config { get; set; } = default!;
 
     private Map mapEnter = new Map();
     private string Seed = string.Empty;
@@ -79,13 +80,16 @@
 
     private async Task GetSeedFromName(string name)
     {
-        Seed = await Http.GetStringAsync($"/api/auth/loadMap?name={Uri.EscapeDataString(name)}");
+        var token = Config["Api:Token"] ?? string.Empty;
+        Seed = await Http.GetStringAsync(
+            $"database/maps/load_map?map_name={Uri.EscapeDataString(name)}&token={Uri.EscapeDataString(token)}"
+        );
     }
 
     private async Task GetSeedNew(string difficulty, int size)
     {
         Seed = await Http.GetStringAsync(
-            $"/api/auth/newMap?difficulty={Uri.EscapeDataString(difficulty)}&size={size}"
+            $"maze/genseed?difficulty={Uri.EscapeDataString(difficulty)}&size={size}"
         );
     }
 
