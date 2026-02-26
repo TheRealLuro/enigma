@@ -81,20 +81,28 @@
     private async Task GetSeedFromName(string name)
     {
         var token = Config["Api:Token"] ?? string.Empty;
-        Seed = await Http.GetStringAsync(
+        var response = await Http.GetFromJsonAsync<SeedApiResponse>(
             $"database/maps/load_map?map_name={Uri.EscapeDataString(name)}&token={Uri.EscapeDataString(token)}"
         );
+        Seed = response?.Seed ?? string.Empty;
     }
 
     private async Task GetSeedNew(string difficulty, int size)
     {
-        Seed = await Http.GetStringAsync(
-            $"maze/genseed?difficulty={Uri.EscapeDataString(difficulty)}&size={size}"
+        var token = Config["Api:Token"] ?? string.Empty;
+        var response = await Http.GetFromJsonAsync<SeedApiResponse>(
+            $"maze/genseed?difficulty={Uri.EscapeDataString(difficulty)}&size={size}&token={Uri.EscapeDataString(token)}"
         );
+        Seed = response?.Seed ?? string.Empty;
     }
 
     private void OnBackClick()
     {
         NavigationManager.NavigateTo("/home");
+    }
+
+    private sealed class SeedApiResponse
+    {
+        public string Seed { get; set; } = string.Empty;
     }
 }

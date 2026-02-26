@@ -25,6 +25,7 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 origins = [
     "https://pro150enigma-dfd8aqh7g4cuaxee.canadacentral-01.azurewebsites.net",
+    "http://localhost:5241"
 ]
 
 app.add_middleware(
