@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import maps_collection, marketplace_collection, app_token
+from .db import maps_collection, marketplace_collection
 from datetime import datetime
 from main import limiter
-from decoder import decode
+
 
 
 router = APIRouter(prefix="/database/maps")
@@ -10,12 +10,9 @@ router = APIRouter(prefix="/database/maps")
 
 @router.post("/add_to_marketplace")
 @limiter.limit("5/minute")
-def add_to_market(request: Request, map_name: str, price: int, token: str):
+def add_to_market(request: Request, map_name: str, price: int ):
 
 
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(401)
     
     map = maps_collection.find_one({"map_name": map_name})
 

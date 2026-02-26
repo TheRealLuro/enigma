@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import users_collection, maps_collection, item_inventory, app_token
+from .db import users_collection, maps_collection, item_inventory
 from main import limiter
-from decoder import decode
 
 router = APIRouter(prefix="/database/users")
 
@@ -14,14 +13,9 @@ def update_user_progress(
     map_seed: str,
     items_in_use: str,
     earned_mn: int,
-    token: str,
     seed_existed: bool = True,
     map_lost: bool = False,
 ):
-
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(401)
 
 
     user = users_collection.find_one({"username": username})

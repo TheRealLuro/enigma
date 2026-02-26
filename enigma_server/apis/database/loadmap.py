@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import maps_collection, app_token
+from .db import maps_collection
 from main import limiter
-from decoder import decode
 
 
 router = APIRouter(prefix="/database/maps")
@@ -11,13 +10,9 @@ router = APIRouter(prefix="/database/maps")
 @limiter.limit("1/minute")
 def load_map(
     request: Request,
-    map_name: str,
-    token: str, 
+    map_name: str, 
 ):
     
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(401)
     
     map_data = maps_collection.find_one({"map_name": map_name})
 

@@ -1,18 +1,14 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import users_collection, app_token
+from .db import users_collection
 from main import limiter
-from decoder import decode
+
 
 router = APIRouter(prefix="/database/users")
 
 
 @router.post("/accept_fr")
 @limiter.limit("10/minute")
-def accept_request(request: Request, username: str, adding: str, token: str):
-
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(status_code=401, detail="Invalid token")
+def accept_request(request: Request, username: str, adding: str ):
      
 
     user = users_collection.find_one({"username": username})

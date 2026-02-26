@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import marketplace_collection, app_token, users_collection, maps_collection
+from .db import marketplace_collection,  users_collection, maps_collection
 from datetime import datetime, timezone
 from main import limiter
 from decoder import decode
@@ -10,11 +10,8 @@ router = APIRouter(prefix="/database/marketplace")
 
 @router.post("/buy")
 @limiter.limit("5/minute")
-def buy_from(request: Request, map_name: str, buyer: str, token: str):
+def buy_from(request: Request, map_name: str, buyer: str):
 
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(401)
     
     listing = marketplace_collection.find_one_and_delete({'map_name': map_name})
 

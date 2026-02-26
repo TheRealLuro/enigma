@@ -10,7 +10,6 @@ user = os.getenv("MONGO_USER")
 password = os.getenv("MONGO_PASSWORD")
 cluster = os.getenv("MONGO_CLUSTER")
 db_name = os.getenv("MONGO_DB")
-app_token = os.getenv("APP_TOKEN")
 
 uri = f"mongodb+srv://{user}:{password}{cluster}"
 

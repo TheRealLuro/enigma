@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import maps_collection, app_token
+from .db import maps_collection
 from main import limiter
-from decoder import decode
 import random
 
 
@@ -23,14 +22,10 @@ def update_map(
     request: Request,
     seed: str,
     username: str,
-    completion_time: str, 
-    token: str, 
+    completion_time: str,  
     rating: int = random.randint(0,10), 
 ):
     
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(401)
     
     hours, minutes, seconds, milliseconds = map(int, completion_time.split(":"))
 

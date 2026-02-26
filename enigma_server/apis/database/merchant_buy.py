@@ -1,8 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 from pymongo.errors import PyMongoError
-
-from .db import app_token, client, item_inventory, merchant, users_collection
-from decoder import decode
+from .db import  client, item_inventory, merchant, users_collection
 from main import limiter
 
 
@@ -11,11 +9,8 @@ router = APIRouter(prefix="/database/merchant")
 
 @router.post("/buy_item")
 @limiter.limit("10/minute")
-def buy_item(request: Request, username: str, item_id: str, token: str, quantity: int = 1):
-    import hmac
-
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(status_code=401, detail="Invalid token")
+def buy_item(request: Request, username: str, item_id: str, quantity: int = 1):
+    
 
     if quantity < 1:
         raise HTTPException(status_code=400, detail="Quantity must be at least 1")

@@ -1,19 +1,14 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import users_collection, app_token, maps_collection
+from .db import users_collection, maps_collection
 import bcrypt
 from main import limiter
-from decoder import decode
 from bson import ObjectId
 
 router = APIRouter(prefix="/database/users")
 
 @router.get("/getuser")
 @limiter.limit("10/minute")
-def get_user(request: Request, username: str, passwd: str, token: str):
-
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(401)
+def get_user(request: Request, username: str, passwd: str):
     
     user = users_collection.find_one({"username": username})
     if not user:

@@ -1,18 +1,14 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import users_collection, app_token
+from .db import users_collection
 from main import limiter
-from decoder import decode
 
 router = APIRouter(prefix="/database/users")
 
 
 @router.post("/send_fr")
 @limiter.limit("10/minute")
-def send_request(request: Request, sender_user: str, receiver_user: str, token: str):
+def send_request(request: Request, sender_user: str, receiver_user: str):
 
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(401)
     
 
     r_user = users_collection.find_one({"username": receiver_user})

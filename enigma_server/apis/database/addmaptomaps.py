@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import maps_collection, users_collection, app_token
+from .db import maps_collection, users_collection
 from datetime import datetime, timezone
 from main import limiter
-from decoder import decode
 from .map_audit import map_audit
 from imagegen import generate_map_image_payload
 
@@ -21,11 +20,8 @@ def add_map(
     founder: str,
     time_completed: str,
     first_rating: int,
-    token: str,
 ):
-    import hmac
-    if not hmac.compare_digest(decode(token), app_token):
-        raise HTTPException(401)
+
 
     
     if maps_collection.find_one({"map_name": map_name}) or maps_collection.find_one({"seed": seed}):
