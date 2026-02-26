@@ -82,7 +82,7 @@
     {
         var token = Config["Api:Token"] ?? string.Empty;
         var response = await Http.GetFromJsonAsync<SeedApiResponse>(
-            $"database/maps/load_map?map_name={Uri.EscapeDataString(name)}&token={Uri.EscapeDataString(token)}"
+            $"database/maps/load_map?map_name={Uri.EscapeDataString(name)}"
         );
         Seed = response?.Seed ?? string.Empty;
     }
@@ -91,7 +91,7 @@
     {
         var token = Config["Api:Token"] ?? string.Empty;
         var response = await Http.GetFromJsonAsync<SeedApiResponse>(
-            $"maze/genseed?difficulty={Uri.EscapeDataString(difficulty)}&size={size}&token={Uri.EscapeDataString(token)}"
+            $"maze/genseed?difficulty={Uri.EscapeDataString(difficulty)}&size={size}"
         );
         Seed = response?.Seed ?? string.Empty;
     }

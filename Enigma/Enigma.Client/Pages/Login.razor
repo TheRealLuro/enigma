@@ -76,8 +76,7 @@
         var token = Config["Api:Token"] ?? string.Empty;
         var url =
             $"database/users/login?username={Uri.EscapeDataString(user.Username ?? string.Empty)}" +
-            $"&passwd={Uri.EscapeDataString(password)}" +
-            $"&token={Uri.EscapeDataString(token)}";
+            $"&passwd={Uri.EscapeDataString(password)}";
 
         try
         {

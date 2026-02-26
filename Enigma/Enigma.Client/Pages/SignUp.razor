@@ -89,8 +89,7 @@
         var url =
             $"database/users/signup?username={Uri.EscapeDataString(newUser.DisplayName ?? string.Empty)}" +
             $"&email={Uri.EscapeDataString(newUser.Email ?? string.Empty)}" +
-            $"&passwd={Uri.EscapeDataString(password)}" +
-            $"&token={Uri.EscapeDataString(token)}";
+            $"&passwd={Uri.EscapeDataString(password)}";
 
         try
         {
