@@ -19,5 +19,3 @@ TestResults/
 .png
 .env
 Dockerfile
-*.png
-*.PNG
