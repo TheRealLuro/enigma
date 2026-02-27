@@ -102,6 +102,8 @@ Every maze gets a **visual fingerprint**.
   - Users
   - Maps
   - Discoveries
+  - Marketplace
+  - Item shop
 - **Redis (Planned)**
   - Multiplayer state
   - Real-time sync
@@ -125,11 +127,14 @@ Each maze is diffused into a themed visual world.
 - ❓ ???  
 - ❓ ???
 
-Some themes remain undiscovered or uncreated — adding mystery to the ecosystem.
+Some themes remain undiscovered or uncreated — adding mystery to the ecosystem. Community can vote on more in the future...
 
 ---
 
 ## 🧪 Diffusion System
+- Yes, we use a diffusion model, but every image is engineered with actual psychology research. (we spent days doing it)
+- Each theme follows guidlines and science to achieve captivation and neural activity in the human brain.
+
 
 The Enigma visual pipeline evolved through multiple stages:
 
@@ -172,9 +177,6 @@ Each maze becomes a **digital artifact**.
 - Shared discoveries
 
 ### 💰 Economy
-- In-game currency
-- Map marketplace
-- Merchant shops
 - Cosmetic skins
 
 ### 🎨 Personalization
