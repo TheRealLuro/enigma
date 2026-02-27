@@ -16,14 +16,8 @@ ehthumbs.db
 *.log
 node_modules/
 TestResults/
-Important/
-**/something.txt
-.txt
 .png
 .env
 Dockerfile
-decoder.py
-encoder.py
-something.txt
-.png
-.PNG
+*.png
+*.PNG
