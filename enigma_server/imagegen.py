@@ -119,7 +119,6 @@ def _upscale_to_target(image: Image.Image, target_size: int = 2160) -> Image.Ima
     upscaled = rgb.resize((target_size, target_size), resample=Image.Resampling.LANCZOS)
     return upscaled.filter(ImageFilter.DETAIL).filter(ImageFilter.SHARPEN)
 
-
 def _clamp_uint8(value: float) -> int:
     return max(0, min(255, int(value)))
 
