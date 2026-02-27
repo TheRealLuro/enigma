@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
 from .db import users_collection, maps_collection
-import bcrypt
 from main import limiter
 from bson import ObjectId
 
@@ -8,7 +7,7 @@ router = APIRouter(prefix="/database/users")
 
 @router.get("/getuser")
 @limiter.limit("10/minute")
-def get_user(request: Request, username: str, passwd: str):
+def get_user(request: Request, username: str):
     
     user = users_collection.find_one({"username": username})
     if not user:
@@ -17,13 +16,6 @@ def get_user(request: Request, username: str, passwd: str):
 
     user["_id"] = str(user["_id"])
 
-    hashed = user.get("password")
-    passwd_bytes = passwd.encode('utf-8')
-    hashed_bytes = hashed if isinstance(hashed, bytes) else hashed.encode('utf-8')
-
-    if not bcrypt.checkpw(passwd_bytes, hashed_bytes):
-        raise HTTPException(status_code=401, detail="Incorrect password")
-    
 
     user_maps = user.get("maps_discovered", [])
 
@@ -37,6 +29,12 @@ def get_user(request: Request, username: str, passwd: str):
     user["maps_discovered"] = maps
 
     user_data = user.copy()
+    user_data.pop("email", None)
+    user_data.pop("friends", None)
+    user_data.pop("friend_requests", None)
+    user_data.pop("owned_cosmetics", None)
+    user_data.pop("item_counts", None)
+    user_data.pop("last_login_at", None)
     user_data.pop("password", None)
 
 

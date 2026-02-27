@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-
 from .db import merchant
 
 

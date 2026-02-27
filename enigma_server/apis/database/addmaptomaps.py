@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from main import limiter
 from .map_audit import map_audit
 from imagegen import generate_map_image_payload
-
+from imageupload import upload_image
 
 router = APIRouter(prefix="/database/maps")
 
@@ -39,16 +39,20 @@ def add_map(
             raise HTTPException(status_code=400, detail="Rating must be 1-10")
 
     rating = [first_rating]
-    value = map_audit(seed)
+    value = int(round(map_audit(seed)))
 
     max_image_attempts = 12
     map_image = None
     map_theme = None
+    
     try:
         for _ in range(max_image_attempts):
             payload = generate_map_image_payload(seed)
-            map_image = payload["map_image"]
+            map_link = upload_image(payload["map_image"])
+
+            map_image = map_link
             map_theme = payload["theme"]
+        
             if maps_collection.find_one({"map_image": map_image}) is None:
                 break
         else:
@@ -90,7 +94,7 @@ def add_map(
         {"username": founder},
         {
             "$addToSet": {"maps_discovered": map_id},
-            "$inc": {"maze_nuggets": value},
+            "$inc": {"maze_nuggets": int(round(value))},
         },
     )
 

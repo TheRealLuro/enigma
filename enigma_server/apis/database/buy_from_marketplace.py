@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, Request
 from .db import marketplace_collection,  users_collection, maps_collection
 from datetime import datetime, timezone
 from main import limiter
-from decoder import decode
 
 
 router = APIRouter(prefix="/database/marketplace")

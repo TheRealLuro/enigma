@@ -85,7 +85,7 @@
             errorMessage = "Passwords do not match.";
             return;
         }
-        var token = Config["Api:Token"] ?? string.Empty;
+    
         var url =
             $"database/users/signup?username={Uri.EscapeDataString(newUser.DisplayName ?? string.Empty)}" +
             $"&email={Uri.EscapeDataString(newUser.Email ?? string.Empty)}" +

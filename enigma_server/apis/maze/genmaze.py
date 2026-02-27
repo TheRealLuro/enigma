@@ -15,6 +15,8 @@ def return_seed(request: Request, difficulty: str, size: int):
 
     if size <= 1:
         raise HTTPException(status_code=400, detail="Invalid size must be greater than 1")
+    elif size >= 200:
+        raise HTTPException(status_code=400, detail="Way too big, please choose below 200")
     
     seed_exists = True
 

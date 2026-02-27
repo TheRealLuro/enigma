@@ -1,7 +1,4 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
-################################################################################
-
+﻿
 /.vs
 bin/
 obj/
@@ -23,3 +20,10 @@ Important/
 **/something.txt
 .txt
 .png
+.env
+Dockerfile
+decoder.py
+encoder.py
+something.txt
+.png
+.PNG

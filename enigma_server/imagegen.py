@@ -1036,12 +1036,223 @@ def _diffuse_dungeon_pipeline(pipe, image: Image.Image, seed: str) -> Image.Imag
     return result
 
 
+def _build_sewer_architecture_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    anchors = [
+        "realistic brick sewer tunnel extending deep into near-total darkness with low arched ceiling and vanishing perspective",
+        "first-person descent through a long decaying brick sewer corridor with stagnant water and corroded pipe-lined walls",
+        "extensive underground sewer passage with aged mortared brickwork, grate openings, and pitch-black far tunnel depth",
+    ]
+    props = [
+        "misshapen and broken corroded pipes snaking erratically along both side walls with rust bloom at joints",
+        "stagnant puddles and grate water surfaces reflecting toxic green ambient light against dark wet ground",
+        "scattered garbage items — wrappers, cans, and bottles — identifiable by bright red, yellow, and green packaging",
+        "crumbling mortar joints, water staining, and mineral deposit efflorescence across aged brick surfaces",
+        "low ground depressions pooling putrid water with faint flow visible through floor grate openings",
+    ]
+    return ", ".join(
+        [
+            anchors[rng.integers(0, len(anchors))],
+            props[rng.integers(0, len(props))],
+            props[rng.integers(0, len(props))],
+            "eerie foreboding atmosphere, dim sourceless ambient light fading to near-total black at tunnel depth, no living creatures or organic life present",
+            "clear brick tunnel architectural readability with coherent wall geometry and deep perspective recession",
+        ]
+    )
+
+def _build_sewer_detail_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    accents = [
+        "misshapen and broken corroded pipes snaking along both side walls with heavy rust bloom and joint leakage staining",
+        "stagnant puddles and grate water surfaces with toxic green reflective sheen pooling in ground depressions",
+        "scattered garbage items — crushed cans, wrappers, and bottles — with bright isolated red, yellow, and green packaging",
+        "crumbling mortar joints, mineral deposit efflorescence, and long moisture stain streaks down aged brick faces",
+        "floor grate openings with putrid water visible flowing beneath and low mist collecting above wet ground surface",
+    ]
+    return ", ".join(
+        [
+            "realistic brick sewer tunnel, eerie and foreboding atmosphere",
+            "dim sourceless ambient lighting fading to near-total pitch black at tunnel depth with toxic green reflections on water surfaces only",
+            "low arched brick vaults, corroded pipes, wet cracked stone floor, coherent deep perspective recession",
+            "clean realism with controlled texture detail and crisp brick edge definition",
+            accents[rng.integers(0, len(accents))],
+        ]
+    )
+
+
+def _diffuse_sewer_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
+    prompt = _build_sewer_architecture_prompt(seed)
+    refiner_prompt = BASE_REFINER_PROMPT
+    negative_prompt = BASE_NEGATIVE_PROMPT
+    detail_prompt = _build_sewer_detail_prompt(seed)
+
+    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    refiner_prompt = _clip_prompt_safe(f"{refiner_prompt}, puddles, flowing water, tunnel archways, halls, water, sewer, grates, exit, entrance, tunnel perspective, first person perspective, realism, realistic, river, pathway, hidden faces, realistic textures", max_words=CLIP_REFINER_WORDS, max_chars=140)
+    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+    detail_prompt = _clip_prompt_safe(f"{detail_prompt}, small rats, realistic rats", max_words=CLIP_DETAIL_WORDS, max_chars=170)
+
+    sewer_negative = _clip_prompt_safe((
+        f"{negative_prompt}, cartoon style, toy plastic look, neon psychedelic colors, flat cel shading, "
+        "clean modern architecture, bright daylight, skylight, sunlight, moonlight, window light, outdoor light, "
+        "open sky, sci-fi corridor, low contrast haze, big spiders, massive spiders, unreal, solid wall picture"
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
+    base = pipe(
+        prompt=prompt,
+        negative_prompt=sewer_negative,
+        image=image.convert("RGB"),
+        strength=0.58,
+        guidance_scale=6.6,
+        num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
+    ).images[0]
+
+    detail = pipe(
+        prompt=detail_prompt,
+        negative_prompt=sewer_negative,
+        image=base.convert("RGB"),
+        strength=0.16,
+        guidance_scale=6.0,
+        num_inference_steps=12,
+    ).images[0]
+
+    result = pipe(
+        prompt=refiner_prompt,
+        negative_prompt=sewer_negative,
+        image=detail,
+        strength=0.20,
+        guidance_scale=5.0,
+        num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
+    ).images[0]
+
+    result = result.convert("RGB")
+    result = _apply_spectral_grade(result, seed=seed)
+    result = _solidify_color_fields(result)
+    result = _lift_deep_blacks(result)
+    result = _solidify_color_fields(result)
+    result = result.filter(ImageFilter.SMOOTH_MORE)
+    result = result.filter(ImageFilter.GaussianBlur(0.12))
+    result = ImageEnhance.Color(result).enhance(0.88)
+    result = ImageEnhance.Contrast(result).enhance(1.24)
+    result = ImageEnhance.Brightness(result).enhance(0.95)
+    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=96, threshold=2))
+    return result
+
+
+def _build_hedge_architecture_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    anchors = [
+        "ground-level first-person view inside a vibrant hedge tunnel corridor with tall trimmed green hedges rising on both sides",
+        "eye-level perspective standing inside a sunlit hedge tunnel path with hedge walls towering left and right and sky visible above",
+        "walking-level view through a hedge tunnel passage with tall square green hedge walls flanking both sides and path ahead",
+    ]
+    props = [
+        "small scattered stones and sticks along the bright grass path floor",
+        "bright blue sky with soft white clouds visible above the hedge tops from ground level",
+        "junction ahead where the hedge path splits into multiple directions at eye level",
+        "neatly trimmed flat hedge tops visible against open sky when looking upward from path level",
+        "dappled natural sunlight casting soft shadows along the grass floor from tall hedge walls",
+    ]
+    return ", ".join(
+        [
+            anchors[rng.integers(0, len(anchors))],
+            props[rng.integers(0, len(props))],
+            props[rng.integers(0, len(props))],
+            "ground-level first-person camera, NOT aerial, NOT top-down, NOT birds-eye, eye-level walking perspective only",
+            "bright calming atmosphere, natural daylight, vibrant greens and sky blue, no darkness or fear",
+        ]
+    )
+
+def _build_hedge_detail_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    accents = [
+        "small scattered light gray stones and pale brown sticks resting naturally along the bright grass floor path",
+        "bright blue sky with soft white clouds visible above the hedge tops from ground-level perspective",
+        "hedge path junction ahead where the corridor splits into multiple directions as seen from eye level",
+        "clean geometric flat-topped hedge walls casting soft midday shadows onto the bright grass floor below",
+        "vibrant saturated green hedge walls rising tall on both sides with crisp trimmed edges framing the sky above",
+    ]
+    return ", ".join(
+        [
+            "realistic vibrant hedge tunnel interior, calming and intriguing atmosphere",
+            "ground-level first-person walking perspective, eye-level camera, NOT top-down, NOT aerial, NOT birds-eye view",
+            "tall neatly trimmed square green hedges rising on both sides, bright grass floor, open sky above, coherent forward path depth",
+            "bright natural daylight, clean realism, crisp hedge edge definition",
+            accents[rng.integers(0, len(accents))],
+        ]
+    )
+
+
+def _diffuse_hedge_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
+    prompt = _build_hedge_architecture_prompt(seed)
+    refiner_prompt = BASE_REFINER_PROMPT
+    negative_prompt = BASE_NEGATIVE_PROMPT
+    detail_prompt = _build_hedge_detail_prompt(seed)
+
+    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    refiner_prompt = _clip_prompt_safe(f"{refiner_prompt}, First-person perspective inside a large, photorealistic hedge tunnel. Tall, dense green hedges rise at least 10–12 feet high on both sides,"
+        "tightly trimmed but slightly organic and imperfect. Narrow dirt and gravel pathway winding forward, subtle footprints and scattered leaves on the ground. Soft natural sunlight filtering through small gaps in the hedge tops,"
+        "creating dappled shadows across the path. Slight depth of field, cinematic lens feel (35mm), ultra-detailed textures on leaves and branches, realistic lighting and shadow behavior, physically accurate materials, high dynamic range,"
+        "No visible sky except faint light bleeding through. Slight atmospheric haze in the distance to add depth. Realistic scale and proportions, grounded human eye level perspective,"
+        "Subtle environmental storytelling — maybe a faint fork in the path ahead or a partially obscured dead end,"
+        "Photorealistic, 8k detail, global illumination, ray-traced lighting, sharp focus, immersive, natural color grading, no stylization, no fantasy elements.first person, first person perspective, hedge pathway, hedge tunnel, tunnel, pathway, walkway, hall, clear walkway, walkway surrounded by bushes, realism, realistic, paved walkway", max_words=CLIP_REFINER_WORDS, max_chars=140)
+    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+    detail_prompt = _clip_prompt_safe(f"{detail_prompt}, first person view, detailed leaves, bush looks real, real looking hedge, real looking bushes, small flowers, detailed grass walkway, grass path, archway in front of point of view,", max_words=CLIP_DETAIL_WORDS, max_chars=170)
+
+    hedge_negative = _clip_prompt_safe((
+        f"{negative_prompt}, cartoon style, toy plastic look, neon psychedelic colors, flat cel shading, wall in the way, wall, obstructed path, path blocked, smudged details"
+        "clean modern architecture, window light"
+        "open sky, sci-fi corridor, low contrast haze, big spiders, massive spiders, unreal, solid wall picture, sky down view, third person view"
+       "aerial view, top-down view, birds-eye view, overhead perspective, drone shot, map view, overhead camera, tunnel in the view, top down view, structure on the walkway, mini maze in view, maze in view, smudged details, smudged leaves, wall in front of the tunnel "
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
+    base = pipe(
+        prompt=prompt,
+        negative_prompt=hedge_negative,
+        image=image.convert("RGB"),
+        strength=0.58,
+        guidance_scale=6.6,
+        num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
+    ).images[0]
+
+    detail = pipe(
+        prompt=detail_prompt,
+        negative_prompt=hedge_negative,
+        image=base.convert("RGB"),
+        strength=0.16,
+        guidance_scale=6.0,
+        num_inference_steps=12,
+    ).images[0]
+
+    result = pipe(
+        prompt=refiner_prompt,
+        negative_prompt=hedge_negative,
+        image=detail,
+        strength=0.20,
+        guidance_scale=5.0,
+        num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
+    ).images[0]
+
+    result = result.convert("RGB")
+    result = _solidify_color_fields(result)
+    result = _lift_deep_blacks(result)
+    result = _solidify_color_fields(result)
+    result = ImageEnhance.Color(result).enhance(0.88)
+    result = ImageEnhance.Contrast(result).enhance(1.24)
+    result = ImageEnhance.Brightness(result).enhance(0.95)
+    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=96, threshold=2))
+    return result
+
+
 def diffuse_abstract(image: Image.Image, seed: str) -> Image.Image:
     pipe = get_pipe()
     if "cartoon" in PROMPT_PACK_NAME:
         return _diffuse_cartoon_pipeline(pipe=pipe, image=image, seed=seed)
     if "dungeon" in PROMPT_PACK_NAME or "castle" in PROMPT_PACK_NAME:
         return _diffuse_dungeon_pipeline(pipe=pipe, image=image, seed=seed)
+    if "sewer" in PROMPT_PACK_NAME:
+        return _diffuse_sewer_pipeline(pipe=pipe, image=image, seed=seed)
+    if "hedge" in PROMPT_PACK_NAME:
+        return _diffuse_hedge_pipeline(pipe=pipe, image=image, seed=seed)
     return _diffuse_membrane_pipeline(pipe=pipe, image=image, seed=seed)
 
 

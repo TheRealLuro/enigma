@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Request
-from .db import maps_collection, marketplace_collection
-from datetime import datetime
+from .db import maps_collection, marketplace_collection, app_token
+from datetime import datetime, timezone
 from main import limiter
-
+from decoder import decode
 
 
 router = APIRouter(prefix="/database/maps")
@@ -10,33 +10,34 @@ router = APIRouter(prefix="/database/maps")
 
 @router.post("/add_to_marketplace")
 @limiter.limit("5/minute")
-def add_to_market(request: Request, map_name: str, price: int ):
-
+def add_to_market(request: Request, user:str, map_name: str, price: int):
 
     
     map = maps_collection.find_one({"map_name": map_name})
+  
+    if map["owner"] != user:
+      raise HTTPException(status_code=400, detail="you dont own this")
+
+    if marketplace_collection.find_one({"map_name": map_name}):
+       raise HTTPException(status_code=400, detail="listed already")
 
     value = map['value']
 
     sfl = map['sold_for_last']
 
-    if value != 0:
-        increase_from_value = price / value 
-    
-    if sfl != 0:
-        increase_from_sfl = price / sfl
 
     listing = {
-        "map_details": map,
+        "map_name": map["map_name"],
+        "map_image": map["map_image"],
         "price": price, 
         "seller": map['owner'],
         "sold_for_last": sfl,
-        "listed_at": datetime.now(datetime.timezone.utc),
+        "listed_at": datetime.now(timezone.utc),
         "last_bought" : map['last_bought']
     }
 
     marketplace_collection.insert_one(listing)
 
-    return {"Success": f"You added the listing to the marketplace, You listed for {increase_from_value}x the value and {increase_from_sfl}x the sold last value"}
+    return {"Success": f"listed"}
 
         

@@ -559,6 +559,347 @@ PROMPT_PACKS: List[Dict[str, object]] = [
             ),
         },
     ),
+    _pack_with_overrides(
+        "sewer_tunnel",
+        {
+            "PROMPT_COMPOSITION_ELITE": [
+                "long brick sewer tunnel receding deep into near-total darkness with a single strong vanishing point and low arched ceiling",
+                "first-person sewer corridor with garbage-scattered floor, pipe-lined walls, and stagnant puddles reflecting dim ambient light",
+                "extensive brick tunnel interior with clear foreground-midground-background depth staging and oppressive pitch-black far passage",
+            ],
+            "PROMPT_COLORS_ELITE": [
+                "deep red brick gradients and cool gray stone with desaturated shadow tones dominating the tunnel walls",
+                "toxic reflective green confined strictly to puddle and grate water surfaces against dark wet ground",
+                "rusty brown and oxidized gray for corroded pipe surfaces with orange-red corrosion blooms at joints",
+                "small isolated bursts of bright red, yellow, and green from reflective trash packaging on the ground",
+            ],
+            "PROMPT_DESCRIPTION_ELITE": [
+                "long extensive brick tunnel sewer system with putrid water flowing through grates and stagnant puddles on the ground",
+                "misshapen twisting and broken pipes snaking along sewer tunnel sides with stray garbage scattered across the floor",
+                "dimly lit sewer passage with nearly pitch-black darkness ahead in an eerie and foreboding atmosphere",
+            ],
+            "PROMPT_ATMOSPHERE_ELITE": [
+                "oppressive dim sourceless ambient light in the near foreground fading to complete impenetrable black at tunnel depth",
+                "still and lifeless sewer air with moisture-heavy atmosphere implied by wet brick surfaces and stagnant water",
+                "foreboding eerie quality built entirely from darkness, decay, and accumulated refuse without any living presence",
+            ],
+            "PROMPT_DETAIL_ELITE": [
+                "aged mortared brickwork with moisture staining, irregular repairs, crumbling mortar, and deep recessed shadow joints",
+                "corroded cast-iron pipes misshapen and twisted with visible rust bloom, broken sections, and irregular wall routing",
+                "individual garbage items identifiable by bright packaging color — wrappers, cans, bottles — scattered on wet dark ground",
+                "grate openings in the floor surface with putrid water visible flowing beneath and pooling in low ground depressions",
+            ],
+            "PROMPT_DEPTH_ELITE": [
+                "extreme brick arch tunnel recession with pitch-black vanishing point and atmospheric darkness deepening rapidly past mid-ground",
+                "layered depth from foreground puddles and garbage to mid-ground pipe clusters to near-total darkness in far passage",
+                "repeated brick arch silhouettes diminishing in size toward the vanishing point reinforcing deep perspective pull",
+            ],
+            "PROMPT_LIGHTING_ELITE": [
+                "dim sourceless ambient glow illuminating only the near foreground with no visible light source present",
+                "toxic green reflective highlights appearing only on puddle and grate water surfaces",
+                "faint rust-warm catch light on corroded pipe surfaces with no clear origin",
+                "near-total darkness consuming all detail beyond the tunnel mid-point in an eerie foreboding black",
+            ],
+            "PROMPT_SURFACE_ELITE": [
+                "wet brick walls showing mineral deposits, water staining, efflorescence, and long-term moisture damage",
+                "cracked uneven stone floor with low depressions collecting stagnant water and ground-level debris accumulation",
+                "corroded pipe exterior surfaces showing layered rust, paint flaking, joint leakage staining, and physical deformation",
+            ],
+            "PROMPT_FLOW_RULES": [
+                "tunnel must read as deep, long, and continuous with a clear single vanishing point pulling into total darkness",
+                "puddles must show toxic reflective green tinted surfaces — still or faintly disturbed, never bright or clean",
+                "pipes must appear misshapen, corroded, and irregularly routed along both side walls with broken sections visible",
+                "garbage items must be identifiable by bright isolated packaging color against the dark wet ground surface",
+                "no living creatures, animals, insects, rodents, humans, or plants of any kind present anywhere in the scene",
+                "no nature elements, roots, moss, organic growth, or water life in any surface or puddle",
+                "brickwork must show age, moisture damage, and wear without complete structural collapse",
+                "lighting must be dim and sourceless in the foreground, fading to complete darkness in the far tunnel",
+                "avoid clean, modern, or well-maintained sewer aesthetics — old, decayed, and long-abandoned only",
+                "preserve eerie foreboding atmosphere by keeping the far tunnel passage nearly pitch black with no detail visible",
+                "garbage scatter must be densest in foreground and thin progressively toward the dark mid-ground",
+            ],
+            "NEURAL_CAVE_SUBJECT": [
+                "abandoned brick sewer tunnel receding into near-total darkness with corroded pipes and refuse-littered ground",
+                "eerie first-person sewer corridor with reflective stagnant puddles, broken pipes, and garbage-scattered floor",
+                "deep decaying sewer passage with dim ambient light, toxic green puddle reflections, and pitch-black far depth",
+            ],
+            "NEURAL_CAVE_STRUCTURE": [
+                "aged mortared brick arches with moisture damage, crumbling mortar joints, and deep shadow recesses between courses",
+                "corroded and misshapen pipes routed erratically along both side walls with broken sections and visible rust bloom",
+                "cracked uneven stone floor with grate openings, stagnant water pooling in low depressions, and scattered refuse",
+            ],
+            "NEURAL_CAVE_GLOW": [
+                "toxic green reflective surface glow confined only to stagnant puddles and grate water openings",
+                "faint sourceless dim ambient illumination in the near foreground fading completely before mid-tunnel",
+                "occasional rust-warm surface catch light on corroded pipe metal with no identifiable light source",
+            ],
+            "NEURAL_CAVE_MOOD": [
+                "oppressive eerie abandoned sewer atmosphere with foreboding impenetrable darkness at tunnel depth",
+                "unsettling lifeless stillness of forgotten decaying infrastructure with no sign of living presence",
+                "dread built through contrast between visible foreground decay detail and total absence of information in the far dark",
+            ],
+            "NEURAL_CAVE_DEPTH": [
+                "extreme linear perspective sewer tunnel with near-total black at vanishing point and dim lit near foreground only",
+                "layered spatial depth from close puddles and garbage through mid-ground pipe complexity to pitch-black far arch",
+                "atmospheric darkness deepening rapidly after the tunnel mid-point with no legible structure visible beyond",
+            ],
+            "NEURAL_CAVE_ORGANIC_PRESENCE": [
+                "no living creatures, animals, insects, rodents, or humans present anywhere in the environment",
+                "no plant life, roots, moss, algae, or any organic growth on any surface",
+                "no sea creatures or water organisms in puddles, grates, or flowing water sections",
+            ],
+            "CORE_PROMPTS": [
+                "first-person deep brick sewer tunnel receding into near-total darkness with stagnant reflective puddles and corroded misshapen pipes",
+                "dim eerie sewer corridor with garbage-littered wet floor, twisted broken pipes on walls, and pitch-black foreboding far passage",
+            ],
+            "BASE_NEGATIVE_PROMPT": (
+                "living creatures, animals, insects, rodents, rats, birds, fish, humans, characters, figures, silhouettes, "
+                "plants, moss, algae, roots, vines, organic growth, nature elements, sea creatures, water organisms, "
+                "bright overall lighting, even illumination, clean modern sewer, well-maintained infrastructure, "
+                "colorful walls, painted surfaces, decorative elements, graffiti art, murals, signage, "
+                "dry clean floor, empty pristine tunnel, new construction, suburban utility aesthetic, "
+                "daylight, sky, outdoor elements, surface world intrusion, fantasy or sci-fi elements, "
+                "cartoon style, illustrated look, cel shading, painterly rendering, stylized art, "
+                "psychedelic colors, neon glow, magical lighting, unnatural color palette"
+            ),
+            "BASE_REFINER_PROMPT": (
+                "deepen pitch-black far tunnel darkness to near-total black with hard atmospheric falloff, "
+                "strengthen toxic green reflectivity on puddle and grate water surfaces only, "
+                "enhance brick moisture staining, crumbling mortar, and age damage across all wall surfaces, "
+                "increase pipe corrosion detail with rust bloom, deformation, and broken section visibility, "
+                "clarify individual garbage item bright packaging colors against dark wet ground, "
+                "preserve completely lifeless uninhabited eerie atmosphere throughout"
+            ),
+        },
+    ), _pack_with_overrides(
+        "sewer_tunnel",
+        {
+            "PROMPT_COMPOSITION_ELITE": [
+                "long brick sewer tunnel receding deep into near-total darkness with a single strong vanishing point and low arched ceiling",
+                "first-person sewer corridor with garbage-scattered floor, pipe-lined walls, and stagnant puddles reflecting dim ambient light",
+                "extensive brick tunnel interior with clear foreground-midground-background depth staging and oppressive pitch-black far passage",
+            ],
+            "PROMPT_COLORS_ELITE": [
+                "deep red brick gradients and cool gray stone with desaturated shadow tones dominating the tunnel walls",
+                "toxic reflective green confined strictly to puddle and grate water surfaces against dark wet ground",
+                "rusty brown and oxidized gray for corroded pipe surfaces with orange-red corrosion blooms at joints",
+                "small isolated bursts of bright red, yellow, and green from reflective trash packaging on the ground",
+            ],
+            "PROMPT_DESCRIPTION_ELITE": [
+                "long extensive brick tunnel sewer system with putrid water flowing through grates and stagnant puddles on the ground",
+                "misshapen twisting and broken pipes snaking along sewer tunnel sides with stray garbage scattered across the floor",
+                "dimly lit sewer passage with nearly pitch-black darkness ahead in an eerie and foreboding atmosphere",
+            ],
+            "PROMPT_ATMOSPHERE_ELITE": [
+                "oppressive dim sourceless ambient light in the near foreground fading to complete impenetrable black at tunnel depth",
+                "still and lifeless sewer air with moisture-heavy atmosphere implied by wet brick surfaces and stagnant water",
+                "foreboding eerie quality built entirely from darkness, decay, and accumulated refuse without any living presence",
+            ],
+            "PROMPT_DETAIL_ELITE": [
+                "aged mortared brickwork with moisture staining, irregular repairs, crumbling mortar, and deep recessed shadow joints",
+                "corroded cast-iron pipes misshapen and twisted with visible rust bloom, broken sections, and irregular wall routing",
+                "individual garbage items identifiable by bright packaging color — wrappers, cans, bottles — scattered on wet dark ground",
+                "grate openings in the floor surface with putrid water visible flowing beneath and pooling in low ground depressions",
+            ],
+            "PROMPT_DEPTH_ELITE": [
+                "extreme brick arch tunnel recession with pitch-black vanishing point and atmospheric darkness deepening rapidly past mid-ground",
+                "layered depth from foreground puddles and garbage to mid-ground pipe clusters to near-total darkness in far passage",
+                "repeated brick arch silhouettes diminishing in size toward the vanishing point reinforcing deep perspective pull",
+            ],
+            "PROMPT_LIGHTING_ELITE": [
+                "dim sourceless ambient glow illuminating only the near foreground with no visible light source present",
+                "toxic green reflective highlights appearing only on puddle and grate water surfaces",
+                "faint rust-warm catch light on corroded pipe surfaces with no clear origin",
+                "near-total darkness consuming all detail beyond the tunnel mid-point in an eerie foreboding black",
+            ],
+            "PROMPT_SURFACE_ELITE": [
+                "wet brick walls showing mineral deposits, water staining, efflorescence, and long-term moisture damage",
+                "cracked uneven stone floor with low depressions collecting stagnant water and ground-level debris accumulation",
+                "corroded pipe exterior surfaces showing layered rust, paint flaking, joint leakage staining, and physical deformation",
+            ],
+            "PROMPT_FLOW_RULES": [
+                "tunnel must read as deep, long, and continuous with a clear single vanishing point pulling into total darkness",
+                "puddles must show toxic reflective green tinted surfaces — still or faintly disturbed, never bright or clean",
+                "pipes must appear misshapen, corroded, and irregularly routed along both side walls with broken sections visible",
+                "garbage items must be identifiable by bright isolated packaging color against the dark wet ground surface",
+                "no living creatures, animals, insects, rodents, humans, or plants of any kind present anywhere in the scene",
+                "no nature elements, roots, moss, organic growth, or water life in any surface or puddle",
+                "brickwork must show age, moisture damage, and wear without complete structural collapse",
+                "lighting must be dim and sourceless in the foreground, fading to complete darkness in the far tunnel",
+                "avoid clean, modern, or well-maintained sewer aesthetics — old, decayed, and long-abandoned only",
+                "preserve eerie foreboding atmosphere by keeping the far tunnel passage nearly pitch black with no detail visible",
+                "garbage scatter must be densest in foreground and thin progressively toward the dark mid-ground",
+            ],
+            "NEURAL_CAVE_SUBJECT": [
+                "abandoned brick sewer tunnel receding into near-total darkness with corroded pipes and refuse-littered ground",
+                "eerie first-person sewer corridor with reflective stagnant puddles, broken pipes, and garbage-scattered floor",
+                "deep decaying sewer passage with dim ambient light, toxic green puddle reflections, and pitch-black far depth",
+            ],
+            "NEURAL_CAVE_STRUCTURE": [
+                "aged mortared brick arches with moisture damage, crumbling mortar joints, and deep shadow recesses between courses",
+                "corroded and misshapen pipes routed erratically along both side walls with broken sections and visible rust bloom",
+                "cracked uneven stone floor with grate openings, stagnant water pooling in low depressions, and scattered refuse",
+            ],
+            "NEURAL_CAVE_GLOW": [
+                "toxic green reflective surface glow confined only to stagnant puddles and grate water openings",
+                "faint sourceless dim ambient illumination in the near foreground fading completely before mid-tunnel",
+                "occasional rust-warm surface catch light on corroded pipe metal with no identifiable light source",
+            ],
+            "NEURAL_CAVE_MOOD": [
+                "oppressive eerie abandoned sewer atmosphere with foreboding impenetrable darkness at tunnel depth",
+                "unsettling lifeless stillness of forgotten decaying infrastructure with no sign of living presence",
+                "dread built through contrast between visible foreground decay detail and total absence of information in the far dark",
+            ],
+            "NEURAL_CAVE_DEPTH": [
+                "extreme linear perspective sewer tunnel with near-total black at vanishing point and dim lit near foreground only",
+                "layered spatial depth from close puddles and garbage through mid-ground pipe complexity to pitch-black far arch",
+                "atmospheric darkness deepening rapidly after the tunnel mid-point with no legible structure visible beyond",
+            ],
+            "NEURAL_CAVE_ORGANIC_PRESENCE": [
+                "no living creatures, animals, insects, rodents, or humans present anywhere in the environment",
+                "no plant life, roots, moss, algae, or any organic growth on any surface",
+                "no sea creatures or water organisms in puddles, grates, or flowing water sections",
+            ],
+            "CORE_PROMPTS": [
+                "first-person deep brick sewer tunnel receding into near-total darkness with stagnant reflective puddles and corroded misshapen pipes",
+                "dim eerie sewer corridor with garbage-littered wet floor, twisted broken pipes on walls, and pitch-black foreboding far passage",
+            ],
+            "BASE_NEGATIVE_PROMPT": (
+                "living creatures, animals, insects, rodents, rats, birds, fish, humans, characters, figures, silhouettes, "
+                "plants, moss, algae, roots, vines, organic growth, nature elements, sea creatures, water organisms, "
+                "bright overall lighting, even illumination, clean modern sewer, well-maintained infrastructure, "
+                "colorful walls, painted surfaces, decorative elements, graffiti art, murals, signage, "
+                "dry clean floor, empty pristine tunnel, new construction, suburban utility aesthetic, "
+                "daylight, sky, outdoor elements, surface world intrusion, fantasy or sci-fi elements, "
+                "cartoon style, illustrated look, cel shading, painterly rendering, stylized art, "
+                "psychedelic colors, neon glow, magical lighting, unnatural color palette"
+            ),
+            "BASE_REFINER_PROMPT": (
+                "deepen pitch-black far tunnel darkness to near-total black with hard atmospheric falloff, "
+                "strengthen toxic green reflectivity on puddle and grate water surfaces only, "
+                "enhance brick moisture staining, crumbling mortar, and age damage across all wall surfaces, "
+                "increase pipe corrosion detail with rust bloom, deformation, and broken section visibility, "
+                "clarify individual garbage item bright packaging colors against dark wet ground, "
+                "preserve completely lifeless uninhabited eerie atmosphere throughout"
+            ),
+        },
+    ),
+    _pack_with_overrides(
+        "hedge_tunnel",
+        {
+            "PROMPT_COMPOSITION_ELITE": [
+                "first-person vibrant hedge tunnel corridor with tall neatly trimmed square green hedges receding into clear path depth",
+                "sunlit hedge tunnel passage with organized hedge walls, bright grass floor, and open blue sky visible above",
+                "wide hedge tunnel path with clear foreground-midground-background staging and junction turns visible ahead",
+            ],
+            "PROMPT_COLORS_ELITE": [
+                "bright vibrant greens for hedge walls and grass floor with natural leaf texture variation",
+                "sky blue and soft white clouds visible above hedge tops against clean daylight atmosphere",
+                "light gray small stones and pale brown sticks as isolated ground detail accents on bright grass",
+                "warm natural sunlight tones with soft even shadow falloff along hedge corridor walls",
+            ],
+            "PROMPT_DESCRIPTION_ELITE": [
+                "vibrant hedge tunnel with neatly cut green hedges forming traversable paths with junctions and turns",
+                "tall square trimmed hedges as corridor walls with bright grass floor and occasional stones and sticks",
+                "bright sunny hedge tunnel with sky visible above and an intriguing calming atmosphere throughout",
+            ],
+            "PROMPT_ATMOSPHERE_ELITE": [
+                "bright open calming sunny atmosphere with warm natural daylight and soft ambient shadows",
+                "intriguing sense of exploration from visible path junctions and turns ahead without fear or darkness",
+                "serene and organized outdoor tunnel space with clean geometry and vibrant natural color throughout",
+            ],
+            "PROMPT_DETAIL_ELITE": [
+                "neatly trimmed flat hedge tops with clean geometric square profile and subtle natural leaf surface texture",
+                "bright grass floor with small scattered light gray stones and pale brown sticks along the path",
+                "visible path junction or turn ahead where hedge corridor splits into multiple traversable directions",
+                "soft natural shadows cast by hedge walls onto the bright grass floor in warm midday sunlight",
+            ],
+            "PROMPT_DEPTH_ELITE": [
+                "clear hedge corridor perspective recession with bright path floor and organized hedge walls guiding depth",
+                "open sky above the hedge tops providing vertical breathing space and natural light source context",
+                "junction geometry ahead creating layered depth decision points without obscuring path readability",
+            ],
+            "PROMPT_LIGHTING_ELITE": [
+                "bright warm natural daylight as the sole light source with soft even ambient illumination throughout",
+                "soft directional shadows cast from hedge walls onto grass floor indicating clear sunny day overhead",
+                "no artificial lighting, no darkness, no shadows deeper than natural soft midday falloff",
+            ],
+            "PROMPT_SURFACE_ELITE": [
+                "neatly trimmed hedge walls with organized flat top geometry and natural green leaf texture variation",
+                "bright grass floor with healthy natural color and small stone and stick ground scatter detail",
+                "clean geometric hedge corners and corridor edges with consistent trim line and hedge wall height",
+            ],
+            "PROMPT_FLOW_RULES": [
+                "camera must be ground-level first-person eye-level walking perspective at all times",
+                "never aerial, never top-down, never birds-eye — hedges must rise upward on both sides of the viewer",
+                "hedge walls must read as tall, neatly trimmed, and square-profiled with organized geometric consistency",
+                "floor must be bright healthy grass with only small stones and sticks as ground scatter detail",
+                "sky must be visible above hedge tops — bright blue with soft white clouds, sunny day only",
+                "path must show a junction or turn ahead to reinforce tunnel traversal and exploration feeling",
+                "atmosphere must remain bright, calming, and intriguing — no darkness, fear, or ominous elements",
+                "no living creatures of any kind — no insects, rodents, animals, humans, characters, or birds",
+                "no water, puddles, or wet surfaces of any kind present in the environment",
+                "lighting must be natural daylight only — no torches, artificial lights, or dramatic shadow work",
+                "hedge color must remain vibrant saturated green — no dead, brown, or decayed hedge sections",
+                "maintain open bright spatial feeling — no enclosed oppressive or claustrophobic atmosphere",
+                
+            ],
+            "NEURAL_CAVE_SUBJECT": [
+                "vibrant sunlit hedge tunnel with tall neatly trimmed green hedge walls and bright grass floor path",
+                "calming first-person hedge tunnel corridor with open sky above and junction turns visible ahead",
+                "organized geometric hedge tunnel passage with bright natural daylight and intriguing exploration atmosphere",
+            ],
+            "NEURAL_CAVE_STRUCTURE": [
+                "tall square-profiled trimmed hedge walls with clean flat tops and consistent organized corridor geometry",
+                "bright healthy grass floor path with small scattered light gray stones and pale brown sticks",
+                "open sky above hedge tops with bright blue and soft white cloud formations in natural daylight",
+            ],
+            "NEURAL_CAVE_GLOW": [
+                "warm natural sunlight ambient glow evenly illuminating the full hedge corridor without harsh contrast",
+                "soft bright sky light spilling down from above the hedge tops onto the grass floor",
+                "gentle warm highlight on upper hedge surfaces catching direct midday sunlight",
+            ],
+            "NEURAL_CAVE_MOOD": [
+                "calming intriguing bright sunny atmosphere with organized natural geometry and open spatial feeling",
+                "serene sense of peaceful exploration through a well-maintained vibrant green tunnel environment",
+                "inviting and curiosity-driven mood built from visible path choices and warm natural daylight",
+            ],
+            "NEURAL_CAVE_DEPTH": [
+                "clear open hedge corridor depth with bright grass floor and trimmed hedge walls guiding perspective",
+                "junction or path turn visible ahead creating layered spatial interest without darkness or obstruction",
+                "vertical sky opening above hedge tops adding depth dimension and natural light context",
+            ],
+            "NEURAL_CAVE_ORGANIC_PRESENCE": [
+                "no living creatures of any kind — no insects, rodents, animals, humans, characters, or birds anywhere",
+                "no water, puddles, streams, or wet surfaces present in any part of the environment",
+                "hedge and grass are the only organic elements — healthy, vibrant, and well-maintained",
+            ],
+            "CORE_PROMPTS": [
+                "first-person vibrant hedge tunnel with tall neatly trimmed square green hedges, bright grass floor, and open sunny sky above",
+                "calming intriguing hedge tunnel corridor with junction turns ahead, small stones and sticks on grass path, bright natural daylight",
+                "ground-level first-person walking view inside vibrant hedge tunnel with tall trimmed square green hedges rising on both sides, bright grass floor, open sunny sky above",
+                "eye-level hedge tunnel corridor perspective with junction turns ahead, small stones and sticks on grass path, bright natural daylight, NOT aerial NOT top-down",
+            ],
+            "BASE_NEGATIVE_PROMPT": (
+                "insects, rodents, animals, humans, characters, birds, any living creatures, "
+                "water, puddles, streams, wet surfaces, moisture, "
+                "darkness, shadows deeper than soft natural falloff, fear, evil, ominous atmosphere, horror elements, "
+                "dead hedges, brown or decayed vegetation, overgrown untrimmed hedges, "
+                "night sky, overcast sky, storm clouds, rain, fog, mist, "
+                "artificial lighting, torches, lanterns, neon, glowing elements, "
+                "urban elements, structures, buildings, fences, walls, non-hedge architecture, "
+                "fantasy or sci-fi elements, magical effects, unnatural colors"
+            ),
+            "BASE_REFINER_PROMPT": (
+                "strengthen vibrant saturated green on hedge walls and grass floor surfaces, "
+                "enhance clean geometric flat hedge top profile and consistent trim line definition, "
+                "clarify bright blue sky and soft white cloud visibility above hedge tops, "
+                "refine small stone and stick ground scatter detail on bright grass floor, "
+                "deepen warm natural sunlight ambient glow and soft directional shadow on corridor walls, "
+                "preserve bright calming intriguing atmosphere with no darkness or living presence anywhere"
+            ),
+        },
+    ),
 ]
 
 
@@ -611,7 +952,7 @@ def _validate_prompt_pack_schema() -> None:
 # - Set ACTIVE_PROMPT_PACK to a pack name (recommended), e.g. "default_membrane_cave"
 # - Set ACTIVE_PROMPT_PACK to "random" for random pack each generation
 # - You may also set ACTIVE_PROMPT_PACK to an integer index
-ACTIVE_PROMPT_PACK: Union[str, int] = "castle_dungeon_tunnel"
+ACTIVE_PROMPT_PACK: Union[str, int] = 3
 
 # Backward-compatible index selector (used only when ACTIVE_PROMPT_PACK is None).
 ACTIVE_PROMPT_PACK_INDEX: Optional[int] = None

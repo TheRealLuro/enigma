@@ -3,14 +3,12 @@ from .db import users_collection
 import bcrypt
 from main import limiter
 
-
 router = APIRouter(prefix="/database/users")
 
 @router.post("/login")
 @limiter.limit("2/minute")
 def login_user(request: Request, username: str, passwd: str):
 
-    
     user = users_collection.find_one({"username": username})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -45,6 +43,8 @@ def login_user(request: Request, username: str, passwd: str):
     
     user_data.pop("_id", None)
     user_data.pop("password", None)
+    user_data.pop("maps_discovered", None)
+
 
 
     return {
