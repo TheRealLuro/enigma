@@ -900,6 +900,129 @@ PROMPT_PACKS: List[Dict[str, object]] = [
             ),
         },
     ),
+     _pack_with_overrides(
+        "haunted_house_hallway",
+        {
+            "PROMPT_COMPOSITION_ELITE": [
+                "ground-level first-person eye-level view down an extremely dark narrow haunted house hallway with closed wooden doors receding into darkness",
+                "immersive interior corridor perspective inside a haunted house with faded peeling wallpaper walls and candle-lit end tables flanking the path",
+                "thin dark haunted hallway extending forward with closed doors on both sides, cobwebbed walls, framed paintings, and faint candlelight ahead",
+            ],
+            "PROMPT_COLORS_ELITE": [
+                "deep muted purples dominating the dark hallway shadows and wallpaper tones with near-black recesses",
+                "faded ochre and dark walnut wood tones for door frames, end tables, and floor boards",
+                "warm amber and dim gold candle flame glow as the only light source cutting through deep purple-black darkness",
+                "desaturated faded wallpaper pattern colors — muted yellows, dusty roses, and aged creams — partially obscured by shadow and peeling",
+            ],
+            "PROMPT_DESCRIPTION_ELITE": [
+                "extremely dark thin haunted house hallway with mostly intact faded wallpaper and peeling spots revealing bare wall beneath",
+                "cobwebs and old framed paintings decorating the walls between closed wooden doors along the receding hallway",
+                "end tables holding candles and candelabras emitting faint warm light giving the hallway slight visibility",
+                "extremely faint translucent ghost figure barely visible at the far end of the hallway just at the edge of perception",
+            ],
+            "PROMPT_ATMOSPHERE_ELITE": [
+                "oppressive darkness broken only by faint warm candle glow creating an eerie claustrophobic haunted atmosphere",
+                "unsettling stillness of an abandoned interior space with the suggestion of presence without explicit threat",
+                "dread and unease built from deep shadow, decayed surfaces, and the barely perceptible ghost shape at the hallway end",
+            ],
+            "PROMPT_DETAIL_ELITE": [
+                "faded wallpaper with visible repeating pattern partially obscured by age, peeling at edges and corners revealing bare plaster beneath",
+                "thick cobwebs draped across upper wall corners, door frames, and painting edges with fine strand detail",
+                "old framed paintings on the walls between doors — dark portraits or landscapes barely legible in low candlelight",
+                "end tables with melting candles or multi-arm candelabras casting soft directional warm amber light and long shadows down the hallway",
+                "closed wooden doors with faded paint, tarnished brass hardware, and dark gaps at their base suggesting rooms beyond",
+            ],
+            "PROMPT_DEPTH_ELITE": [
+                "long narrow hallway perspective recession with doors diminishing in size toward near-total darkness at the far end",
+                "faint barely-visible translucent ghost shape at the extreme far end of the hallway just within candle light reach",
+                "candle light falloff deepening rapidly from warm near-foreground glow to pitch black at hallway depth",
+            ],
+            "PROMPT_LIGHTING_ELITE": [
+                "candles and candelabras as the sole light source with warm amber flame glow and long soft shadow casting",
+                "dim faint illumination giving only slight visibility — darkness dominates with light as the exception not the rule",
+                "no daylight, no electric light, no windows — candlelight only with deep purple-black shadow filling all unlit space",
+                "light falloff is rapid and dramatic — warm glow near candle sources fading immediately to near-total darkness beyond",
+            ],
+            "PROMPT_SURFACE_ELITE": [
+                "faded aged wallpaper with visible dust, moisture staining, peeling edges, and partial pattern loss across wall surfaces",
+                "worn wooden floorboards with age darkening, gap lines, and faint candle light reflection on polished high points",
+                "wooden door surfaces with chipped paint, age cracking, tarnished metal hardware, and deep shadow in panel recesses",
+            ],
+            "PROMPT_GHOST_ELITE": [
+                "extremely faint translucent white-gray ghost figure barely perceptible at the very end of the hallway, nearly absorbed by darkness",
+                "ghost presence suggested more than shown — a vague luminous shape at threshold of visibility in the far deep shadow",
+                "subtle spectral form at hallway depth with near-zero opacity, visible only as a slightly lighter region against the black",
+            ],
+            "PROMPT_FLOW_RULES": [
+                "camera must be ground-level first-person eye-level interior perspective looking down the hallway — never aerial or top-down",
+                "hallway must be narrow and thin with walls close on both sides and a low ceiling pressing down",
+                "darkness must dominate — candlelight provides only faint slight visibility, not full illumination",
+                "wallpaper must be faded and aged with visible peeling sections and intact patterned sections coexisting",
+                "all doors must be closed — no open rooms, no visible interiors beyond doors",
+                "cobwebs must appear in upper corners, door frames, and around paintings — fine and layered not cartoon-thick",
+                "ghost must be extremely faint and barely visible at hallway end — suggestion of presence only, not explicit figure",
+                "no living creatures of any kind — no insects, rodents, animals, humans, or characters present",
+                "no water, plants, nature, or organic life of any kind",
+                "no daylight, windows, or any light source other than candles and candelabras",
+                "end tables must be present as candle holders — part of the hallway furniture",
+                "paintings must be on the walls between peeled wallpaper sections — dark and barely legible in candlelight",
+            ],
+            "NEURAL_CAVE_SUBJECT": [
+                "extremely dark narrow haunted house hallway with faded peeling wallpaper, closed wooden doors, and faint candle-lit end tables",
+                "eerie first-person haunted corridor with cobwebbed walls, old framed paintings, candelabras, and barely visible ghost at hallway end",
+                "dim candlelit haunted house interior hallway receding into near-total darkness with spectral presence at far depth",
+            ],
+            "NEURAL_CAVE_STRUCTURE": [
+                "narrow hallway with faded patterned wallpaper walls — intact in sections, peeling at edges — and worn wooden floor boards",
+                "closed wooden doors with tarnished hardware receding along both sides of the hallway into darkness",
+                "end tables positioned along hallway walls bearing candles and candelabras with cobwebs and paintings between doors",
+            ],
+            "NEURAL_CAVE_GLOW": [
+                "warm amber candle flame glow as the only light — dim, faint, and localized with immediate falloff into deep shadow",
+                "soft directional candlelight casting long shadows down the hallway floor and up the wallpapered walls",
+                "faint ghostly luminescence at the extreme far end of the hallway barely distinguishable from darkness",
+            ],
+            "NEURAL_CAVE_MOOD": [
+                "deeply eerie and unsettling haunted interior atmosphere with oppressive darkness and faint spectral suggestion",
+                "dread built from narrow space, decayed surfaces, closed doors, and the barely perceptible ghost at hallway depth",
+                "haunted house stillness — abandoned, decayed, and quietly threatening without explicit horror",
+            ],
+            "NEURAL_CAVE_DEPTH": [
+                "long narrow hallway recession with doors diminishing toward near-total black and faint ghost shape at vanishing depth",
+                "candle light warmth in foreground fading rapidly to cold purple-black darkness at hallway mid-point and beyond",
+                "layered depth from close wallpaper texture through mid-ground doors and end tables to far ghost suggestion",
+            ],
+            "NEURAL_CAVE_ORGANIC_PRESENCE": [
+                "no living creatures of any kind — no insects, rodents, animals, humans, or characters anywhere in the scene",
+                "no plants, nature, water, or organic life present on any surface or in any detail",
+                "cobwebs are the only organic-adjacent detail — present as abandoned remnants, not active or inhabited",
+            ],
+            "CORE_PROMPTS": [
+                "ground-level first-person eye-level view down an extremely dark narrow haunted house hallway, faded peeling wallpaper, closed wooden doors, end tables with candles and candelabras, cobwebs and old paintings on walls",
+                "dim candlelit haunted interior corridor receding into near-total darkness, deep muted purples and faded ochre wood tones, extremely faint barely visible ghost at far hallway end, no living presence of any kind",
+            ],
+            "BASE_NEGATIVE_PROMPT": (
+                "insects, rodents, animals, humans, characters, living creatures of any kind, "
+                "plants, nature, water, organic life, moss, roots, "
+                "open doors, visible room interiors, daylight, windows, sunlight, "
+                "electric lighting, modern fixtures, bright illumination, even lighting, "
+                "clean undamaged wallpaper, new or well-maintained surfaces, "
+                "aerial view, top-down view, birds-eye view, exterior house view, "
+                "explicit clear ghost figure, fully visible apparition, cartoon ghost, "
+                "bright colors, saturated palette, vivid hues, neon, fantasy magic effects, "
+                "cartoon style, illustrated look, painterly rendering, stylized art, "
+                "gore, blood, explicit horror imagery, jump scare elements"
+            ),
+            "BASE_REFINER_PROMPT": (
+                "deepen dark purple-black shadow dominance throughout hallway with candle glow as only light exception, "
+                "enhance faded wallpaper age detail — peeling edges, dust, staining, and partial pattern visibility, "
+                "strengthen cobweb fine strand detail in corners and around door frames and paintings, "
+                "refine warm amber candle flame glow with rapid falloff into deep surrounding shadow, "
+                "reduce ghost visibility to absolute threshold — faint luminous suggestion only at hallway far end, "
+                "preserve narrow claustrophobic hallway geometry with closed doors and end tables intact"
+            ),
+        },
+    ),
 ]
 
 
@@ -952,7 +1075,7 @@ def _validate_prompt_pack_schema() -> None:
 # - Set ACTIVE_PROMPT_PACK to a pack name (recommended), e.g. "default_membrane_cave"
 # - Set ACTIVE_PROMPT_PACK to "random" for random pack each generation
 # - You may also set ACTIVE_PROMPT_PACK to an integer index
-ACTIVE_PROMPT_PACK: Union[str, int] = 3
+ACTIVE_PROMPT_PACK: Union[str, int] = "random"
 
 # Backward-compatible index selector (used only when ACTIVE_PROMPT_PACK is None).
 ACTIVE_PROMPT_PACK_INDEX: Optional[int] = None
