@@ -124,7 +124,7 @@ Each maze is diffused into a themed visual world.
 - 🏰 Dungeon  
 - 🌿 Hedge Maze  
 - 🚇 Sewer  
-- ❓ ???  
+- 🏚️ Haunted  
 - ❓ ???
 
 Some themes remain undiscovered or uncreated — adding mystery to the ecosystem. Community can vote on more in the future...
