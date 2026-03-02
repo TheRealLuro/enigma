@@ -1,13 +1,46 @@
-﻿@page "/home"
+@page "/home"
+@using Enigma.Client.Models.Gameplay
+@inject IJSRuntime JS
 
-<div class="hero">
-    <h1>Welcome to Enigma</h1>
-    <p>
-        View options below:
-    </p>
+<div class="hero hero-panel">
+    <div>
+        <h1>@String.Format("Welcome to Enigma {0}", Username)</h1>
+        @if (ActiveRun is not null)
+        {
+            <p class="hero-subcopy">Current run: @GetActiveRunLabel()</p>
+        }
+    </div>
+
+    @if (Session is not null)
+    {
+        <div class="hero-metric-ribbon">
+            <div>
+                <span>Maze Nuggets</span>
+                <strong>@Session.MazeNuggets.ToString("N0") MN</strong>
+            </div>
+            <div>
+                <span>Completed</span>
+                <strong>@Session.MapsCompleted</strong>
+            </div>
+            <div>
+                <span>Owned Maps</span>
+                <strong>@Session.MapsOwned.Count</strong>
+            </div>
+        </div>
+    }
 </div>
 
 <div class="grid grid-auto">
+    @if (ActiveRun is not null)
+    {
+        <div class="game-card clickable accent-card" @onclick="ResumeActiveRun">
+            <div class="game-card-image"></div>
+            <div class="game-card-content">
+                <div class="game-card-title">Resume Run</div>
+                <div class="game-card-meta">@GetActiveRunMeta()</div>
+            </div>
+        </div>
+    }
 
     <div class="game-card clickable" @onclick="OnPlayClick">
         <div class="game-card-image"></div>
@@ -29,7 +62,15 @@
         <div class="game-card-image"></div>
         <div class="game-card-content">
             <div class="game-card-title">Profile</div>
-            <div class="game-card-meta">View your stats & history</div>
+            <div class="game-card-meta">View your friends, maps, and stats</div>
+        </div>
+    </div>
+
+    <div class="game-card clickable" @onclick="OnMarketplaceClick">
+        <div class="game-card-image"></div>
+        <div class="game-card-content">
+            <div class="game-card-title">Marketplace</div>
+            <div class="game-card-meta">Browse, buy, and list player-made maps</div>
         </div>
     </div>
 
@@ -40,29 +81,102 @@
             <div class="game-card-meta">Return to login screen</div>
         </div>
     </div>
-
 </div>
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; } = default!;
 
-    void OnPlayClick()
+    private string Username { get; set; } = string.Empty;
+    private LoginUserSummary? Session { get; set; }
+    private ActiveGameSession? ActiveRun { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        Session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        if (Session is not null)
+        {
+            Username = Session.Username;
+        }
+        else
+        {
+            var identity = await JS.InvokeAsync<PlayerIdentity?>("enigmaGame.getPlayerIdentity");
+            Username = identity?.Username ?? string.Empty;
+        }
+
+        ActiveRun = await JS.InvokeAsync<ActiveGameSession?>("enigmaGame.getActiveGameSession");
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPlayClick()
     {
         NavigationManager.NavigateTo("/play");
     }
 
-    void OnLeaderboardsClick()
+    private void OnLeaderboardsClick()
     {
         NavigationManager.NavigateTo("/leaderboard");
     }
 
-    void OnProfileClick()
+    private void OnProfileClick()
     {
         NavigationManager.NavigateTo("/profile");
     }
 
-    void OnLogoutClick()
+    private void OnMarketplaceClick()
     {
+        NavigationManager.NavigateTo("/marketplace");
+    }
+
+    private async Task OnLogoutClick()
+    {
+        await JS.InvokeVoidAsync("enigmaGame.clearPlayerIdentity");
+        await JS.InvokeVoidAsync("enigmaGame.clearUserSession");
+        await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
         NavigationManager.NavigateTo("/");
+    }
+
+    private void ResumeActiveRun()
+    {
+        if (string.IsNullOrWhiteSpace(ActiveRun?.Seed))
+        {
+            NavigationManager.NavigateTo("/play");
+            return;
+        }
+
+        var url = $"/game?seed={Uri.EscapeDataString(ActiveRun.Seed)}&source={Uri.EscapeDataString(ActiveRun.Source)}";
+        if (!string.IsNullOrWhiteSpace(ActiveRun.MapName))
+        {
+            url += $"&mapName={Uri.EscapeDataString(ActiveRun.MapName)}";
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+
+    private string GetActiveRunLabel()
+    {
+        return string.IsNullOrWhiteSpace(ActiveRun?.MapName)
+            ? "Generated maze ready to resume."
+            : $"{ActiveRun.MapName} is ready to resume.";
+    }
+
+    private string GetActiveRunMeta()
+    {
+        if (ActiveRun is null)
+        {
+            return "Return to your last maze.";
+        }
+
+        var sourceLabel = string.Equals(ActiveRun.Source, "load", StringComparison.OrdinalIgnoreCase)
+            ? "loaded map"
+            : "generated seed";
+
+        var roomLabel = string.IsNullOrWhiteSpace(ActiveRun.CurrentRoomLabel) ? "room unknown" : $"room {ActiveRun.CurrentRoomLabel}";
+        return $"{sourceLabel} | {ActiveRun.Difficulty} | {roomLabel}";
     }
 }

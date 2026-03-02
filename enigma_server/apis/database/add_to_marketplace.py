@@ -1,8 +1,7 @@
-from fastapi import APIRouter, HTTPException, Request
-from .db import maps_collection, marketplace_collection, app_token
 from datetime import datetime, timezone
+from fastapi import APIRouter, HTTPException, Request
 from main import limiter
-from decoder import decode
+from .db import maps_collection, marketplace_collection
 
 
 router = APIRouter(prefix="/database/maps")
@@ -10,34 +9,39 @@ router = APIRouter(prefix="/database/maps")
 
 @router.post("/add_to_marketplace")
 @limiter.limit("5/minute")
-def add_to_market(request: Request, user:str, map_name: str, price: int):
+def add_to_market(request: Request, user: str, map_name: str, price: int):
+    if price <= 0:
+        raise HTTPException(status_code=400, detail="Price must be greater than zero")
 
-    
     map = maps_collection.find_one({"map_name": map_name})
-  
+    if not map:
+        raise HTTPException(status_code=404, detail="Map not found")
+
     if map["owner"] != user:
-      raise HTTPException(status_code=400, detail="you dont own this")
+        raise HTTPException(status_code=400, detail="You do not own this map")
 
     if marketplace_collection.find_one({"map_name": map_name}):
-       raise HTTPException(status_code=400, detail="listed already")
+        raise HTTPException(status_code=400, detail="Map is already listed")
 
-    value = map['value']
-
-    sfl = map['sold_for_last']
-
+    sold_for_last = map.get("sold_for_last", 0)
 
     listing = {
         "map_name": map["map_name"],
         "map_image": map["map_image"],
-        "price": price, 
-        "seller": map['owner'],
-        "sold_for_last": sfl,
+        "image_status": map.get("image_status") or ("ready" if map.get("map_image") else "pending_upload"),
+        "theme": map.get("theme"),
+        "difficulty": map.get("difficulty"),
+        "size": map.get("size"),
+        "value": map.get("value", 0),
+        "price": price,
+        "seller": map["owner"],
+        "sold_for_last": sold_for_last,
         "listed_at": datetime.now(timezone.utc),
-        "last_bought" : map['last_bought']
+        "last_bought": map.get("last_bought"),
     }
 
     marketplace_collection.insert_one(listing)
 
-    return {"Success": f"listed"}
+    return {"status": "success", "message": "Map listed"}
 
         

@@ -1,21 +1,55 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+@implements IDisposable
 
 <div class="page">
-    @*
-        <div class="sidebar">
-        <NavMenu />
-        </div>
-    *@
-    <main>
-        @*
-            <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+    @if (ShouldShowHeader)
+    {
+        <header class="app-header app-shell-header">
+            <div class="app-shell-brand">
+                <button class="btn btn-secondary app-back-button" @onclick="GoBackAsync">Back</button>
+                <div class="app-shell-brand-copy">
+                    <button class="app-brand-button" @onclick="GoHome">Enigma</button>
+                    <span class="app-shell-brand-tag">Maze network and live runs</span>
+                </div>
             </div>
-        *@
 
-        <article class="content px-4">
-            @Body
-        </article>
+            <nav class="app-shell-nav">
+                <NavLink class="nav-link" href="/home">Home</NavLink>
+                <NavLink class="nav-link" href="/play">Play</NavLink>
+                <NavLink class="nav-link" href="/leaderboard">Leaderboard</NavLink>
+                <NavLink class="nav-link" href="/players">Players</NavLink>
+                <NavLink class="nav-link" href="/profile">Profile</NavLink>
+                <NavLink class="nav-link" href="/marketplace">Marketplace</NavLink>
+            </nav>
+
+            <div class="app-shell-account">
+                <button class="app-shell-user-chip" @onclick="GoProfile">
+                    <span class="app-shell-user-kicker">Signed in</span>
+                    <strong>@(Session?.Username ?? "Explorer")</strong>
+                </button>
+                <button class="btn btn-secondary app-logout-button" @onclick="LogoutAsync">Logout</button>
+            </div>
+        </header>
+    }
+
+    <main>
+        @if (CanRenderCurrentRoute)
+        {
+            <article class="content px-4 app-shell-content">
+                @Body
+            </article>
+        }
+        else
+        {
+            <div class="content app-shell-content">
+                <div class="card enigma-game-message">
+                    <div class="loader"></div>
+                    <p>Checking session...</p>
+                </div>
+            </div>
+        }
     </main>
 </div>
 
@@ -24,3 +58,125 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private static readonly HashSet<string> PublicPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "",
+        "register",
+    };
+
+    private LoginUserSummary? Session { get; set; }
+    private bool AuthCheckComplete { get; set; }
+    private bool IsAuthenticated { get; set; }
+
+    private bool ShouldShowHeader
+    {
+        get
+        {
+            return !IsPublicPath() && AuthCheckComplete && IsAuthenticated;
+        }
+    }
+
+    private bool CanRenderCurrentRoute => IsPublicPath() || (AuthCheckComplete && IsAuthenticated);
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += HandleLocationChanged;
+        ResetAuthStateForCurrentPath();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsPublicPath())
+        {
+            return;
+        }
+
+        if (AuthCheckComplete && IsAuthenticated && Session is not null)
+        {
+            return;
+        }
+
+        var session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        AuthCheckComplete = true;
+        IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
+        Session = session;
+
+        if (!IsAuthenticated)
+        {
+            NavigationManager.NavigateTo("/", replace: true);
+            return;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task GoBackAsync()
+    {
+        await JS.InvokeVoidAsync("enigmaGame.goBack", "/home");
+    }
+
+    private void GoHome()
+    {
+        NavigationManager.NavigateTo("/home");
+    }
+
+    private void GoProfile()
+    {
+        if (string.IsNullOrWhiteSpace(Session?.Username))
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(Session.Username)}");
+    }
+
+    private async Task LogoutAsync()
+    {
+        await JS.InvokeVoidAsync("enigmaGame.clearPlayerIdentity");
+        await JS.InvokeVoidAsync("enigmaGame.clearUserSession");
+        await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
+        Session = null;
+        AuthCheckComplete = true;
+        IsAuthenticated = false;
+        NavigationManager.NavigateTo("/", replace: true);
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        ResetAuthStateForCurrentPath(args.Location);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void ResetAuthStateForCurrentPath(string? uri = null)
+    {
+        if (IsPublicPath(uri))
+        {
+            AuthCheckComplete = true;
+            IsAuthenticated = true;
+            Session = null;
+            return;
+        }
+
+        AuthCheckComplete = false;
+        IsAuthenticated = false;
+    }
+
+    private bool IsPublicPath(string? uri = null)
+    {
+        var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
+        return PublicPaths.Contains(cleanPath);
+    }
+
+    private static string GetCleanPath(string uri)
+    {
+        var relativePath = new Uri(uri, UriKind.Absolute).AbsolutePath.Trim('/');
+        return relativePath.ToLowerInvariant();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= HandleLocationChanged;
+    }
+}

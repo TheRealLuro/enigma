@@ -1,0 +1,447 @@
+@page "/players"
+
+<PageTitle>Players</PageTitle>
+
+@if (!SessionReady)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading player search...</p>
+        </div>
+    </div>
+}
+else if (Session is null)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Player search unavailable</h1>
+            <p>Sign in to browse explorer profiles.</p>
+            <div class="enigma-end-actions">
+                <button class="btn btn-primary" @onclick="GoHome">Home</button>
+                <button class="btn btn-secondary" @onclick="GoLogin">Login</button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="content players-shell">
+        <section class="players-banner">
+            <div class="players-banner-copy">
+                <span class="profile-kicker">Explorer Index</span>
+                <h1>Find Players</h1>
+                <p>Search exact usernames, browse high-performing explorers, and jump straight into their profiles.</p>
+            </div>
+
+            <div class="players-banner-metrics">
+                <div>
+                    <span>Signed In</span>
+                    <strong>@Session.Username</strong>
+                </div>
+                <div>
+                    <span>Maze Nuggets</span>
+                    <strong>@Session.MazeNuggets.ToString("N0") MN</strong>
+                </div>
+                <div>
+                    <span>Friends</span>
+                    <strong>@Session.Friends.Count</strong>
+                </div>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
+        }
+
+        <section class="panel players-search-panel">
+            <div class="panel-heading">
+                <div>
+                    <span class="profile-eyebrow">Search</span>
+                    <h2>Player Lookup</h2>
+                </div>
+                <button class="btn btn-secondary" type="button" @onclick="ClearSearch">Clear</button>
+            </div>
+
+            <div class="players-search-box">
+                <label class="form-label" for="players-search-input">Username</label>
+                <div class="players-search-row">
+                    <input id="players-search-input"
+                           class="form-control"
+                           value="@SearchQuery"
+                           @oninput="OnSearchInput"
+                           @onkeydown="HandleSearchKeyDown"
+                           placeholder="type a username"
+                           autocomplete="off" />
+                    <button class="btn btn-primary" type="button" disabled="@string.IsNullOrWhiteSpace(SearchQuery)" @onclick="OpenExactProfileAsync">
+                        Open Profile
+                    </button>
+                </div>
+                <p class="players-search-hint">Results update as you type. `Open Profile` always tries the exact username you entered.</p>
+            </div>
+
+            @if (IsSearching)
+            {
+                <div class="players-search-status">
+                    <div class="loader small"></div>
+                    <span>Searching explorers...</span>
+                </div>
+            }
+            else if (HasSearchQuery)
+            {
+                @if (SearchResults.Count == 0)
+                {
+                    <div class="players-empty-state">
+                        <h3>No matching players yet</h3>
+                        <p>Try a different spelling, or open the exact profile path directly if you already know the username.</p>
+                        <button class="btn btn-secondary" type="button" disabled="@string.IsNullOrWhiteSpace(SearchQuery)" @onclick="OpenExactProfileAsync">
+                            Try @SearchQuery.Trim()
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="players-results-grid">
+                        @foreach (var user in SearchResults)
+                        {
+                            <article class="player-search-card">
+                                <div class="player-search-card-top">
+                                    <div class="player-search-avatar">@GetInitials(user.Username)</div>
+                                    <div class="player-search-copy">
+                                        <button class="map-link-button player-search-name" type="button" @onclick="() => OpenProfile(user.Username)">
+                                            @user.Username
+                                        </button>
+                                        <p>@user.MazeNuggets.ToString("N0") Maze Nuggets</p>
+                                    </div>
+                                </div>
+
+                                <div class="player-search-actions">
+                                    <button class="btn btn-primary" type="button" @onclick="() => OpenProfile(user.Username)">View Profile</button>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            }
+        </section>
+
+        <section class="panel players-top-panel">
+            <div class="panel-heading">
+                <div>
+                    <span class="profile-eyebrow">Discovery</span>
+                    <h2>Top Explorers</h2>
+                </div>
+                <span class="section-count">@TopPlayers.Count</span>
+            </div>
+
+            @if (IsLoadingTopPlayers)
+            {
+                <div class="players-search-status">
+                    <div class="loader small"></div>
+                    <span>Loading top explorers...</span>
+                </div>
+            }
+            else if (TopPlayers.Count == 0)
+            {
+                <div class="empty-state-inline">No player leaderboard results were returned.</div>
+            }
+            else
+            {
+                <div class="players-results-grid top-player-grid">
+                    @foreach (var entry in TopPlayers.Select((player, index) => new { Player = player, Rank = index + 1 }))
+                    {
+                        <article class="player-search-card top-player-card">
+                            <div class="top-player-rank">#@entry.Rank</div>
+                            <div class="player-search-card-top">
+                                <div class="player-search-avatar">@GetInitials(entry.Player.Username)</div>
+                                <div class="player-search-copy">
+                                    <button class="map-link-button player-search-name" type="button" @onclick="() => OpenProfile(entry.Player.Username)">
+                                        @entry.Player.Username
+                                    </button>
+                                    <p>@entry.Player.MazeNuggets.ToString("N0") Maze Nuggets</p>
+                                </div>
+                            </div>
+
+                            <div class="top-player-metrics">
+                                <div>
+                                    <span>Owned</span>
+                                    <strong>@entry.Player.OwnedMapsCount</strong>
+                                </div>
+                                <div>
+                                    <span>Discovered</span>
+                                    <strong>@entry.Player.DiscoveredMapsCount</strong>
+                                </div>
+                                <div>
+                                    <span>Wins</span>
+                                    <strong>@entry.Player.MapsCompleted</strong>
+                                </div>
+                                <div>
+                                    <span>Win Rate</span>
+                                    <strong>@FormatPercent(entry.Player.WinRate)</strong>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private HttpClient Http { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private LoginUserSummary? Session { get; set; }
+    private bool SessionReady { get; set; }
+    private bool IsSearching { get; set; }
+    private bool IsLoadingTopPlayers { get; set; } = true;
+    private bool HasError { get; set; }
+    private string StatusMessage { get; set; } = string.Empty;
+    private string SearchQuery { get; set; } = string.Empty;
+    private int SearchVersion { get; set; }
+    private List<UserSearchResult> SearchResults { get; set; } = [];
+    private List<PlayerLeaderboardEntry> TopPlayers { get; set; } = [];
+
+    private bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery) && SearchQuery.Trim().Length >= 2;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        Session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        SessionReady = true;
+
+        if (Session is null || string.IsNullOrWhiteSpace(Session.Username))
+        {
+            NavigationManager.NavigateTo("/");
+            return;
+        }
+
+        await LoadTopPlayersAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadTopPlayersAsync()
+    {
+        IsLoadingTopPlayers = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await Http.GetAsync(
+                BuildControllerUrl("api/auth/playerLeaderboard?sortBy=maze_nuggets&order=desc"));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                HasError = true;
+                StatusMessage = await response.Content.ReadAsStringAsync();
+                TopPlayers = [];
+                return;
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<PlayerLeaderboardResponse>();
+            TopPlayers = payload?.Players
+                .Where(player => !string.IsNullOrWhiteSpace(player.Username))
+                .Take(8)
+                .ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+            TopPlayers = [];
+        }
+        finally
+        {
+            IsLoadingTopPlayers = false;
+        }
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs args)
+    {
+        SearchQuery = args.Value?.ToString() ?? string.Empty;
+        await SearchUsersAsync(SearchQuery);
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await OpenExactProfileAsync();
+        }
+    }
+
+    private async Task SearchUsersAsync(string query)
+    {
+        var trimmedQuery = query.Trim();
+        var requestVersion = ++SearchVersion;
+
+        if (trimmedQuery.Length < 2)
+        {
+            SearchResults = [];
+            IsSearching = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        IsSearching = true;
+        HasError = false;
+        StatusMessage = string.Empty;
+        await InvokeAsync(StateHasChanged);
+
+        await Task.Delay(180);
+        if (requestVersion != SearchVersion)
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<UserSearchResponse>(
+                BuildControllerUrl($"api/auth/userSearch?query={Uri.EscapeDataString(trimmedQuery)}&limit=8"));
+
+            if (requestVersion != SearchVersion)
+            {
+                return;
+            }
+
+            SearchResults = response?.Users
+                .Where(user => !string.IsNullOrWhiteSpace(user.Username))
+                .GroupBy(user => user.Username, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(user => user.Username, StringComparer.OrdinalIgnoreCase)
+                .ToList() ?? [];
+
+            if (SearchResults.Count == 0)
+            {
+                var exactUser = await TryResolveExactUserAsync(trimmedQuery);
+                if (requestVersion == SearchVersion && exactUser is not null)
+                {
+                    SearchResults = [exactUser];
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            if (requestVersion != SearchVersion)
+            {
+                return;
+            }
+
+            HasError = true;
+            StatusMessage = ex.Message;
+            SearchResults = [];
+        }
+        finally
+        {
+            if (requestVersion == SearchVersion)
+            {
+                IsSearching = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async Task<UserSearchResult?> TryResolveExactUserAsync(string username)
+    {
+        try
+        {
+            using var response = await Http.GetAsync(
+                BuildControllerUrl($"api/auth/user?username={Uri.EscapeDataString(username)}"));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<ProfileResponse>();
+            if (payload?.User is null || string.IsNullOrWhiteSpace(payload.User.Username))
+            {
+                return null;
+            }
+
+            return new UserSearchResult
+            {
+                Username = payload.User.Username,
+                MazeNuggets = payload.User.MazeNuggets,
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private Task OpenExactProfileAsync()
+    {
+        var username = SearchQuery.Trim();
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return Task.CompletedTask;
+        }
+
+        OpenProfile(username);
+        return Task.CompletedTask;
+    }
+
+    private void ClearSearch()
+    {
+        SearchVersion++;
+        SearchQuery = string.Empty;
+        SearchResults = [];
+        HasError = false;
+        StatusMessage = string.Empty;
+    }
+
+    private void OpenProfile(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(username.Trim())}");
+    }
+
+    private string BuildControllerUrl(string relativePath)
+    {
+        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
+    }
+
+    private void GoHome()
+    {
+        NavigationManager.NavigateTo("/home");
+    }
+
+    private void GoLogin()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+
+    private static string FormatPercent(double value)
+    {
+        return $"{value:0.#}%";
+    }
+
+    private static string GetInitials(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "??";
+        }
+
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 1)
+        {
+            return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
+        }
+
+        return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+}

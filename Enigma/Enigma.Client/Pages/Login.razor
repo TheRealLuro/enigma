@@ -1,5 +1,6 @@
-﻿@page "/"
+@page "/"
 @rendermode InteractiveWebAssembly
+@using Enigma.Client.Models.Gameplay
 
 <div class="content" style="max-width: 480px; margin-top: 60px;">
     <div class="card p-4 shadow-sm">
@@ -10,10 +11,10 @@
             <DataAnnotationsValidator />
 
             <div class="mb-3">
-                <label class="form-label">Email</label>
+                <label class="form-label">Username</label>
                 <InputText class="form-control"
                            @bind-Value="user.Username"
-                           placeholder="you@example.com" />
+                           placeholder="your_username" />
             </div>
 
             <div class="mb-3">
@@ -21,7 +22,7 @@
                 <InputText type="password"
                            class="form-control"
                            @bind-Value="password"
-                           placeholder="••••••••" />
+                           placeholder="��������" />
             </div>
 
             <div class="mb-3 d-flex justify-content-between align-items-center">
@@ -41,13 +42,18 @@
                 </button>
             </div>
 
-            <button type="submit" class="btn btn-primary w-100">
-                Login
+            <button type="submit" class="btn btn-primary w-100" disabled="@IsSubmitting">
+                @(IsSubmitting ? "Logging in..." : "Login")
             </button>
         </EditForm>
 
-        <div class="mt-4 text-center text-muted">
-            Don’t have an account?
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert @(HasError ? "alert-warning" : "alert-info") mt-3">@StatusMessage</div>
+        }
+
+        <div class="subtext-mt-4">
+            Don't have an account?
             <button class="btn btn-link p-0"
                     @onclick="OnRegisterClick">
                 Create one
@@ -62,52 +68,78 @@
     NavigationManager NavigationManager { get; set; } = default!;
 
     [Inject]
-    HttpClient Http { get; set; }
+    HttpClient Http { get; set; } = default!;
 
     [Inject]
-    IConfiguration Config { get; set; } = default!;
+    IJSRuntime JS { get; set; } = default!;
 
-    User user = new();
-    string password = string.Empty;
-    bool rememberMe;
+    private User user = new() { Username = string.Empty };
+    private string password = string.Empty;
+    private bool rememberMe;
+    private bool IsSubmitting;
+    private bool HasError;
+    private string StatusMessage = string.Empty;
 
-    async Task OnLoginClick()
+    private async Task OnLoginClick()
     {
-        var token = Config["Api:Token"] ?? string.Empty;
-        var url =
-            $"database/users/login?username={Uri.EscapeDataString(user.Username ?? string.Empty)}" +
-            $"&passwd={Uri.EscapeDataString(password)}";
+        IsSubmitting = true;
+        HasError = false;
+        StatusMessage = string.Empty;
+
+        var url = BuildControllerUrl(
+            $"api/auth/login?username={Uri.EscapeDataString(user.Username ?? string.Empty)}&password={Uri.EscapeDataString(password)}");
 
         try
         {
             using var httpResponse = await Http.PostAsync(url, content: null);
-            httpResponse.EnsureSuccessStatusCode();
-            var response = await httpResponse.Content.ReadFromJsonAsync<LoginResponse>();
-
-            if (response == null || response.Status != "success")
+            if (!httpResponse.IsSuccessStatusCode)
             {
-                Console.WriteLine("Login failed.");
-                return;
+                var errorText = await httpResponse.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorText) ? "Login failed." : errorText);
             }
 
-            Console.WriteLine($"Welcome {response.User?.Username}");
-            Console.WriteLine($"Daily reward granted: {response.DailyRewardGranted}");
+            var response = await httpResponse.Content.ReadFromJsonAsync<LoginResponse>();
+            if (response is null || response.Status != "success" || string.IsNullOrWhiteSpace(response.User?.Username))
+            {
+                throw new InvalidOperationException("Login failed.");
+            }
+
+            await JS.InvokeVoidAsync(
+                "enigmaGame.setPlayerIdentity",
+                new PlayerIdentity { Username = response.User.Username },
+                rememberMe);
+
+            await JS.InvokeVoidAsync("enigmaGame.setUserSession", response.User, rememberMe);
+
+            StatusMessage = response.DailyRewardGranted
+                ? $"Daily reward granted: {response.DailyRewardAmount}"
+                : "Login successful.";
 
             NavigationManager.NavigateTo("/home");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Login error: {ex.Message}");
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsSubmitting = false;
         }
     }
 
-    void OnRegisterClick()
+    private void OnRegisterClick()
     {
         NavigationManager.NavigateTo("/register");
     }
 
-    void OnForgotPasswordClick()
+    private void OnForgotPasswordClick()
     {
         NavigationManager.NavigateTo("/forgot-password");
+    }
+
+    private string BuildControllerUrl(string relativePath)
+    {
+        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
     }
 }

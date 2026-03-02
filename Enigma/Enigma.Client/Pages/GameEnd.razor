@@ -1,66 +1,300 @@
-﻿@page "/gameend/{Result}"
+@page "/gameend/{Result?}"
+@using Enigma.Client.Models.Gameplay
 
-@inject NavigationManager Nav
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+@inject HttpClient Http
 
-<h1 class="mb-4">
-    @(IsWin ? "🎉 You Escaped the Maze!" : "💀 You Were Lost...")
-</h1>
+<PageTitle>Game Complete</PageTitle>
 
-@if (IsWin)
+@if (IsLoading)
 {
-    <div class="card p-4 shadow-sm mb-4">
-        <h3>Add Your Score to the Leaderboard</h3>
-
-        <div class="mb-3">
-            <label class="form-label">Player Name</label>
-            <input class="form-control" @bind="PlayerName" maxlength="20" />
+    <div class="content">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading run summary...</p>
         </div>
-
-        <button class="btn btn-success" @onclick="SubmitScore">
-            Submit Score
-        </button>
+    </div>
+}
+else if (!IsWin || Summary is null)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Run Complete</h1>
+            <p>@(LoadError ?? "No game summary is available for this run.")</p>
+            <div class="enigma-end-actions">
+                <button class="btn btn-primary" @onclick="GoHome">Main Menu</button>
+                <button class="btn btn-secondary" @onclick="GoPlay">Back to Play</button>
+            </div>
+        </div>
     </div>
 }
 else
 {
-    <div class="card p-4 shadow-sm mb-4">
-        <h3>Better luck next time.</h3>
-        <p>Want to try again?</p>
+    <div class="content enigma-end-page">
+        <div class="card enigma-end-card">
+            <span class="enigma-kicker">Escape Logged</span>
+            <h1>Maze Cleared</h1>
+            <div class="enigma-end-grid">
+                <div>
+                    <span>Player</span>
+                    <strong>@Summary.Username</strong>
+                </div>
+                <div>
+                    <span>Total Gold</span>
+                    <strong>@Summary.GoldCollected</strong>
+                </div>
+                <div>
+                    <span>Completion Time</span>
+                    <strong>@Summary.CompletionTime</strong>
+                </div>
+                <div>
+                    <span>Difficulty</span>
+                    <strong>@Summary.Difficulty</strong>
+                </div>
+            </div>
 
-        <button class="btn btn-danger me-2" @onclick="Retry">
-            Retry Maze
-        </button>
+            <div class="enigma-end-grid compact">
+                <div>
+                    <span>Map Source</span>
+                    <strong>@(Summary.Source == "load" ? "Existing map" : "Generated seed")</strong>
+                </div>
+                <div>
+                    <span>Maze Size</span>
+                    <strong>@Summary.Size x @Summary.Size</strong>
+                </div>
+                <div>
+                    <span>Seed</span>
+                    <strong class="seed-preview">@Summary.Seed</strong>
+                </div>
+            </div>
+
+            <div class="enigma-form-block">
+                <label class="form-label">Map Name</label>
+                @if (Summary.Source == "load")
+                {
+                    <input class="form-control" value="@MapName" readonly />
+                }
+                else
+                {
+                    <input class="form-control" @bind="MapName" maxlength="50" placeholder="Enter a name for this maze" />
+                }
+            </div>
+
+            <div class="enigma-form-block">
+                <label class="form-label">Rating</label>
+                <InputNumber class="form-control" @bind-Value="Rating" />
+                <small class="enigma-helper">Required by the backend when submitting or updating a map.</small>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(StatusMessage))
+            {
+                <div class="alert @(SubmissionSucceeded ? "alert-success" : "alert-warning")">@StatusMessage</div>
+            }
+
+            <div class="enigma-end-actions">
+                <button class="btn btn-success" disabled="@IsSubmitting" @onclick="SubmitResultAsync">
+                    @(IsSubmitting ? "Submitting..." : Summary.HasBeenSubmitted ? "Submitted" : "Submit Result")
+                </button>
+                <button class="btn btn-primary" @onclick="RetryMaze">Play Again</button>
+                <button class="btn btn-secondary" @onclick="GoHome">Main Menu</button>
+            </div>
+        </div>
     </div>
 }
 
-<hr />
-
-<button class="btn btn-secondary me-2" @onclick="GoHome">
-    Main Menu
-</button>
-
 @code {
+    private const string CompletionSummaryStorageKey = "enigma.game.summary";
+
     [Parameter] public string? Result { get; set; }
 
-    private string PlayerName = string.Empty;
+    private bool IsLoading { get; set; } = true;
+    private bool IsSubmitting { get; set; }
+    private bool SubmissionSucceeded { get; set; }
+    private string? LoadError { get; set; }
+    private string StatusMessage { get; set; } = string.Empty;
+    private GameCompletionSummary? Summary { get; set; }
+    private string MapName { get; set; } = string.Empty;
+    private int Rating { get; set; } = 8;
 
-    private bool IsWin =>
-        string.Equals(Result, "win", StringComparison.OrdinalIgnoreCase);
+    private bool IsWin => string.Equals(Result, "win", StringComparison.OrdinalIgnoreCase);
 
-    private void SubmitScore()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // TODO: Leaderboard logic later
-        Console.WriteLine($"Score submitted by {PlayerName}");
-        Nav.NavigateTo("/");
+        if (!firstRender)
+        {
+            return;
+        }
+
+        Summary = await JS.InvokeAsync<GameCompletionSummary?>("enigmaGame.sessionGetJson", CompletionSummaryStorageKey);
+        if (Summary is null)
+        {
+            LoadError = "Finish a maze from the Game page before visiting the result screen.";
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        MapName = Summary.Source == "load"
+            ? Summary.LoadedMapName ?? string.Empty
+            : MapName;
+
+        IsLoading = false;
+        await InvokeAsync(StateHasChanged);
     }
 
-    private void Retry()
+    private async Task SubmitResultAsync()
     {
-        //Nav.NavigateTo("/maze");
+        if (Summary is null || Summary.HasBeenSubmitted)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Summary.Username) || string.Equals(Summary.Username, "Guest", StringComparison.OrdinalIgnoreCase))
+        {
+            SubmissionSucceeded = false;
+            StatusMessage = "Log in before submitting a completed run.";
+            return;
+        }
+
+        if (Rating is < 1 or > 10)
+        {
+            SubmissionSucceeded = false;
+            StatusMessage = "Rating must be between 1 and 10.";
+            return;
+        }
+
+        if (Summary.Source == "new" && string.IsNullOrWhiteSpace(MapName))
+        {
+            SubmissionSucceeded = false;
+            StatusMessage = "Map name is required for a newly generated maze.";
+            return;
+        }
+
+        IsSubmitting = true;
+        StatusMessage = string.Empty;
+
+        try
+        {
+            if (Summary.Source == "load")
+            {
+                await UpdateExistingMapAsync();
+                await UpdateUserProgressAsync(seedExisted: true);
+            }
+            else
+            {
+                await AddNewMapAsync();
+                await UpdateUserProgressAsync(seedExisted: false);
+            }
+
+            Summary.HasBeenSubmitted = true;
+            await JS.InvokeVoidAsync("enigmaGame.sessionSetJson", CompletionSummaryStorageKey, Summary);
+            SubmissionSucceeded = true;
+            StatusMessage = "Run submitted successfully.";
+        }
+        catch (Exception exception)
+        {
+            SubmissionSucceeded = false;
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
     }
 
-    private void GoHome()
+    private async Task AddNewMapAsync()
     {
-        //Nav.NavigateTo("/");
+        if (Summary is null)
+        {
+            return;
+        }
+
+        var url =
+            $"database/maps/add?map_name={Uri.EscapeDataString(MapName)}" +
+            $"&seed={Uri.EscapeDataString(Summary.Seed)}" +
+            $"&size={Summary.Size}" +
+            $"&difficulty={Uri.EscapeDataString(Summary.Difficulty.ToLowerInvariant())}" +
+            $"&founder={Uri.EscapeDataString(Summary.Username)}" +
+            $"&time_completed={Uri.EscapeDataString(Summary.CompletionTime)}" +
+            $"&first_rating={Rating}";
+
+        using var response = await Http.PostAsync(url, content: null);
+        await EnsureSuccessAsync(response, "Unable to save the new map.");
+    }
+
+    private async Task UpdateExistingMapAsync()
+    {
+        if (Summary is null)
+        {
+            return;
+        }
+
+        var url =
+            $"database/maps/update_map?seed={Uri.EscapeDataString(Summary.Seed)}" +
+            $"&username={Uri.EscapeDataString(Summary.Username)}" +
+            $"&completion_time={Uri.EscapeDataString(Summary.CompletionTime)}" +
+            $"&rating={Rating}";
+
+        using var response = await Http.PutAsync(url, content: null);
+        await EnsureSuccessAsync(response, "Unable to update the existing map.");
+    }
+
+    private async Task UpdateUserProgressAsync(bool seedExisted)
+    {
+        if (Summary is null)
+        {
+            return;
+        }
+
+        var url =
+            $"database/users/update_progress?username={Uri.EscapeDataString(Summary.Username)}" +
+            $"&map_seed={Uri.EscapeDataString(Summary.Seed)}" +
+            $"&items_in_use=none" +
+            $"&earned_mn={Summary.GoldCollected}" +
+            $"&seed_existed={seedExisted.ToString().ToLowerInvariant()}" +
+            $"&map_lost=false";
+
+        using var response = await Http.PutAsync(url, content: null);
+        await EnsureSuccessAsync(response, "Unable to update the player progress.");
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, string prefix)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        var details = await response.Content.ReadAsStringAsync();
+        throw new InvalidOperationException($"{prefix} {details}".Trim());
+    }
+
+    private void RetryMaze()
+    {
+        if (Summary is null)
+        {
+            GoPlay();
+            return;
+        }
+
+        var url = $"/game?seed={Uri.EscapeDataString(Summary.Seed)}&source={Uri.EscapeDataString(Summary.Source)}";
+        if (!string.IsNullOrWhiteSpace(Summary.LoadedMapName))
+        {
+            url += $"&mapName={Uri.EscapeDataString(Summary.LoadedMapName)}";
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+
+    private async Task GoHome()
+    {
+        await JS.InvokeVoidAsync("enigmaGame.sessionRemove", CompletionSummaryStorageKey);
+        NavigationManager.NavigateTo("/home");
+    }
+
+    private void GoPlay()
+    {
+        NavigationManager.NavigateTo("/play");
     }
 }

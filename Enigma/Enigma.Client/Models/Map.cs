@@ -12,11 +12,11 @@ namespace Enigma.Client.Models
         }
 
         [Required(ErrorMessage = "Cannot be empty.")]
-        public string MapName { get; set; }
+        public string MapName { get; set; } = string.Empty;
         [Required]
         public Difficulty MapDifficulty { get; set; } = Difficulty.Easy;
         [Range(2, int.MaxValue, ErrorMessage = "A map's dimensions must be at least a 2x2")]
         public int MapSize { get; set; }
-        public Seed Seed { get; set; }
+        public Seed Seed { get; set; } = new();
     }
 }

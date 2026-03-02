@@ -1,6 +1,295 @@
-﻿@page "/game"
-<h3>Game</h3>
+@page "/game"
+@using Enigma.Client.Models.Gameplay
 
-@code {
+<PageTitle>Enigma Game</PageTitle>
 
+@if (!string.IsNullOrWhiteSpace(LoadError))
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Game Unavailable</h1>
+            <p>@LoadError</p>
+            <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/play"))'>Return to Play</button>
+        </div>
+    </div>
+}
+else if (!IsLoaded || !CanShowRoom)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading maze state...</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="enigma-game-page content">
+        <section class="enigma-game-shell">
+            <div class="enigma-room-shell card">
+                <div class="enigma-room-meta">
+                    <div>
+                        <span class="enigma-kicker">@CurrentMapSourceLabel</span>
+                        <h1>@CurrentMapLabel</h1>
+                    </div>
+                    <div class="enigma-room-meta-grid">
+                        <div>
+                            <span>Difficulty</span>
+                            <strong>@DifficultyLabel</strong>
+                        </div>
+                        <div>
+                            <span>Size</span>
+                            <strong>@ParsedSeed!.Size x @ParsedSeed.Size</strong>
+                        </div>
+                        <div>
+                            <span>Elapsed</span>
+                            <strong>@ElapsedTimeLabel</strong>
+                        </div>
+                        <div>
+                            <span>Gold</span>
+                            <strong>@TotalGold</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="enigma-room-stage-wrap">
+                    <div id="@GameSurfaceId"
+                         tabindex="0"
+                         class="enigma-room-stage @(UsePlaceholderGraphics ? "placeholder-mode" : string.Empty)"
+                         style="@GetRoomStageStyle()">
+                        @foreach (var segment in GetWallSegments())
+                        {
+                            <div class="enigma-wall @segment.CssClass" style="@segment.Style"></div>
+                        }
+
+                        @if (CurrentRoomState!.Puzzle is PressurePlatePuzzle platePuzzle)
+                        {
+                            <div class="enigma-plate" style="@GetRectStyle(platePuzzle.PlateBounds)">
+                                <span>@($"{Math.Round(platePuzzle.Progress * 100d)}%")</span>
+                            </div>
+                        }
+
+                        @if (CurrentRoomState.Puzzle is ZoneActivationPuzzle zonePuzzle)
+                        {
+                            @for (var zoneIndex = 0; zoneIndex < zonePuzzle.Zones.Count; zoneIndex++)
+                            {
+                                var zone = zonePuzzle.Zones[zoneIndex];
+                                var activeClass = zoneIndex < zonePuzzle.CurrentZoneIndex
+                                    ? "complete"
+                                    : zoneIndex == zonePuzzle.CurrentZoneIndex ? "current" : string.Empty;
+                                <div class="enigma-zone @activeClass" style="@GetRectStyle(zone)">
+                                    <span>@(zoneIndex + 1)</span>
+                                </div>
+                            }
+                        }
+
+                        @if (CurrentRoomState.RewardPickupVisible)
+                        {
+                            <div class="enigma-reward-pickup" style="@GetRectStyle(CurrentRoomState.RewardPickupBounds)"></div>
+                        }
+
+                        @if (CurrentRoomState.FinishPortalVisible)
+                        {
+                            <div class="enigma-black-hole" style="@GetRectStyle(CurrentRoomState.FinishPortalBounds)"></div>
+                        }
+
+                        <div class="enigma-player @GetPlayerClass()" style="@GetPlayerStyle()"></div>
+
+                        <div class="enigma-room-hud enigma-room-hud-right">Room: @RoomCoordinateLabel</div>
+                        <div class="enigma-room-hud enigma-room-hud-left">@CurrentRoom!.Kind</div>
+                        @if (!string.IsNullOrWhiteSpace(StatusBanner))
+                        {
+                            <div class="enigma-room-banner">@StatusBanner</div>
+                        }
+                    </div>
+                </div>
+
+                <div class="enigma-room-footer">
+                    <span>Move with WASD or the arrow keys.</span>
+                    <span>@(CurrentRoomState.Puzzle.IsCompleted ? "Room solved. Exit doors unlocked." : "Room locked until this puzzle is solved.")</span>
+                </div>
+            </div>
+
+            <aside class="enigma-sidebar">
+                <div class="card enigma-sidebar-card">
+                    <span class="enigma-kicker">Run Status</span>
+                    <div class="enigma-stat-grid">
+                        <div>
+                            <span>Solved Rooms</span>
+                            <strong>@SolvedRoomCount / @TotalRoomCount</strong>
+                        </div>
+                        <div>
+                            <span>Player</span>
+                            <strong>@Username</strong>
+                        </div>
+                        <div>
+                            <span>Graphics</span>
+                            <strong>@(UsePlaceholderGraphics ? "Placeholder" : "Sprites")</strong>
+                        </div>
+                        <div>
+                            <span>Goal</span>
+                            <strong>@(PortalReady ? "Enter the black hole" : "Solve and move")</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card enigma-sidebar-card enigma-puzzle-card">
+                    <span class="enigma-kicker">Current Puzzle</span>
+                    <h2>@CurrentRoomState.Puzzle.Title</h2>
+                    <p class="enigma-puzzle-copy">@CurrentRoomState.Puzzle.Instruction</p>
+                    <div class="enigma-puzzle-status">@CurrentRoomState.Puzzle.StatusText</div>
+
+                    @if (CurrentRoomState.Puzzle is PressurePlatePuzzle pressure)
+                    {
+                        <div class="enigma-progress-shell">
+                            <div class="enigma-progress-bar" style="width: @(Math.Round(pressure.Progress * 100d, 2))%;"></div>
+                        </div>
+                        <p class="enigma-helper">Stand on the glowing plate inside the room.</p>
+                    }
+                    else if (CurrentRoomState.Puzzle is QuickTimePuzzle quickTime)
+                    {
+                        <div class="enigma-timing-track">
+                            <div class="enigma-timing-window" style="left: @(Math.Round(quickTime.TargetStart * 100d, 2))%; width: @(Math.Round(quickTime.TargetWidth * 100d, 2))%;"></div>
+                            <div class="enigma-timing-marker" style="left: @(Math.Round(quickTime.MeterValue * 100d, 2))%;"></div>
+                        </div>
+                        <button class="btn btn-primary w-100" @onclick="AttemptQuickTimeStop">Stop Pulse</button>
+                    }
+                    else if (CurrentRoomState.Puzzle is RiddlePuzzle riddle)
+                    {
+                        <p class="enigma-helper">@riddle.Question</p>
+                        <div class="enigma-option-grid">
+                            @for (var index = 0; index < riddle.Options.Count; index++)
+                            {
+                                var optionIndex = index;
+                                <button class="btn btn-secondary" @onclick="(() => ChooseRiddleAnswer(optionIndex))">@riddle.Options[index]</button>
+                            }
+                        </div>
+                    }
+                    else if (CurrentRoomState.Puzzle is SequenceMemoryPuzzle sequence)
+                    {
+                        <div class="enigma-sequence-display">
+                            @foreach (var rune in sequence.Sequence)
+                            {
+                                <span>@(sequence.IsSequenceVisible ? rune : "•")</span>
+                            }
+                        </div>
+                        @if (!sequence.IsSequenceVisible)
+                        {
+                            <p class="enigma-helper">Entered: @(sequence.Entered.Count == 0 ? "none" : string.Join(" ", sequence.Entered))</p>
+                        }
+                        <div class="enigma-option-grid compact">
+                            @foreach (var rune in new[] { "A", "B", "C", "D" })
+                            {
+                                var currentRune = rune;
+                                <button class="btn btn-secondary" @onclick="(() => PressSequenceRune(currentRune))">@currentRune</button>
+                            }
+                        </div>
+                    }
+                    else if (CurrentRoomState.Puzzle is TileRotationPuzzle tileRotation)
+                    {
+                        <div class="enigma-tile-grid">
+                            @for (var index = 0; index < tileRotation.Rotations.Length; index++)
+                            {
+                                var tileIndex = index;
+                                <button class="enigma-tile-button"
+                                        @onclick="(() => RotateTile(tileIndex))"
+                                        style="transform: rotate(@(tileRotation.Rotations[index] * 90)deg);">
+                                    🡱
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (CurrentRoomState.Puzzle is UnlockPatternPuzzle unlockPattern)
+                    {
+                        <div class="enigma-sequence-display compact">
+                            @foreach (var direction in unlockPattern.Pattern)
+                            {
+                                <span>@(unlockPattern.IsPatternVisible ? direction.ToString()[0] : '•')</span>
+                            }
+                        </div>
+                        @if (!unlockPattern.IsPatternVisible)
+                        {
+                            <p class="enigma-helper">Entered: @(unlockPattern.Entered.Count == 0 ? "none" : string.Join(" ", unlockPattern.Entered.Select(direction => direction.ToString()[0])))</p>
+                        }
+                        <div class="enigma-direction-grid">
+                            <button class="btn btn-secondary" @onclick="(() => PressPatternDirection(PlayerDirection.Up))">Up</button>
+                            <button class="btn btn-secondary" @onclick="(() => PressPatternDirection(PlayerDirection.Right))">Right</button>
+                            <button class="btn btn-secondary" @onclick="(() => PressPatternDirection(PlayerDirection.Down))">Down</button>
+                            <button class="btn btn-secondary" @onclick="(() => PressPatternDirection(PlayerDirection.Left))">Left</button>
+                        </div>
+                    }
+                    else if (CurrentRoomState.Puzzle is ValveFlowPuzzle valveFlow)
+                    {
+                        <div class="enigma-option-grid compact">
+                            @for (var index = 0; index < valveFlow.ValveValues.Length; index++)
+                            {
+                                var valveIndex = index;
+                                <button class="btn @(valveFlow.OpenStates[index] ? "btn-success" : "btn-secondary")"
+                                        @onclick="(() => ToggleValve(valveIndex))">
+                                    Valve @(index + 1): @valveFlow.ValveValues[index]
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (CurrentRoomState.Puzzle is WeightBalancePuzzle weightBalance)
+                    {
+                        <div class="enigma-option-grid compact">
+                            @for (var index = 0; index < weightBalance.Weights.Length; index++)
+                            {
+                                var weightIndex = index;
+                                <button class="btn @(weightBalance.Selected[index] ? "btn-warning" : "btn-secondary")"
+                                        @onclick="(() => ToggleWeight(weightIndex))">
+                                    Weight @weightBalance.Weights[index]
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (CurrentRoomState.Puzzle is XorLogicPuzzle xor)
+                    {
+                        <div class="enigma-option-grid compact">
+                            @for (var index = 0; index < xor.Inputs.Length; index++)
+                            {
+                                var inputIndex = index;
+                                <button class="btn @(xor.Inputs[index] ? "btn-success" : "btn-secondary")"
+                                        @onclick="(() => ToggleXorInput(inputIndex))">
+                                    Input @(index + 1): @(xor.Inputs[index] ? 1 : 0)
+                                </button>
+                            }
+                        </div>
+                        <p class="enigma-helper">Set parity to @(xor.TargetOutput ? 1 : 0).</p>
+                    }
+                    else if (CurrentRoomState.Puzzle is YarnUntanglePuzzle yarn)
+                    {
+                        <div class="enigma-yarn-grid">
+                            @for (var index = 0; index < yarn.StrandOrder.Length; index++)
+                            {
+                                var strandIndex = index;
+                                var isSelected = yarn.SelectedIndex == index;
+                                <button class="enigma-yarn-node @(isSelected ? "selected" : string.Empty)"
+                                        @onclick="(() => SelectYarnStrand(strandIndex))">
+                                    @yarn.StrandOrder[index]
+                                </button>
+                            }
+                        </div>
+                    }
+                    else if (CurrentRoomState.Puzzle is ZoneActivationPuzzle zoneActivation)
+                    {
+                        <div class="enigma-progress-shell">
+                            <div class="enigma-progress-bar" style="width: @(Math.Round(zoneActivation.HoldProgress * 100d, 2))%;"></div>
+                        </div>
+                        <p class="enigma-helper">Walk into beacon @(zoneActivation.CurrentZoneIndex + 1) inside the room.</p>
+                    }
+
+                    @if (CurrentRoomState.Definition.Kind == MazeRoomKind.Reward)
+                    {
+                        <p class="enigma-helper reward-copy">Reward rooms spawn bonus gold after the puzzle is cleared.</p>
+                    }
+                    @if (CurrentRoomState.Definition.Kind == MazeRoomKind.Finish)
+                    {
+                        <p class="enigma-helper reward-copy">Once this puzzle is solved, touch the black hole to finish the run.</p>
+                    }
+                </div>
+            </aside>
+        </section>
+    </div>
 }

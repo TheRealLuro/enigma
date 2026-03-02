@@ -75,7 +75,7 @@ def update_user_progress(
         update_query["$inc"][f"item_counts.{item_id}"] = -amount
 
     if not seed_existed:
-        update_query["$addToSet"] = {"maps_discovered": map_id}
+        update_query["$addToSet"] = {"maps_discovered": map_id, "maps_owned": map_id}
 
     result = users_collection.update_one({"username": username}, update_query)
 

@@ -1,0 +1,449 @@
+@page "/marketplace"
+@using System.ComponentModel.DataAnnotations
+
+<PageTitle>Marketplace</PageTitle>
+
+@if (IsLoading && !HasLoadedOnce)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading marketplace...</p>
+        </div>
+    </div>
+}
+else if (Session is null)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Marketplace unavailable</h1>
+            <p>Sign in to browse and trade maps.</p>
+            <div class="enigma-end-actions">
+                <button class="btn btn-primary" @onclick="GoHome">Home</button>
+                <button class="btn btn-secondary" @onclick="GoLogin">Login</button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="content marketplace-shell">
+        <section class="marketplace-banner">
+            <div>
+                <span class="profile-kicker">Trading Floor</span>
+                <h1>Map Marketplace</h1>
+                <p>Browse live listings, inspect map artwork, and trade player-owned mazes.</p>
+            </div>
+
+            <div class="marketplace-banner-metrics">
+                <div>
+                    <span>Maze Nuggets</span>
+                    <strong>@Session.MazeNuggets.ToString("N0") MN</strong>
+                </div>
+                <div>
+                    <span>Live Listings</span>
+                    <strong>@Listings.Count</strong>
+                </div>
+                <div>
+                    <span>Owned Maps</span>
+                    <strong>@Session.MapsOwned.Count</strong>
+                </div>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
+        }
+
+        <div class="marketplace-top-grid">
+            <section class="panel marketplace-sell-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Sell</span>
+                        <h2>List a Map</h2>
+                    </div>
+                    <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="LoadMarketplaceAsync">
+                        @(IsLoading ? "Refreshing..." : "Refresh")
+                    </button>
+                </div>
+
+                @if (AvailableOwnedMaps.Count == 0)
+                {
+                    <div class="empty-state-inline">You do not have any unlisted owned maps available for sale.</div>
+                }
+                else
+                {
+                    <EditForm FormName="MarketplaceSellForm" Model="SellRequest" OnValidSubmit="ListMapAsync" class="marketplace-sell-form">
+                        <DataAnnotationsValidator />
+
+                        <div>
+                            <label class="form-label">Owned Map</label>
+                            <InputSelect class="form-control" @bind-Value="SellRequest.MapName">
+                                @foreach (var map in AvailableOwnedMaps)
+                                {
+                                    <option value="@map.MapName">@map.MapName</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Listing Price</label>
+                            <InputNumber class="form-control" @bind-Value="SellRequest.Price" />
+                            <ValidationMessage For="() => SellRequest.Price" />
+                        </div>
+
+                        <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">
+                            @(IsActionBusy ? "Listing..." : "List Map")
+                        </button>
+                    </EditForm>
+                }
+            </section>
+
+            <section class="panel marketplace-info-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Market</span>
+                        <h2>How It Works</h2>
+                    </div>
+                </div>
+                <div class="marketplace-bullet-list">
+                    <div>Listings use the map marketplace APIs and refresh live from the backend.</div>
+                    <div>Buying transfers ownership, updates the seller payout, and moves the map into your collection.</div>
+                    <div>Map art is shown inside contained frames so the full image stays visible.</div>
+                </div>
+            </section>
+        </div>
+
+        @if (IsLoading)
+        {
+            <div class="card enigma-game-message">
+                <div class="loader"></div>
+                <p>Refreshing listings...</p>
+            </div>
+        }
+        else if (Listings.Count == 0)
+        {
+            <section class="panel leaderboard-empty-panel">
+                <h2>No active listings</h2>
+                <p>The marketplace is empty right now.</p>
+            </section>
+        }
+        else
+        {
+            <section class="catalog-card-grid marketplace-grid">
+                @foreach (var listing in Listings)
+                {
+                    <article class="catalog-card marketplace-card">
+                        <MapImageFrame ImageUrl="@listing.MapImage" AltText="@($"{listing.MapName} artwork")" FallbackText="@listing.MapName" Class="poster" />
+
+                        <div class="catalog-card-body">
+                            <span class="catalog-card-kicker">Listed by @listing.Seller</span>
+                            <h3>@listing.MapName</h3>
+                            <p>@FormatThemeLabel(listing.Theme) | Listed @listing.ListedAtDisplay</p>
+
+                            <strong class="catalog-card-price">@listing.Price.ToString("N0") MN</strong>
+
+                            <div class="catalog-card-meta">
+                                <span>Value @listing.Value.ToString("N0")</span>
+                                <span>Size @listing.Size x @listing.Size</span>
+                                <span class="difficulty-badge difficulty-@GetDifficultyClass(listing.Difficulty)">@listing.Difficulty</span>
+                            </div>
+
+                            <div class="marketplace-card-footer">
+                                <button class="inline-link-button" type="button" @onclick="() => OpenProfile(listing.Seller)">
+                                    View seller
+                                </button>
+                                <span class="marketplace-last-sale">Last sale @DisplayLastSale(listing)</span>
+                            </div>
+
+                            @if (IsOwnListing(listing))
+                            {
+                                <span class="profile-status-pill">Your listing</span>
+                            }
+                            else
+                            {
+                                <button class="btn btn-primary" disabled="@(!CanBuy(listing) || IsActionBusy)" @onclick="() => BuyListingAsync(listing)">
+                                    @GetBuyLabel(listing)
+                                </button>
+                            }
+                        </div>
+                    </article>
+                }
+            </section>
+        }
+    </div>
+}
+
+@code {
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private HttpClient Http { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private bool IsLoading { get; set; } = true;
+    private bool IsActionBusy { get; set; }
+    private bool HasLoadedOnce { get; set; }
+    private bool HasError { get; set; }
+    private string StatusMessage { get; set; } = string.Empty;
+    private LoginUserSummary? Session { get; set; }
+    private List<MarketplaceListing> Listings { get; set; } = [];
+    private MarketplaceSellForm SellRequest { get; set; } = new();
+
+    private List<MapSummary> AvailableOwnedMaps =>
+        Session?.MapsOwned
+            .Where(map => !string.IsNullOrWhiteSpace(map.MapName))
+            .GroupBy(map => map.MapName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Where(map => !Listings.Any(listing => EqualsIgnoreCase(listing.MapName, map.MapName)))
+            .OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase)
+            .ToList()
+        ?? [];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        Session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        if (Session is null || string.IsNullOrWhiteSpace(Session.Username))
+        {
+            NavigationManager.NavigateTo("/");
+            return;
+        }
+
+        await LoadMarketplaceAsync();
+    }
+
+    private async Task LoadMarketplaceAsync()
+    {
+        IsLoading = true;
+        HasError = false;
+        StatusMessage = string.Empty;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await Http.GetAsync(BuildControllerUrl("api/auth/marketplace"));
+            if (!response.IsSuccessStatusCode)
+            {
+                HasError = true;
+                StatusMessage = await response.Content.ReadAsStringAsync();
+                Listings = [];
+                return;
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<MarketplaceResponse>();
+            Listings = payload?.Listings ?? [];
+
+            if (AvailableOwnedMaps.Count > 0 && string.IsNullOrWhiteSpace(SellRequest.MapName))
+            {
+                SellRequest.MapName = AvailableOwnedMaps[0].MapName;
+            }
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+            Listings = [];
+        }
+        finally
+        {
+            IsLoading = false;
+            HasLoadedOnce = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ListMapAsync()
+    {
+        if (Session is null)
+        {
+            return;
+        }
+
+        await PerformMarketplaceActionAsync(
+            BuildControllerUrl(
+                $"api/auth/marketplace/add?user={Uri.EscapeDataString(Session.Username)}&mapName={Uri.EscapeDataString(SellRequest.MapName)}&price={SellRequest.Price}"),
+            successFallback: "Map listed.");
+
+        await LoadMarketplaceAsync();
+    }
+
+    private async Task BuyListingAsync(MarketplaceListing listing)
+    {
+        if (Session is null)
+        {
+            return;
+        }
+
+        await PerformMarketplaceActionAsync(
+            BuildControllerUrl(
+                $"api/auth/marketplace/buy?mapName={Uri.EscapeDataString(listing.MapName)}&buyer={Uri.EscapeDataString(Session.Username)}"),
+            successFallback: "Purchase completed.",
+            asyncOnSuccess: async () =>
+            {
+                Session.MazeNuggets = Math.Max(0, Session.MazeNuggets - listing.Price);
+                if (!Session.MapsOwned.Any(map => EqualsIgnoreCase(map.MapName, listing.MapName)))
+                {
+                    Session.MapsOwned.Add(new MapSummary
+                    {
+                        MapName = listing.MapName,
+                        MapImage = listing.MapImage,
+                        Difficulty = listing.Difficulty,
+                        Size = listing.Size,
+                        Value = listing.Value,
+                        ImageAvailable = listing.ImageAvailable,
+                        ImageStatus = listing.ImageStatus,
+                        Theme = listing.Theme,
+                    });
+                }
+
+                await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", Session);
+                await LoadMarketplaceAsync();
+            });
+    }
+
+    private async Task PerformMarketplaceActionAsync(string url, string successFallback, Func<Task>? asyncOnSuccess = null)
+    {
+        IsActionBusy = true;
+        HasError = false;
+        StatusMessage = string.Empty;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await Http.PostAsync(url, content: null);
+            var payload = await response.Content.ReadFromJsonAsync<ApiStatusResponse>();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                HasError = true;
+                StatusMessage = payload?.ToDisplayMessage() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(StatusMessage))
+                {
+                    StatusMessage = await response.Content.ReadAsStringAsync();
+                }
+
+                return;
+            }
+
+            if (asyncOnSuccess is not null)
+            {
+                await asyncOnSuccess();
+            }
+
+            StatusMessage = payload?.ToDisplayMessage() ?? successFallback;
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsActionBusy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private bool CanBuy(MarketplaceListing listing)
+    {
+        return Session is not null
+            && !IsOwnListing(listing)
+            && Session.MazeNuggets >= listing.Price;
+    }
+
+    private bool IsOwnListing(MarketplaceListing listing)
+    {
+        return Session is not null && EqualsIgnoreCase(Session.Username, listing.Seller);
+    }
+
+    private static bool EqualsIgnoreCase(string? left, string? right)
+    {
+        return string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetBuyLabel(MarketplaceListing listing)
+    {
+        if (IsActionBusy)
+        {
+            return "Processing...";
+        }
+
+        if (Session is null)
+        {
+            return "Sign in";
+        }
+
+        if (Session.MazeNuggets < listing.Price)
+        {
+            return "Not enough MN";
+        }
+
+        return $"Buy for {listing.Price:N0} MN";
+    }
+
+    private static string DisplayLastSale(MarketplaceListing listing)
+    {
+        return string.IsNullOrWhiteSpace(listing.LastBoughtDisplay) || listing.LastBoughtDisplay == "Unknown"
+            ? "none"
+            : listing.LastBoughtDisplay;
+    }
+
+    private static string FormatThemeLabel(string? theme)
+    {
+        if (string.IsNullOrWhiteSpace(theme))
+        {
+            return "Unknown theme";
+        }
+
+        return theme.Replace('_', ' ').Trim();
+    }
+
+    private void OpenProfile(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(username)}");
+    }
+
+    private static string GetDifficultyClass(string difficulty)
+    {
+        return difficulty?.Trim().ToLowerInvariant() switch
+        {
+            "easy" => "easy",
+            "medium" => "medium",
+            "hard" => "hard",
+            _ => "default",
+        };
+    }
+
+    private string BuildControllerUrl(string relativePath)
+    {
+        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
+    }
+
+    private void GoHome()
+    {
+        NavigationManager.NavigateTo("/home");
+    }
+
+    private void GoLogin()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+
+    private sealed class MarketplaceSellForm
+    {
+        [Required]
+        public string MapName { get; set; } = string.Empty;
+
+        [Range(1, int.MaxValue, ErrorMessage = "Price must be at least 1 Maze Nugget.")]
+        public int Price { get; set; } = 100;
+    }
+}

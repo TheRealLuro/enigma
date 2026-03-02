@@ -1,20 +1,33 @@
-﻿@page "/play"
+@page "/play"
+@using System.ComponentModel.DataAnnotations
+@using Enigma.Client.Models.Gameplay
 
 <PageTitle>Play Game</PageTitle>
 
-<div class="container mt-5" style="max-width: 700px;">
+<div class="container mt-5" style="max-width: 760px;">
 
-    <h1 class="text-center mb-4">🎮 Start Your Maze</h1>
+    <h1 class="text-center mb-4">Start a Maze Run</h1>
+
+    @if (ActiveRun is not null)
+    {
+        <div class="card shadow-sm p-4 mb-4">
+            <h4 class="mb-3">Resume Current Maze</h4>
+            <p class="mb-3">@GetActiveRunDescription()</p>
+            <button class="btn btn-warning w-100" @onclick="ResumeActiveRun">
+                Resume Maze
+            </button>
+        </div>
+    }
 
     <div class="card shadow-sm p-4 mb-4">
         <h4 class="mb-3">Generate New Maze</h4>
 
-        <EditForm FormName="NewForm" OnValidSubmit="OnNewClick" Model="mapEnter">
+        <EditForm FormName="NewForm" OnValidSubmit="OnNewClick" Model="newMazeRequest">
             <DataAnnotationsValidator />
 
             <div class="mb-3">
                 <label class="form-label">Difficulty</label>
-                <InputSelect class="form-select" @bind-Value="mapEnter.MapDifficulty">
+                <InputSelect class="form-select" @bind-Value="newMazeRequest.Difficulty">
                     @foreach (var difficulty in Enum.GetValues<Difficulty>())
                     {
                         <option value="@difficulty">@difficulty</option>
@@ -24,12 +37,12 @@
 
             <div class="mb-3">
                 <label class="form-label">Size</label>
-                <InputNumber @bind-Value="mapEnter.MapSize" class="form-control" />
-                <ValidationMessage For="() => mapEnter.MapSize" />
+                <InputNumber @bind-Value="newMazeRequest.Size" class="form-control" />
+                <ValidationMessage For="() => newMazeRequest.Size" />
             </div>
 
-            <button class="btn btn-success w-100">
-                Generate Maze
+            <button class="btn btn-success w-100" disabled="@IsBusy">
+                @(IsBusy ? "Generating..." : "Generate Maze")
             </button>
         </EditForm>
     </div>
@@ -37,24 +50,29 @@
     <div class="card shadow-sm p-4 mb-4">
         <h4 class="mb-3">Load Maze by Name</h4>
 
-        <EditForm FormName="FromNameForm" OnValidSubmit="OnSeedClick" Model="mapEnter">
+        <EditForm FormName="FromNameForm" OnValidSubmit="OnSeedClick" Model="loadMazeRequest">
             <DataAnnotationsValidator />
 
             <div class="mb-3">
                 <label class="form-label">Map Name</label>
-                <InputText @bind-Value="mapEnter.MapName" class="form-control" />
-                <ValidationMessage For="() => mapEnter.MapName" />
+                <InputText @bind-Value="loadMazeRequest.MapName" class="form-control" />
+                <ValidationMessage For="() => loadMazeRequest.MapName" />
             </div>
 
-            <button class="btn btn-primary w-100">
-                Load Maze
+            <button class="btn btn-primary w-100" disabled="@IsBusy">
+                @(IsBusy ? "Loading..." : "Load Maze")
             </button>
         </EditForm>
     </div>
 
+    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+    {
+        <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
+    }
+
     <div class="text-center">
         <button class="btn btn-secondary" @onclick="OnBackClick">
-            ← Back to Menu
+            Back to Menu
         </button>
     </div>
 
@@ -62,38 +80,86 @@
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; } = default!;
-    [Inject] HttpClient Http { get; set; }
-    [Inject] IConfiguration Config { get; set; } = default!;
+    [Inject] HttpClient Http { get; set; } = default!;
+    [Inject] IJSRuntime JS { get; set; } = default!;
 
-    private Map mapEnter = new Map();
-    private string Seed = string.Empty;
+    private NewMazeRequest newMazeRequest = new();
+    private LoadMazeRequest loadMazeRequest = new();
+    private ActiveGameSession? ActiveRun { get; set; }
+    private bool IsBusy { get; set; }
+    private bool HasError { get; set; }
+    private string StatusMessage { get; set; } = string.Empty;
 
-    async Task OnNewClick()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await GetSeedNew(mapEnter.MapDifficulty.ToString().ToLower(), mapEnter.MapSize);
+        if (!firstRender)
+        {
+            return;
+        }
+
+        ActiveRun = await JS.InvokeAsync<ActiveGameSession?>("enigmaGame.getActiveGameSession");
+        await InvokeAsync(StateHasChanged);
     }
 
-    async Task OnSeedClick()
+    private async Task OnNewClick()
     {
-        await GetSeedFromName(mapEnter.MapName);
+        IsBusy = true;
+        HasError = false;
+        StatusMessage = string.Empty;
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<SeedApiResponse>(
+                BuildControllerUrl(
+                    $"api/auth/newMap?difficulty={Uri.EscapeDataString(newMazeRequest.Difficulty.ToString().ToLowerInvariant())}&size={newMazeRequest.Size}"));
+
+            if (string.IsNullOrWhiteSpace(response?.Seed))
+            {
+                throw new InvalidOperationException("The backend returned an empty seed.");
+            }
+
+            NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(response.Seed)}&source=new");
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
-    private async Task GetSeedFromName(string name)
+    private async Task OnSeedClick()
     {
-        var token = Config["Api:Token"] ?? string.Empty;
-        var response = await Http.GetFromJsonAsync<SeedApiResponse>(
-            $"database/maps/load_map?map_name={Uri.EscapeDataString(name)}"
-        );
-        Seed = response?.Seed ?? string.Empty;
-    }
+        IsBusy = true;
+        HasError = false;
+        StatusMessage = string.Empty;
 
-    private async Task GetSeedNew(string difficulty, int size)
-    {
-        var token = Config["Api:Token"] ?? string.Empty;
-        var response = await Http.GetFromJsonAsync<SeedApiResponse>(
-            $"maze/genseed?difficulty={Uri.EscapeDataString(difficulty)}&size={size}"
-        );
-        Seed = response?.Seed ?? string.Empty;
+        try
+        {
+            var response = await Http.GetFromJsonAsync<SeedApiResponse>(
+                BuildControllerUrl(
+                    $"api/auth/loadMap?name={Uri.EscapeDataString(loadMazeRequest.MapName)}"));
+
+            if (string.IsNullOrWhiteSpace(response?.Seed))
+            {
+                throw new InvalidOperationException("The requested map did not return a seed.");
+            }
+
+            NavigationManager.NavigateTo(
+                $"/game?seed={Uri.EscapeDataString(response.Seed)}&source=load&mapName={Uri.EscapeDataString(loadMazeRequest.MapName)}");
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     private void OnBackClick()
@@ -101,8 +167,56 @@
         NavigationManager.NavigateTo("/home");
     }
 
+    private void ResumeActiveRun()
+    {
+        if (string.IsNullOrWhiteSpace(ActiveRun?.Seed))
+        {
+            return;
+        }
+
+        var url = $"/game?seed={Uri.EscapeDataString(ActiveRun.Seed)}&source={Uri.EscapeDataString(ActiveRun.Source)}";
+        if (!string.IsNullOrWhiteSpace(ActiveRun.MapName))
+        {
+            url += $"&mapName={Uri.EscapeDataString(ActiveRun.MapName)}";
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+
+    private string GetActiveRunDescription()
+    {
+        if (ActiveRun is null)
+        {
+            return string.Empty;
+        }
+
+        var name = string.IsNullOrWhiteSpace(ActiveRun.MapName) ? "Unsaved generated maze" : ActiveRun.MapName;
+        var room = string.IsNullOrWhiteSpace(ActiveRun.CurrentRoomLabel) ? "room unknown" : $"room {ActiveRun.CurrentRoomLabel}";
+        return $"{name} | {ActiveRun.Difficulty} | {room}";
+    }
+
+    private string BuildControllerUrl(string relativePath)
+    {
+        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
+    }
+
     private sealed class SeedApiResponse
     {
         public string Seed { get; set; } = string.Empty;
+    }
+
+    private sealed class NewMazeRequest
+    {
+        [Required]
+        public Difficulty Difficulty { get; set; } = Difficulty.Easy;
+
+        [Range(2, int.MaxValue, ErrorMessage = "A map's dimensions must be at least a 2x2")]
+        public int Size { get; set; } = 4;
+    }
+
+    private sealed class LoadMazeRequest
+    {
+        [Required(ErrorMessage = "Cannot be empty.")]
+        public string MapName { get; set; } = string.Empty;
     }
 }

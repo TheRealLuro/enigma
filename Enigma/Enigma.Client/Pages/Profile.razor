@@ -1,49 +1,758 @@
-﻿@page "/profile"
+@page "/profile"
+@page "/profile/{ViewedUsername}"
+@using System.Text.Json
 
-<div class="app-header">
-    <h1>Player Profile</h1>
-    <h2>ColtonClark</h2>
-</div>
+<PageTitle>Profile</PageTitle>
 
-<div class="content">
-
-    <div class="card">
-        <div style="display:flex; align-items:center; gap:24px;">
-            <div class="friend-avatar" style="width:80px; height:80px; font-size:2rem;">
-                CC
-                <div class="friend-status online"></div>
+@if (IsLoading)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading profile...</p>
+        </div>
+    </div>
+}
+else if (ProfileData is null)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Profile unavailable</h1>
+            <p>@(LoadError ?? "Sign in to view profiles.")</p>
+            <div class="enigma-end-actions">
+                <button class="btn btn-primary" @onclick="GoHome">Home</button>
+                <button class="btn btn-secondary" @onclick="GoLogin">Login</button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="content profile-shell">
+        <section class="profile-banner">
+            <div class="profile-banner-copy">
+                <span class="profile-kicker">Explorer Ledger</span>
+                <h1>@ProfileData.Username</h1>
+                <p>@GetBannerCopy()</p>
             </div>
 
-            <div>
-                <h2 style="margin-bottom:6px;">Colton Clark</h2>
-                <div class="badge badge-primary">Pro Solver</div>
-                <div style="color: var(--epic-text-secondary); margin-top:6px;">
-                    Member since 2026
+            @if (!IsOwnProfile)
+            {
+                <div class="profile-banner-actions">
+                    <div class="profile-primary-actions">
+                        @if (AreFriends)
+                        {
+                            <span class="profile-status-pill success">Friends</span>
+                        }
+                        else if (HasIncomingFriendRequest)
+                        {
+                            <button class="btn btn-primary" disabled="@IsActionBusy" @onclick="AcceptViewedFriendRequestAsync">
+                                @(IsActionBusy ? "Accepting..." : "Accept Friend")
+                            </button>
+                        }
+                        else if (HasOutgoingFriendRequest)
+                        {
+                            <span class="profile-status-pill warning">Request pending</span>
+                        }
+                        else
+                        {
+                            <button class="btn btn-primary" disabled="@IsActionBusy" @onclick="SendFriendRequestAsync">
+                                @(IsActionBusy ? "Sending..." : "Add Friend")
+                            </button>
+                        }
+
+                        <button class="btn btn-secondary" type="button" @onclick="GoToOwnProfile">My Profile</button>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </div>
+            }
 
-    <div class="stats-grid">
-        <div class="stat-box">
-            <div class="stat-value">128</div>
-            <div class="stat-label">Solved</div>
+            <div class="profile-balance-card">
+                <span>Maze Nuggets</span>
+                <strong>@ProfileData.MazeNuggets.ToString("N0") MN</strong>
+                <small>@ProfileData.OwnedMapsCount owned mazes</small>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(ActionMessage))
+        {
+            <div class="alert @(HasActionError ? "alert-warning" : "alert-info")">@ActionMessage</div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(LoadError))
+        {
+            <div class="alert alert-warning">@LoadError</div>
+        }
+
+        <div class="profile-layout">
+            <section class="panel profile-identity-card">
+                <div class="profile-avatar-large">@GetInitials(ProfileData.Username)</div>
+                <div>
+                    <span class="profile-eyebrow">Username</span>
+                    <h2>@ProfileData.Username</h2>
+                    <p class="profile-subcopy">@GetIdentityCopy()</p>
+                </div>
+                <div class="profile-mini-grid">
+                    <div>
+                        <span>Friends</span>
+                        <strong>@ProfileData.Friends.Count</strong>
+                    </div>
+                    <div>
+                        <span>Owned</span>
+                        <strong>@ProfileData.OwnedMapsCount</strong>
+                    </div>
+                    <div>
+                        <span>Discovered</span>
+                        <strong>@ProfileData.DiscoveredMapsCount</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel profile-stats-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Performance</span>
+                        <h2>Run Stats</h2>
+                    </div>
+                </div>
+                <div class="profile-stat-grid">
+                    <article class="profile-stat-card accent-blue">
+                        <span>Maps Played</span>
+                        <strong>@ProfileData.NumberOfMapsPlayed</strong>
+                    </article>
+                    <article class="profile-stat-card accent-green">
+                        <span>Completed</span>
+                        <strong>@ProfileData.MapsCompleted</strong>
+                    </article>
+                    <article class="profile-stat-card accent-red">
+                        <span>Lost</span>
+                        <strong>@ProfileData.MapsLost</strong>
+                    </article>
+                    <article class="profile-stat-card accent-gold">
+                        <span>Win Rate</span>
+                        <strong>@FormatPercent(ProfileData.WinRate)</strong>
+                    </article>
+                </div>
+            </section>
+
+            <section class="panel profile-list-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Social</span>
+                        <h2>Friends</h2>
+                    </div>
+                    <span class="section-count">@ProfileData.Friends.Count</span>
+                </div>
+                @if (ProfileData.Friends.Count == 0)
+                {
+                    <div class="empty-state-inline">No friends added yet.</div>
+                }
+                else
+                {
+                    <div class="list-stack">
+                        @foreach (var friend in ProfileData.Friends.OrderBy(friend => friend, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <button class="list-chip list-chip-button" type="button" @onclick="() => OpenProfile(friend)">
+                                <span class="chip-avatar">@GetInitials(friend)</span>
+                                <span>@friend</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </section>
+
+            @if (IsOwnProfile)
+            {
+                <section class="panel profile-list-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Inbox</span>
+                            <h2>Friend Requests</h2>
+                        </div>
+                        <span class="section-count">@ProfileData.FriendRequests.Count</span>
+                    </div>
+                    @if (ProfileData.FriendRequests.Count == 0)
+                    {
+                        <div class="empty-state-inline">No pending friend requests.</div>
+                    }
+                    else
+                    {
+                        <div class="profile-request-stack">
+                            @foreach (var request in ProfileData.FriendRequests.OrderBy(request => request, StringComparer.OrdinalIgnoreCase))
+                            {
+                                <div class="profile-request-card">
+                                    <button class="list-chip list-chip-button pending" type="button" @onclick="() => OpenProfile(request)">
+                                        <span class="chip-avatar warm">@GetInitials(request)</span>
+                                        <span>@request</span>
+                                    </button>
+                                    <button class="btn btn-primary" disabled="@IsActionBusy" @onclick="() => AcceptFriendRequestAsync(request)">
+                                        Accept
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+            }
         </div>
-        <div class="stat-box">
-            <div class="stat-value">12h</div>
-            <div class="stat-label">Play Time</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-value">87%</div>
-            <div class="stat-label">Accuracy</div>
-        </div>
-        <div class="stat-box">
-            <div class="stat-value">#3</div>
-            <div class="stat-label">Global Rank</div>
-        </div>
+
+        <section class="panel profile-maps-panel">
+            <div class="panel-heading maps-heading">
+                <div>
+                    <span class="profile-eyebrow">Collection</span>
+                    <h2>Owned Maps</h2>
+                </div>
+                <span class="section-count">@ProfileData.MapsOwned.Count</span>
+            </div>
+
+            @if (ProfileData.MapsOwned.Count == 0)
+            {
+                <div class="empty-state-inline">No owned maps are attached to this account yet.</div>
+            }
+            else
+            {
+                <div class="catalog-card-grid">
+                    @foreach (var map in ProfileData.MapsOwned.OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        <article class="catalog-card">
+                            <MapImageFrame ImageUrl="@map.MapImage" AltText="@($"{map.MapName} artwork")" FallbackText="@map.MapName" Class="poster" />
+
+                            <div class="catalog-card-body">
+                                <span class="catalog-card-kicker">Owned Map</span>
+                                <button class="map-link-button catalog-card-title-button" type="button" @onclick="() => OpenMapAsync(map.MapName)">
+                                    @map.MapName
+                                </button>
+                                <p class="catalog-card-subline">Best Time: @FormatMapBestTime(map)</p>
+
+                                <strong class="catalog-card-price">@map.Value.ToString("N0") MN</strong>
+
+                                <div class="catalog-card-meta">
+                                    <span class="catalog-card-meta-pill">Size @map.Size x @map.Size</span>
+                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="panel profile-maps-panel">
+            <div class="panel-heading maps-heading">
+                <div>
+                    <span class="profile-eyebrow">Archive</span>
+                    <h2>Discovered Maps</h2>
+                </div>
+                <span class="section-count">@ProfileData.MapsDiscovered.Count</span>
+            </div>
+
+            @if (ProfileData.MapsDiscovered.Count == 0)
+            {
+                <div class="empty-state-inline">No discovered maps are attached to this account yet.</div>
+            }
+            else
+            {
+                <div class="catalog-card-grid">
+                    @foreach (var map in ProfileData.MapsDiscovered.OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        <article class="catalog-card">
+                            <MapImageFrame ImageUrl="@map.MapImage" AltText="@($"{map.MapName} artwork")" FallbackText="@map.MapName" Class="poster" />
+
+                            <div class="catalog-card-body">
+                                <span class="catalog-card-kicker">Discovered Map</span>
+                                <button class="map-link-button catalog-card-title-button" type="button" @onclick="() => OpenMapAsync(map.MapName)">
+                                    @map.MapName
+                                </button>
+                                <p class="catalog-card-subline">Best Time: @FormatMapBestTime(map)</p>
+
+                                <strong class="catalog-card-price">@map.Value.ToString("N0") MN</strong>
+
+                                <div class="catalog-card-meta">
+                                    <span class="catalog-card-meta-pill">Size @map.Size x @map.Size</span>
+                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
     </div>
-</div>
+}
 
 @code {
+    [Parameter] public string? ViewedUsername { get; set; }
 
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private HttpClient Http { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private bool IsLoading { get; set; } = true;
+    private bool IsActionBusy { get; set; }
+    private bool SessionReady { get; set; }
+    private bool HasActionError { get; set; }
+    private string? LoadError { get; set; }
+    private string? ActionMessage { get; set; }
+    private string? LoadedUsername { get; set; }
+    private ProfileUserData? ProfileData { get; set; }
+    private LoginUserSummary? Session { get; set; }
+
+    private bool IsOwnProfile =>
+        Session is not null
+        && ProfileData is not null
+        && EqualsUser(Session.Username, ProfileData.Username);
+
+    private bool AreFriends =>
+        Session is not null
+        && ProfileData is not null
+        && Session.Friends.Any(friend => EqualsUser(friend, ProfileData.Username));
+
+    private bool HasIncomingFriendRequest =>
+        Session is not null
+        && ProfileData is not null
+        && Session.FriendRequests.Any(friend => EqualsUser(friend, ProfileData.Username));
+
+    private bool HasOutgoingFriendRequest =>
+        Session is not null
+        && ProfileData is not null
+        && ProfileData.FriendRequests.Any(friend => EqualsUser(friend, Session.Username));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!SessionReady)
+        {
+            return;
+        }
+
+        await LoadResolvedProfileAsync(forceReload: true);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        Session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        if (Session is null || string.IsNullOrWhiteSpace(Session.Username))
+        {
+            NavigationManager.NavigateTo("/");
+            return;
+        }
+
+        SessionReady = true;
+        await LoadResolvedProfileAsync(forceReload: true);
+    }
+
+    private async Task LoadResolvedProfileAsync(bool forceReload = false)
+    {
+        var targetUsername = ResolveRequestedUsername();
+        if (string.IsNullOrWhiteSpace(targetUsername))
+        {
+            LoadError = "A username is required to view a profile.";
+            ProfileData = null;
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (!forceReload && EqualsUser(targetUsername, LoadedUsername))
+        {
+            return;
+        }
+
+        IsLoading = true;
+        LoadError = null;
+        ActionMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await Http.GetAsync(BuildControllerUrl($"api/auth/user?username={Uri.EscapeDataString(targetUsername)}"));
+            var rawContent = await response.Content.ReadAsStringAsync();
+            var payload = DeserializePayload<ProfileResponse>(rawContent);
+            var statusPayload = DeserializePayload<ApiStatusResponse>(rawContent);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                LoadError = statusPayload?.ToDisplayMessage() ?? payload?.Status ?? rawContent;
+                ProfileData = IsSelfProfile(targetUsername) && Session is not null
+                    ? CreateProfileFromSession(Session)
+                    : null;
+                return;
+            }
+
+            if (payload?.User is null)
+            {
+                LoadError = "The profile API returned an empty payload.";
+                ProfileData = null;
+                return;
+            }
+
+            if (IsSelfProfile(targetUsername) && Session is not null)
+            {
+                ProfileData = MergeProfile(Session, payload.User);
+                Session = BuildSession(ProfileData);
+                await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", Session);
+            }
+            else
+            {
+                ProfileData = payload.User;
+            }
+
+            LoadedUsername = ProfileData?.Username ?? targetUsername;
+        }
+        catch (Exception ex)
+        {
+            LoadError = ex.Message;
+            ProfileData = IsSelfProfile(targetUsername) && Session is not null
+                ? CreateProfileFromSession(Session)
+                : null;
+        }
+        finally
+        {
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SendFriendRequestAsync()
+    {
+        if (Session is null || ProfileData is null || IsOwnProfile)
+        {
+            return;
+        }
+
+        await PerformProfileActionAsync(
+            BuildControllerUrl(
+                $"api/auth/friendRequest?senderUser={Uri.EscapeDataString(Session.Username)}&receiverUser={Uri.EscapeDataString(ProfileData.Username)}"),
+            onSuccess: () =>
+            {
+                if (!ProfileData.FriendRequests.Any(request => EqualsUser(request, Session.Username)))
+                {
+                    ProfileData.FriendRequests.Add(Session.Username);
+                }
+            });
+    }
+
+    private async Task AcceptViewedFriendRequestAsync()
+    {
+        if (ProfileData is null)
+        {
+            return;
+        }
+
+        await AcceptFriendRequestAsync(ProfileData.Username);
+    }
+
+    private async Task AcceptFriendRequestAsync(string requesterUsername)
+    {
+        if (Session is null || string.IsNullOrWhiteSpace(requesterUsername))
+        {
+            return;
+        }
+
+        await PerformProfileActionAsync(
+            BuildControllerUrl(
+                $"api/auth/acceptFriend?username={Uri.EscapeDataString(Session.Username)}&adding={Uri.EscapeDataString(requesterUsername)}"),
+            asyncOnSuccess: async () =>
+            {
+                Session.FriendRequests.RemoveAll(request => EqualsUser(request, requesterUsername));
+                if (!Session.Friends.Any(friend => EqualsUser(friend, requesterUsername)))
+                {
+                    Session.Friends.Add(requesterUsername);
+                }
+
+                await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", Session);
+                await LoadResolvedProfileAsync(forceReload: true);
+            });
+    }
+
+    private async Task PerformProfileActionAsync(string url, Action? onSuccess = null, Func<Task>? asyncOnSuccess = null)
+    {
+        HasActionError = false;
+        ActionMessage = null;
+        IsActionBusy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await Http.PostAsync(url, content: null);
+            var payload = await response.Content.ReadFromJsonAsync<ApiStatusResponse>();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                HasActionError = true;
+                ActionMessage = payload?.ToDisplayMessage() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(ActionMessage))
+                {
+                    ActionMessage = await response.Content.ReadAsStringAsync();
+                }
+
+                return;
+            }
+
+            onSuccess?.Invoke();
+            if (asyncOnSuccess is not null)
+            {
+                await asyncOnSuccess();
+            }
+
+            ActionMessage = payload?.ToDisplayMessage() ?? "Request completed.";
+        }
+        catch (Exception ex)
+        {
+            HasActionError = true;
+            ActionMessage = ex.Message;
+        }
+        finally
+        {
+            IsActionBusy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OpenMapAsync(string mapName)
+    {
+        if (string.IsNullOrWhiteSpace(mapName))
+        {
+            return;
+        }
+
+        HasActionError = false;
+        ActionMessage = null;
+        IsActionBusy = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<SeedApiResponse>(
+                BuildControllerUrl($"api/auth/loadMap?name={Uri.EscapeDataString(mapName)}"));
+
+            if (string.IsNullOrWhiteSpace(response?.Seed))
+            {
+                throw new InvalidOperationException("The requested map did not return a seed.");
+            }
+
+            NavigationManager.NavigateTo(
+                $"/game?seed={Uri.EscapeDataString(response.Seed)}&source=load&mapName={Uri.EscapeDataString(mapName)}");
+        }
+        catch (Exception ex)
+        {
+            HasActionError = true;
+            ActionMessage = ex.Message;
+        }
+        finally
+        {
+            IsActionBusy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private ProfileUserData CreateProfileFromSession(LoginUserSummary session)
+    {
+        return new ProfileUserData
+        {
+            Username = session.Username,
+            MazeNuggets = session.MazeNuggets,
+            Friends = [.. session.Friends],
+            FriendRequests = [.. session.FriendRequests],
+            NumberOfMapsPlayed = session.NumberOfMapsPlayed,
+            MapsCompleted = session.MapsCompleted,
+            MapsLost = session.MapsLost,
+            MapsOwned = [.. session.MapsOwned],
+            MapsDiscovered = [.. session.MapsDiscovered],
+            OwnedMapsCount = session.MapsOwned.Count,
+            DiscoveredMapsCount = session.MapsDiscovered.Count,
+        };
+    }
+
+    private static ProfileUserData MergeProfile(LoginUserSummary session, ProfileUserData apiUser)
+    {
+        apiUser.Username = string.IsNullOrWhiteSpace(apiUser.Username) ? session.Username : apiUser.Username;
+        apiUser.MazeNuggets = apiUser.MazeNuggets == 0 ? session.MazeNuggets : apiUser.MazeNuggets;
+        apiUser.Friends = apiUser.Friends.Count == 0 ? [.. session.Friends] : apiUser.Friends;
+        apiUser.FriendRequests = apiUser.FriendRequests.Count == 0 ? [.. session.FriendRequests] : apiUser.FriendRequests;
+        apiUser.NumberOfMapsPlayed = apiUser.NumberOfMapsPlayed == 0 ? session.NumberOfMapsPlayed : apiUser.NumberOfMapsPlayed;
+        apiUser.MapsCompleted = apiUser.MapsCompleted == 0 ? session.MapsCompleted : apiUser.MapsCompleted;
+        apiUser.MapsLost = apiUser.MapsLost == 0 ? session.MapsLost : apiUser.MapsLost;
+        apiUser.MapsOwned = apiUser.MapsOwned.Count == 0 ? [.. session.MapsOwned] : apiUser.MapsOwned;
+        apiUser.MapsDiscovered = apiUser.MapsDiscovered.Count == 0 ? [.. session.MapsDiscovered] : apiUser.MapsDiscovered;
+        apiUser.OwnedMapsCount = Math.Max(session.MapsOwned.Count, apiUser.MapsOwned.Count);
+        apiUser.DiscoveredMapsCount = Math.Max(session.MapsDiscovered.Count, apiUser.MapsDiscovered.Count);
+        return apiUser;
+    }
+
+    private static LoginUserSummary BuildSession(ProfileUserData profileData)
+    {
+        return new LoginUserSummary
+        {
+            Username = profileData.Username,
+            MazeNuggets = profileData.MazeNuggets,
+            Friends = [.. profileData.Friends],
+            FriendRequests = [.. profileData.FriendRequests],
+            MapsOwned = [.. profileData.MapsOwned],
+            MapsDiscovered = [.. profileData.MapsDiscovered],
+            NumberOfMapsPlayed = profileData.NumberOfMapsPlayed,
+            MapsCompleted = profileData.MapsCompleted,
+            MapsLost = profileData.MapsLost,
+        };
+    }
+
+    private string ResolveRequestedUsername()
+    {
+        return string.IsNullOrWhiteSpace(ViewedUsername)
+            ? Session?.Username?.Trim() ?? string.Empty
+            : ViewedUsername.Trim();
+    }
+
+    private bool IsSelfProfile(string username)
+    {
+        return Session is not null && EqualsUser(Session.Username, username);
+    }
+
+    private static bool EqualsUser(string? left, string? right)
+    {
+        return string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OpenProfile(string username)
+    {
+        NavigationManager.NavigateTo(BuildProfilePath(username));
+    }
+
+    private void GoToOwnProfile()
+    {
+        if (Session is null || string.IsNullOrWhiteSpace(Session.Username))
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo(BuildProfilePath(Session.Username));
+    }
+
+    private string BuildProfilePath(string username)
+    {
+        return $"/profile/{Uri.EscapeDataString(username.Trim())}";
+    }
+
+    private string BuildControllerUrl(string relativePath)
+    {
+        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
+    }
+
+    private string GetBannerCopy()
+    {
+        if (IsOwnProfile)
+        {
+            return "Review your network, wallet, and maze collection.";
+        }
+
+        return $"Viewing {ProfileData?.Username}'s explorer profile. You can open connected profiles or send a friend request from here.";
+    }
+
+    private string GetIdentityCopy()
+    {
+        return IsOwnProfile
+            ? "Your current social graph, wallet, and run history."
+            : "Explorer stats, social connections, and public map collection.";
+    }
+
+    private static string GetInitials(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "??";
+        }
+
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 1)
+        {
+            return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
+        }
+
+        return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private static string FormatPercent(double value)
+    {
+        return $"{value:P0}";
+    }
+
+    private static string GetDifficultyClass(string difficulty)
+    {
+        return difficulty?.Trim().ToLowerInvariant() switch
+        {
+            "easy" => "easy",
+            "medium" => "medium",
+            "hard" => "hard",
+            _ => "default",
+        };
+    }
+
+    private static string FormatMapBestTime(MapSummary map)
+    {
+        return FormatHumanTime(map.BestTime);
+    }
+
+    private static T? DeserializePayload<T>(string rawContent)
+    {
+        if (string.IsNullOrWhiteSpace(rawContent))
+        {
+            return default;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(rawContent);
+        }
+        catch
+        {
+            return default;
+        }
+    }
+
+    private void GoHome()
+    {
+        NavigationManager.NavigateTo("/home");
+    }
+
+    private void GoLogin()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+
+    private static string FormatHumanTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "N/A";
+        }
+
+        var parts = value.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length != 4
+            || !int.TryParse(parts[0], out var hours)
+            || !int.TryParse(parts[1], out var minutes)
+            || !int.TryParse(parts[2], out var seconds)
+            || !int.TryParse(parts[3], out var milliseconds))
+        {
+            return value;
+        }
+
+        if (hours > 0)
+        {
+            return $"{hours}h {minutes:D2}m {seconds:D2}.{milliseconds:D3}s";
+        }
+
+        if (minutes > 0)
+        {
+            return $"{minutes}m {seconds:D2}.{milliseconds:D3}s";
+        }
+
+        return $"{seconds}.{milliseconds:D3}s";
+    }
+    private sealed class SeedApiResponse
+    {
+        public string Seed { get; set; } = string.Empty;
+    }
 }

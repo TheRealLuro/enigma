@@ -1,72 +1,599 @@
-﻿@page "/leaderboard"
+@page "/leaderboard"
 
-<h1 class="mb-4 text-center">🏆 Maze Leaderboard</h1>
+<PageTitle>Leaderboard</PageTitle>
 
-<div class="card p-4 shadow-sm mb-4">
+<div class="content leaderboard-shell">
+    <section class="leaderboard-banner">
+        <div>
+            <span class="profile-kicker">Global Rankings</span>
+            <h1>@(IsPlayerMode ? "Top Players" : "Top Maps")</h1>
+            <p>
+                @(IsPlayerMode
+                    ? "Rank explorers by wealth, collection size, wins, and losses."
+                    : "Browse the strongest maps by rating, play count, record time, and founding date.")
+            </p>
+        </div>
+        <button class="btn btn-secondary" @onclick="GoHome">Back to Main Menu</button>
+    </section>
 
-    <div class="row mb-3">
-        <div class="col-md-5">
-            <label class="form-label">Sort By</label>
-            <select class="form-select">
-                <option>Rating</option>
-                <option>Plays</option>
-                <option>Best Time</option>
-                <option>Time Founded</option>
-                <option>Difficulty</option>
-                <option>Map Name</option>
-            </select>
+    <section class="panel leaderboard-controls-panel">
+        <div class="leaderboard-mode-toggle">
+            <button class="@(GetModeButtonClass("maps"))" type="button" @onclick='@(() => SetBoardModeAsync("maps"))'>Maps</button>
+            <button class="@(GetModeButtonClass("players"))" type="button" @onclick='@(() => SetBoardModeAsync("players"))'>Players</button>
         </div>
 
-        <div class="col-md-5">
-            <label class="form-label">Order</label>
-            <select class="form-select">
-                <option>Ascending</option>
-                <option>Descending</option>
-            </select>
+        <div class="leaderboard-controls-grid">
+            <div>
+                <label class="form-label">Sort By</label>
+                <InputSelect class="form-control" @bind-Value="SortBy">
+                    @foreach (var option in CurrentSortOptions)
+                    {
+                        <option value="@option.Value">@option.Label</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div>
+                <label class="form-label">Order</label>
+                <InputSelect class="form-control" @bind-Value="Order">
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
+                </InputSelect>
+            </div>
+
+            <div class="leaderboard-actions">
+                <button class="btn btn-primary" disabled="@IsLoading" @onclick="LoadLeaderboardAsync">
+                    @(IsLoading ? "Loading..." : "Apply")
+                </button>
+            </div>
         </div>
+    </section>
 
-        <div class="col-md-2 d-flex align-items-end">
-            <button class="btn btn-primary w-100">
-                Apply
-            </button>
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-warning">@ErrorMessage</div>
+    }
+
+    @if (IsLoading)
+    {
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading leaderboard...</p>
         </div>
-    </div>
-</div>
+    }
+    else if (IsPlayerMode)
+    {
+        @if (Players.Count == 0)
+        {
+            <div class="panel leaderboard-empty-panel">
+                <h2>No players found</h2>
+                <p>The player leaderboard API returned an empty list.</p>
+            </div>
+        }
+        else
+        {
+            <section class="leaderboard-podium player-podium">
+                @foreach (var entry in Players.Take(3).Select((player, index) => new { Player = player, Rank = index + 1 }))
+                {
+                    <article class="podium-card player-podium-card rank-@entry.Rank">
+                        <span class="podium-rank">#@entry.Rank</span>
+                        <div class="player-podium-avatar">@GetInitials(entry.Player.Username)</div>
+                        <button class="map-link-button podium-map-title" type="button" @onclick="() => GoToProfile(entry.Player.Username)">
+                            @entry.Player.Username
+                        </button>
+                        <p>@GetPlayerKicker(entry.Player)</p>
+                        <div class="podium-metrics player-podium-metrics">
+                            <div>
+                                <span>Maze Nuggets</span>
+                                <strong>@entry.Player.MazeNuggets.ToString("N0")</strong>
+                            </div>
+                            <div>
+                                <span>Owned</span>
+                                <strong>@entry.Player.OwnedMapsCount</strong>
+                            </div>
+                            <div class="podium-best-time-card">
+                                <span>Wins / Losses</span>
+                                <strong>@entry.Player.MapsCompleted / @entry.Player.MapsLost</strong>
+                                <span class="leaderboard-secondary-text">@FormatWinRate(entry.Player.WinRate) win rate</span>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </section>
 
-<div class="card p-4 shadow-sm">
+            <section class="panel leaderboard-table-panel">
+                <div class="panel-heading maps-heading">
+                    <div>
+                        <span class="profile-eyebrow">Player Board</span>
+                        <h2>All Ranked Players</h2>
+                    </div>
+                    <span class="section-count">@Players.Count</span>
+                </div>
 
-    <table class="table table-hover align-middle">
-        <thead class="table-dark">
-            <tr>
-                <th>#</th>
-                <th>Map Name</th>
-                <th>Difficulty</th>
-                <th>Rating</th>
-                <th>Plays</th>
-                <th>Best Time</th>
-                <th>Founded</th>
-            </tr>
-        </thead>
+                <div class="leaderboard-table-wrap">
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Player</th>
+                                <th>Maze Nuggets</th>
+                                <th>Owned</th>
+                                <th>Discovered</th>
+                                <th>Wins</th>
+                                <th>Losses</th>
+                                <th>Win Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in Players.Select((player, index) => new { Player = player, Rank = index + 1 }))
+                            {
+                                <tr>
+                                    <td><span class="leaderboard-rank-pill">#@entry.Rank</span></td>
+                                    <td>
+                                        <div class="leaderboard-player-cell">
+                                            <div class="player-table-avatar">@GetInitials(entry.Player.Username)</div>
+                                            <div class="leaderboard-map-copy">
+                                                <button class="map-link-button leaderboard-map-title" type="button" @onclick="() => GoToProfile(entry.Player.Username)">
+                                                    @entry.Player.Username
+                                                </button>
+                                                <span class="leaderboard-theme-text">@GetPlayerKicker(entry.Player)</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="leaderboard-stat-cell">
+                                            <strong>@entry.Player.MazeNuggets.ToString("N0")</strong>
+                                            <span class="leaderboard-secondary-text">MN</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="leaderboard-stat-cell">
+                                            <strong>@entry.Player.OwnedMapsCount</strong>
+                                            <span class="leaderboard-secondary-text">owned maps</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="leaderboard-stat-cell">
+                                            <strong>@entry.Player.DiscoveredMapsCount</strong>
+                                            <span class="leaderboard-secondary-text">discovered maps</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="leaderboard-stat-cell">
+                                            <strong>@entry.Player.MapsCompleted</strong>
+                                            <span class="leaderboard-secondary-text">wins</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="leaderboard-stat-cell">
+                                            <strong>@entry.Player.MapsLost</strong>
+                                            <span class="leaderboard-secondary-text">losses</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="leaderboard-stat-cell">
+                                            <strong>@FormatWinRate(entry.Player.WinRate)</strong>
+                                            <span class="leaderboard-secondary-text">@entry.Player.MapsPlayed matches</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+    }
+    else if (Maps.Count == 0)
+    {
+        <div class="panel leaderboard-empty-panel">
+            <h2>No maps found</h2>
+            <p>The leaderboard API returned an empty list.</p>
+        </div>
+    }
+    else
+    {
+        <section class="leaderboard-podium">
+            @foreach (var entry in Maps.Take(3).Select((map, index) => new { Map = map, Rank = index + 1 }))
+            {
+                <article class="podium-card rank-@entry.Rank">
+                    <span class="podium-rank">#@entry.Rank</span>
+                    <MapImageFrame ImageUrl="@entry.Map.MapImage" AltText="@($"{entry.Map.MapName} artwork")" FallbackText="@entry.Map.MapName" Class="podium-art" />
+                    <button class="map-link-button podium-map-title" type="button" @onclick="() => OpenMapAsync(entry.Map.MapName)">
+                        @entry.Map.MapName
+                    </button>
+                    <p>@entry.Map.Difficulty maze - @FormatThemeLabel(entry.Map.Theme)</p>
+                    <div class="podium-metrics">
+                        <div>
+                            <span>Rating</span>
+                            <strong>@entry.Map.RatingAverage.ToString("0.0")</strong>
+                        </div>
+                        <div>
+                            <span>Plays</span>
+                            <strong>@entry.Map.Plays</strong>
+                        </div>
+                        <div class="podium-best-time-card">
+                            <span>Best Time</span>
+                            <strong>@FormatHumanTime(entry.Map.BestTime)</strong>
+                            @if (!string.IsNullOrWhiteSpace(entry.Map.UserWithBestTime))
+                            {
+                                <button class="inline-link-button compact podium-record-link" type="button" @onclick="() => GoToProfile(entry.Map.UserWithBestTime)">
+                                    Record by @entry.Map.UserWithBestTime
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <div class="leaderboard-podium-links">
+                        <button class="inline-link-button" type="button" @onclick="() => GoToProfile(entry.Map.Founder)">
+                            Founder: @entry.Map.Founder
+                        </button>
+                    </div>
+                </article>
+            }
+        </section>
 
-        <tbody>
-            
-        </tbody>
-    </table>
+        <section class="panel leaderboard-table-panel">
+            <div class="panel-heading maps-heading">
+                <div>
+                    <span class="profile-eyebrow">Map Board</span>
+                    <h2>All Ranked Maps</h2>
+                </div>
+                <span class="section-count">@Maps.Count</span>
+            </div>
 
-</div>
-
-<div class="text-center mt-4">
-    <button class="btn btn-secondary" @onclick="GoHome">
-        Back to Main Menu
-    </button>
+            <div class="leaderboard-table-wrap">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Map</th>
+                            <th>Difficulty</th>
+                            <th>Rating</th>
+                            <th>Plays</th>
+                            <th>Best Time</th>
+                            <th>Founded</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in Maps.Select((map, index) => new { Map = map, Rank = index + 1 }))
+                        {
+                            <tr>
+                                <td>
+                                    <span class="leaderboard-rank-pill">#@entry.Rank</span>
+                                </td>
+                                <td>
+                                    <div class="leaderboard-map-cell">
+                                        @if (!string.IsNullOrWhiteSpace(entry.Map.MapImage))
+                                        {
+                                            <MapImageFrame ImageUrl="@entry.Map.MapImage" AltText="@($"{entry.Map.MapName} artwork")" FallbackText="@entry.Map.MapName" Class="thumb" />
+                                        }
+                                        else
+                                        {
+                                            <MapImageFrame ImageUrl="@entry.Map.MapImage" AltText="@($"{entry.Map.MapName} artwork")" FallbackText="@GetThemeGlyph(entry.Map.Theme)" Class="thumb" />
+                                        }
+                                        <div class="leaderboard-map-copy">
+                                            <button class="map-link-button leaderboard-map-title" type="button" @onclick="() => OpenMapAsync(entry.Map.MapName)">
+                                                @entry.Map.MapName
+                                            </button>
+                                            <span class="leaderboard-theme-text">@FormatThemeLabel(entry.Map.Theme)</span>
+                                            @if (!string.IsNullOrWhiteSpace(entry.Map.Founder))
+                                            {
+                                                <button class="inline-link-button compact leaderboard-user-link" type="button" @onclick="() => GoToProfile(entry.Map.Founder)">
+                                                    by @entry.Map.Founder
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(entry.Map.Difficulty)">@entry.Map.Difficulty</span>
+                                </td>
+                                <td>
+                                    <div class="leaderboard-stat-cell">
+                                        <strong>@entry.Map.RatingAverage.ToString("0.0")</strong>
+                                        <span class="leaderboard-secondary-text">@entry.Map.RatingCount votes</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="leaderboard-stat-cell">
+                                        <strong>@entry.Map.Plays</strong>
+                                        <span class="leaderboard-secondary-text">total plays</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="leaderboard-time-cell">
+                                        <strong>@FormatHumanTime(entry.Map.BestTime)</strong>
+                                        @if (!string.IsNullOrWhiteSpace(entry.Map.UserWithBestTime))
+                                        {
+                                            <button class="inline-link-button compact leaderboard-user-link" type="button" @onclick="() => GoToProfile(entry.Map.UserWithBestTime)">
+                                                @entry.Map.UserWithBestTime
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="leaderboard-secondary-text">No record holder</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="leaderboard-stat-cell">
+                                        <strong>@FormatFoundedDate(entry.Map)</strong>
+                                        <span class="leaderboard-secondary-text">founded</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
 </div>
 
 @code {
-    [Inject]
-    NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject] private HttpClient Http { get; set; } = default!;
+
+    private bool IsLoading { get; set; } = true;
+    private string ErrorMessage { get; set; } = string.Empty;
+    private string BoardMode { get; set; } = "maps";
+    private string SortBy { get; set; } = "rating";
+    private string Order { get; set; } = "desc";
+    private List<MapSummary> Maps { get; set; } = [];
+    private List<PlayerLeaderboardEntry> Players { get; set; } = [];
+
+    private bool IsPlayerMode => BoardMode == "players";
+
+    private static readonly IReadOnlyList<(string Value, string Label)> MapSortOptions =
+    [
+        ("rating", "Rating"),
+        ("plays", "Plays"),
+        ("best_time", "Best Time"),
+        ("time_founded", "Founded"),
+        ("difficulty", "Difficulty"),
+        ("map_name", "Map Name"),
+    ];
+
+    private static readonly IReadOnlyList<(string Value, string Label)> PlayerSortOptions =
+    [
+        ("maze_nuggets", "Maze Nuggets"),
+        ("owned_maps", "Owned Maps"),
+        ("discovered_maps", "Discovered Maps"),
+        ("wins", "Wins"),
+        ("losses", "Losses"),
+        ("win_rate", "Win Rate"),
+        ("maps_played", "Maps Played"),
+        ("username", "Username"),
+    ];
+
+    private IReadOnlyList<(string Value, string Label)> CurrentSortOptions => IsPlayerMode ? PlayerSortOptions : MapSortOptions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLeaderboardAsync();
+    }
+
+    private async Task SetBoardModeAsync(string mode)
+    {
+        if (BoardMode == mode)
+        {
+            return;
+        }
+
+        BoardMode = mode;
+        SortBy = IsPlayerMode ? "maze_nuggets" : "rating";
+        Order = "desc";
+        await LoadLeaderboardAsync();
+    }
+
+    private async Task LoadLeaderboardAsync()
+    {
+        IsLoading = true;
+        ErrorMessage = string.Empty;
+
+        try
+        {
+            if (IsPlayerMode)
+            {
+                using var playerResponse = await Http.GetAsync(
+                    BuildControllerUrl($"api/auth/playerLeaderboard?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}"));
+
+                if (!playerResponse.IsSuccessStatusCode)
+                {
+                    ErrorMessage = await playerResponse.Content.ReadAsStringAsync();
+                    Players = [];
+                    return;
+                }
+
+                var playerPayload = await playerResponse.Content.ReadFromJsonAsync<PlayerLeaderboardResponse>();
+                Players = playerPayload?.Players ?? [];
+                Maps = [];
+            }
+            else
+            {
+                using var response = await Http.GetAsync(
+                    BuildControllerUrl($"api/auth/leaderboard?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}"));
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    ErrorMessage = await response.Content.ReadAsStringAsync();
+                    Maps = [];
+                    return;
+                }
+
+                var payload = await response.Content.ReadFromJsonAsync<LeaderboardResponse>();
+                Maps = payload?.Maps ?? [];
+                Players = [];
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            Maps = [];
+            Players = [];
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private string GetModeButtonClass(string mode)
+    {
+        return BoardMode == mode ? "btn btn-primary" : "btn btn-secondary";
+    }
+
+    private string BuildControllerUrl(string relativePath)
+    {
+        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
+    }
+
+    private static string GetDifficultyClass(string difficulty)
+    {
+        return difficulty?.Trim().ToLowerInvariant() switch
+        {
+            "easy" => "easy",
+            "medium" => "medium",
+            "hard" => "hard",
+            _ => "default",
+        };
+    }
+
+    private static string GetThemeGlyph(string theme)
+    {
+        return string.IsNullOrWhiteSpace(theme) ? "?" : char.ToUpperInvariant(theme[0]).ToString();
+    }
+
+    private static string FormatThemeLabel(string? theme)
+    {
+        if (string.IsNullOrWhiteSpace(theme))
+        {
+            return "Unknown theme";
+        }
+
+        return theme.Replace('_', ' ').Trim();
+    }
 
     private void GoHome()
     {
         NavigationManager.NavigateTo("/home");
+    }
+
+    private async Task OpenMapAsync(string mapName)
+    {
+        if (string.IsNullOrWhiteSpace(mapName))
+        {
+            return;
+        }
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<SeedApiResponse>(
+                BuildControllerUrl($"api/auth/loadMap?name={Uri.EscapeDataString(mapName)}"));
+
+            if (string.IsNullOrWhiteSpace(response?.Seed))
+            {
+                throw new InvalidOperationException("The requested map did not return a seed.");
+            }
+
+            NavigationManager.NavigateTo(
+                $"/game?seed={Uri.EscapeDataString(response.Seed)}&source=load&mapName={Uri.EscapeDataString(mapName)}");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void GoToProfile(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(username)}");
+    }
+
+    private static string FormatFoundedDate(MapSummary map)
+    {
+        var source = !string.IsNullOrWhiteSpace(map.TimeFounded)
+            ? map.TimeFounded
+            : map.TimeFoundedDisplay;
+
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return "Unknown";
+        }
+
+        if (DateTimeOffset.TryParse(source, out var timestamp))
+        {
+            var local = timestamp.ToLocalTime();
+            return $"{local:MMM d, yyyy} at {local:h:mm tt}";
+        }
+
+        return source;
+    }
+
+    private static string FormatHumanTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "N/A";
+        }
+
+        var parts = value.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length != 4
+            || !int.TryParse(parts[0], out var hours)
+            || !int.TryParse(parts[1], out var minutes)
+            || !int.TryParse(parts[2], out var seconds)
+            || !int.TryParse(parts[3], out var milliseconds))
+        {
+            return value;
+        }
+
+        if (hours > 0)
+        {
+            return $"{hours}h {minutes:D2}m {seconds:D2}.{milliseconds:D3}s";
+        }
+
+        if (minutes > 0)
+        {
+            return $"{minutes}m {seconds:D2}.{milliseconds:D3}s";
+        }
+
+        return $"{seconds}.{milliseconds:D3}s";
+    }
+
+    private static string FormatWinRate(double value)
+    {
+        return $"{value:0.#}%";
+    }
+
+    private static string GetPlayerKicker(PlayerLeaderboardEntry player)
+    {
+        return $"{player.OwnedMapsCount} owned | {player.DiscoveredMapsCount} discovered | {player.MapsPlayed} played";
+    }
+
+    private static string GetInitials(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "??";
+        }
+
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 1)
+        {
+            return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
+        }
+
+        return string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
+
+    private sealed class SeedApiResponse
+    {
+        public string Seed { get; set; } = string.Empty;
     }
 }
