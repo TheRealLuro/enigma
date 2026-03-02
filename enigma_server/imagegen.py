@@ -1241,6 +1241,136 @@ def _diffuse_hedge_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
     result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=96, threshold=2))
     return result
 
+def _build_haunted_detail_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    accents = [
+        " extremely faint translucent white-gray haze vaguely resembling a human silhouette barely visible in the far darkness, "
+"ghost presence suggested not shown, near-zero opacity ethereal mist in human shape at hallway depth, "
+"subtle luminous haze only, not a solid figure, not a clear ghost, absorbed almost entirely by surrounding darkness, end tables bearing melting candles and candelabras casting faint warm amber glow and long soft shadows down the hallway",
+        "faded wallpaper with visible aged repeating pattern, peeling at corners and edges revealing bare plaster beneath",
+        "thick cobwebs draped in upper wall corners and across old door frames with fine layered strand detail",
+        "old dark framed portraits and landscape paintings mounted on the wall between closed wooden doors",
+        "extremely faint translucent ghost figure barely perceptible at the very end of the hallway, nearly consumed by darkness",
+    ]
+    return ", ".join(
+        [
+            "standing inside an extremely dark narrow haunted house hallway, faded peeling wallpaper close on both sides, worn wooden floor underfoot, closed wooden doors receding ahead",
+            "ground-level first-person eye-level interior camera looking down the hallway, NOT aerial NOT top-down NOT exterior",
+            "candlelight and candelabras as sole light source — faint warm amber glow only, darkness dominates, deep muted purples and faded ochre wood",
+            "no living creatures, no insects, no animals, no humans, no water, no plants — abandoned and lifeless",
+            accents[rng.integers(0, len(accents))],
+        ]
+    )
+
+def _build_haunted_architecture_prompt(seed: str) -> str:
+    rng = np.random.default_rng()
+    anchors = [
+        "ground-level first-person eye-level view down an extremely dark narrow haunted house hallway with faded wallpaper and closed wooden doors",
+        "immersive interior corridor perspective inside a haunted house with peeling wallpaper, cobwebbed walls, and candle-lit end tables receding into darkness",
+        "thin dark haunted hallway extending forward with closed wooden doors, old framed paintings, and faint candlelight barely illuminating the space",
+    ]
+    props = [
+        "end tables with melting candles and candelabras emitting faint warm amber light and long shadows",
+        "faded peeling wallpaper with visible aged pattern and bare plaster showing beneath peeled sections",
+        "thick cobwebs draped across upper wall corners and door frames with fine layered strand detail",
+        "old dark framed paintings on the walls barely legible in low candlelight",
+        "extremely faint barely visible translucent ghost shape at the very far end of the hallway",
+    ]
+    return ", ".join(
+        [
+            anchors[rng.integers(0, len(anchors))],
+            props[rng.integers(0, len(props))],
+            props[rng.integers(0, len(props))],
+            "deep muted purples and faded ochre wood tones, candlelight as sole light source, darkness dominates",
+            "ground-level first-person interior eye-level camera only, NOT aerial NOT top-down, no living creatures, no water, no plants",
+        ]
+    )
+
+def _diffuse_haunted_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
+    prompt = _build_haunted_architecture_prompt(seed)
+    refiner_prompt = BASE_REFINER_PROMPT
+    negative_prompt = BASE_NEGATIVE_PROMPT
+    detail_prompt = _build_haunted_detail_prompt(seed)
+
+    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    refiner_prompt = _clip_prompt_safe(
+        f"{refiner_prompt}, "
+        "first-person eye-level perspective standing inside an extremely dark narrow haunted house hallway, "
+        "faded peeling wallpaper close on both sides, worn wooden floorboards underfoot, closed wooden doors receding ahead, "
+        "end tables with melting candles and candelabras as sole light source casting faint warm amber glow and long shadows, "
+        "cobwebs in upper corners and across door frames, old dark framed paintings on walls, "
+        "deep muted purples and near-black shadow dominating, faded ochre wood tones on doors and floor, "
+        "extremely faint barely visible translucent ghost shape at the very far end of the hallway, "
+        "photorealistic, 8k detail, global illumination, ray-traced candlelight, sharp focus, "
+        "immersive cinematic 35mm lens feel, natural shadow behavior, high dynamic range, "
+        "no daylight, no windows, no electric light, candlelight only, darkness dominates",
+        max_words=CLIP_REFINER_WORDS, max_chars=140
+    )
+    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+    detail_prompt = _clip_prompt_safe(
+        f"{detail_prompt}, "
+        "first person view, detailed faded wallpaper texture with peeling edges, fine cobweb strand detail in corners, "
+        "tarnished brass door hardware, worn floorboard grain, dripping candle wax detail, "
+        "faint ghost shape at hallway end near-transparent, dark framed painting detail on walls, some blood, tiny blood spots",
+        max_words=CLIP_DETAIL_WORDS, max_chars=170
+    )
+
+    haunted_negative = _clip_prompt_safe((
+        f"{negative_prompt}, "
+        "aerial view, top-down view, birds-eye view, overhead perspective, drone shot, map view, "
+        "exterior house view, outside the building, outdoor scene, "
+        "open doors, visible room interiors, daylight, windows, sunlight, bright lighting, even illumination, "
+        "electric lighting, modern fixtures, clean undamaged wallpaper, new surfaces, well-maintained interior, "
+        "explicit clear ghost figure, fully visible apparition, cartoon ghost, solid white ghost, "
+        "insects, rodents, animals, humans, characters, living creatures, "
+        "plants, nature, water, organic life, moss, roots, "
+        "bright colors, neon, saturated palette, fantasy magic effects, "
+        "cartoon style, illustrated look, painterly rendering, stylized art, "
+        "gore,  third person view, wide open space, huge cobwebs"
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
+    base = pipe(
+        prompt=prompt,
+        negative_prompt=haunted_negative,
+        image=image.convert("RGB"),
+        strength=0.62,
+        guidance_scale=5.5,
+        num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
+    ).images[0]
+
+    base = base.filter(ImageFilter.GaussianBlur(radius=0.8))
+
+    detail = pipe(
+        prompt=detail_prompt,
+        negative_prompt=haunted_negative,
+        image=base.convert("RGB"),
+        strength=0.18,
+        guidance_scale=4.5,
+        num_inference_steps=12,
+    ).images[0]
+
+    result = pipe(
+        prompt=refiner_prompt,
+        negative_prompt=haunted_negative,
+        image=detail,
+        strength=0.22,
+        guidance_scale=4.0,
+        num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
+    ).images[0]
+
+    result = result.convert("RGB")
+    result = _apply_spectral_grade(result, seed=seed)
+    result = _solidify_color_fields(result)
+    result = _lift_deep_blacks(result)
+    result = _solidify_color_fields(result)
+    result = result.filter(ImageFilter.SMOOTH_MORE)
+    result = result.filter(ImageFilter.GaussianBlur(0.12))
+    result = ImageEnhance.Brightness(result).enhance(0.80)
+    result = ImageEnhance.Color(result).enhance(0.75)
+    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=96, threshold=2))
+    return result
+
+
 
 def diffuse_abstract(image: Image.Image, seed: str) -> Image.Image:
     pipe = get_pipe()
@@ -1252,6 +1382,9 @@ def diffuse_abstract(image: Image.Image, seed: str) -> Image.Image:
         return _diffuse_sewer_pipeline(pipe=pipe, image=image, seed=seed)
     if "hedge" in PROMPT_PACK_NAME:
         return _diffuse_hedge_pipeline(pipe=pipe, image=image, seed=seed)
+    if "haunted" in PROMPT_PACK_NAME:
+        return _diffuse_haunted_pipeline(pipe=pipe, image=image, seed=seed)
+        
     return _diffuse_membrane_pipeline(pipe=pipe, image=image, seed=seed)
 
 
