@@ -58,7 +58,7 @@ def _refresh_weekly_inventory_stock_if_needed(now=None):
     if not refreshed:
         return
 
-    for item in item_inventory.find({}, {"_id": 1, "rarity": 1}):
+    for item in item_inventory.find({"never_restock": {"$ne": True}}, {"_id": 1, "rarity": 1}):
         min_stock, max_stock = _weekly_stock_range_for_rarity(item.get("rarity"))
         item_inventory.update_one(
             {"_id": item["_id"]},
@@ -80,7 +80,15 @@ def restock_item_shop():
     ensure_inventory_ready()
     _refresh_weekly_inventory_stock_if_needed(now)
 
-    available_items = list(item_inventory.find({"stock": {"$gt": 0}}))
+    available_items = list(
+        item_inventory.find(
+            {
+                "stock": {"$gt": 0},
+                "retired": {"$ne": True},
+                "always_available": {"$ne": True},
+            }
+        )
+    )
     if len(available_items) < DAILY_SHOP_SIZE:
         raise ValueError("Not enough in-stock items in item_inventory to fill the daily shop")
 

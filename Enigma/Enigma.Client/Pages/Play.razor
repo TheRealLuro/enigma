@@ -13,6 +13,9 @@
             <h1 class="mb-2">Start a Maze Run</h1>
             <p>Choose a maze, equip up to three items, and confirm fullscreen before you enter.</p>
         </div>
+        <div class="play-header-actions">
+            <button class="btn btn-secondary" type="button" @onclick="OpenCoopLobby">Co-op Lobby</button>
+        </div>
         @if (Session is not null)
         {
             <div class="play-header-metrics">
@@ -184,13 +187,17 @@
         try
         {
             var inventory = await Api.GetFromJsonAsync<InventoryResponse>("api/auth/items/inventory");
-            Inventory = inventory?.Items ?? [];
+            Inventory = (inventory?.Items ?? [])
+                .Where(item => !string.Equals(item.SlotKind, "perk", StringComparison.OrdinalIgnoreCase))
+                .ToList();
         }
         catch
         {
             Inventory = [];
         }
     }
+
+    private void OpenCoopLobby() => NavigationManager.NavigateTo("/play/coop");
 
     private async Task OnNewClick()
     {

@@ -47,7 +47,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
     public string? Source { get; set; }
 
     [SupplyParameterFromQuery(Name = "tutorial")]
-    public bool Tutorial { get; set; }
+    public string? Tutorial { get; set; }
 
     protected bool UsePlaceholderGraphics { get; } = true;
     protected string GameSurfaceId { get; } = $"enigma-game-{Guid.NewGuid():N}";
@@ -99,7 +99,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
         [PlayerDirection.Left] = "placeholder-left",
     };
 
-    protected int SolvedRoomCount => _roomStates.Values.Count(state => state.Puzzle.IsCompleted);
+    protected int SolvedRoomCount => IsCoopRun
+        ? _coopSession?.SolvedRoomCount ?? _roomStates.Values.Count(state => state.Puzzle.IsCompleted)
+        : _roomStates.Values.Count(state => state.Puzzle.IsCompleted);
     protected int TotalRoomCount => _roomStates.Count;
     protected string DifficultyLabel => ParsedSeed?.Difficulty.ToString() ?? "Unknown";
     protected string RoomCoordinateLabel => CurrentRoom is null ? "(0, 0)" : CurrentRoom.Coordinates.ToString();
@@ -107,8 +109,13 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected string NormalizedSource => string.Equals(Source, "load", StringComparison.OrdinalIgnoreCase) ? "load" : "new";
     protected string ElapsedTimeLabel => FormatElapsed(_sessionStopwatch.Elapsed);
     protected bool CanShowRoom => ParsedSeed is not null && CurrentRoom is not null && CurrentRoomState is not null;
-    protected bool PortalReady => CurrentRoomState?.FinishPortalVisible == true;
-    protected bool IsTutorialRun => Tutorial;
+    protected bool PortalReady => IsCoopRun
+        ? CurrentRoomState?.Definition.Kind == MazeRoomKind.Finish && IsCurrentCoopRoomSolved
+        : CurrentRoomState?.FinishPortalVisible == true;
+    protected bool IsTutorialRun =>
+        string.Equals(Tutorial, "true", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(Tutorial, "1", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(Tutorial, "yes", StringComparison.OrdinalIgnoreCase);
 
     protected override void OnParametersSet()
     {
@@ -125,6 +132,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
 
         ResetRuntimeState();
+        ResetCoopRuntimeState();
         _runNonce = Guid.NewGuid().ToString("N");
         _abandonTriggered = false;
         _allowRouteExit = false;
@@ -188,8 +196,20 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 Username = session!.Username;
             }
 
+            try
+            {
+                await InitializeCoopAsync();
+            }
+            catch (Exception ex)
+            {
+                LoadError = ex.Message;
+                IsLoaded = false;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
             _jsReady = true;
-            if (!IsTutorialRun)
+            await ConnectCoopSocketAsync();
+            if (!IsTutorialRun && !IsCoopRun)
             {
                 await JS.InvokeVoidAsync("enigmaGame.registerLossUnload", Api.BuildUrl("api/auth/game/abandon"));
                 await UpdatePendingLossDraftAsync(force: true);
@@ -204,6 +224,47 @@ public partial class Game : ComponentBase, IAsyncDisposable
     [JSInvokable]
     public Task HandleKeyChange(string keyCode, bool isPressed)
     {
+        if (IsCoopRun)
+        {
+            return HandleCoopPuzzleKeyChangeAsync(keyCode, isPressed);
+        }
+
+        if (CurrentRoomState?.Puzzle is UnlockPatternPuzzle unlockPattern && !unlockPattern.IsCompleted)
+        {
+            _pressedKeys.Clear();
+
+            if (isPressed && TryMapDirectionKey(keyCode, out var patternDirection))
+            {
+                unlockPattern.Press(patternDirection);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        if (CurrentRoomState?.Puzzle is DirectionalEchoPuzzle directionalEcho && !directionalEcho.IsCompleted)
+        {
+            _pressedKeys.Clear();
+
+            if (isPressed && TryMapDirectionKey(keyCode, out var echoDirection))
+            {
+                directionalEcho.Press(echoDirection);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        if (CurrentRoomState?.Puzzle is DimensionalPatternShiftPuzzle dimensionalShift && !dimensionalShift.IsCompleted)
+        {
+            _pressedKeys.Clear();
+
+            if (isPressed && TryMapDirectionKey(keyCode, out var shiftDirection))
+            {
+                dimensionalShift.Press(shiftDirection);
+            }
+
+            return Task.CompletedTask;
+        }
+
         if (isPressed)
         {
             _pressedKeys.Add(keyCode);
@@ -529,6 +590,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             try
             {
                 await JS.InvokeVoidAsync("enigmaGame.disposeInput");
+                await JS.InvokeVoidAsync("enigmaGame.disposeCoopSocket");
                 await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
             }
             catch (JSDisconnectedException)
@@ -582,32 +644,60 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         UpdateMovement(deltaTime);
 
-        CurrentRoomState.Puzzle.Update(new PuzzleUpdateContext
+        if (!IsCoopRun)
         {
-            PlayerBounds = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize),
-            DeltaTimeSeconds = deltaTime,
-        });
-
-        if (CurrentRoomState.Puzzle.IsCompleted)
-        {
-            var reward = CurrentRoomState.GrantPuzzleReward();
-            if (reward > 0)
+            CurrentRoomState.Puzzle.Update(new PuzzleUpdateContext
             {
-                TotalGold += reward;
-                _playerStateDirty = true;
-                ShowBanner($"Puzzle solved. +{reward} gold", 1.5d);
+                PlayerBounds = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize),
+                DeltaTimeSeconds = deltaTime,
+            });
+
+            if (_jsReady && CurrentRoomState.Puzzle is HarmonicPhasePuzzle harmonicPhase)
+            {
+                var tone = harmonicPhase.ConsumePendingTone();
+                if (tone.HasValue)
+                {
+                    await JS.InvokeVoidAsync("enigmaGame.playTone", tone.Value);
+                }
             }
+
+            if (CurrentRoomState.Puzzle.IsCompleted)
+            {
+                var reward = CurrentRoomState.GrantPuzzleReward();
+                if (reward > 0)
+                {
+                    TotalGold += reward;
+                    _playerStateDirty = true;
+                    ShowBanner($"Puzzle solved. +{reward} gold", 1.5d);
+                }
+            }
+        }
+        else if (CurrentCoopPuzzle?.Completed == true && !IsCurrentCoopRoomSolved)
+        {
+            _playerStateDirty = true;
         }
 
         if (CurrentRoomState.RewardPickupVisible &&
             CurrentRoomState.RewardPickupBounds.Intersects(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize)))
         {
-            var bonus = CurrentRoomState.CollectRewardPickup();
-            if (bonus > 0)
+            if (IsCoopRun)
             {
-                TotalGold += bonus;
-                _playerStateDirty = true;
-                ShowBanner($"Reward cache collected. +{bonus} gold", 1.5d);
+                if (!IsCurrentCoopRewardCollected)
+                {
+                    CurrentRoomState.MarkRewardPickupCollectedForSync();
+                    _playerStateDirty = true;
+                    ShowBanner("Reward cache secured for the team.", 0.9d);
+                }
+            }
+            else
+            {
+                var bonus = CurrentRoomState.CollectRewardPickup();
+                if (bonus > 0)
+                {
+                    TotalGold += bonus;
+                    _playerStateDirty = true;
+                    ShowBanner($"Reward cache collected. +{bonus} gold", 1.5d);
+                }
             }
         }
 
@@ -615,11 +705,15 @@ public partial class Game : ComponentBase, IAsyncDisposable
             CurrentRoomState.FinishPortalVisible &&
             CurrentRoomState.FinishPortalBounds.Intersects(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize)))
         {
-            _completionTriggered = true;
-            _sessionStopwatch.Stop();
-            _ = CompleteRunAsync();
+            if (!IsCoopRun)
+            {
+                _completionTriggered = true;
+                _sessionStopwatch.Stop();
+                _ = CompleteRunAsync();
+            }
         }
 
+        await PumpCoopAsync();
         await SyncLivePlayerStateAsync();
         StateHasChanged();
     }
@@ -664,6 +758,20 @@ public partial class Game : ComponentBase, IAsyncDisposable
         var previousMoving = IsMoving;
         var previousRoom = CurrentRoom?.Coordinates;
 
+        if (!IsCoopRun &&
+            ((CurrentRoomState?.Puzzle is UnlockPatternPuzzle unlockPattern && !unlockPattern.IsCompleted) ||
+             (CurrentRoomState?.Puzzle is DirectionalEchoPuzzle directionalEcho && !directionalEcho.IsCompleted) ||
+             (CurrentRoomState?.Puzzle is DimensionalPatternShiftPuzzle dimensionalShift && !dimensionalShift.IsCompleted)))
+        {
+            IsMoving = false;
+            if (previousMoving)
+            {
+                _playerStateDirty = true;
+            }
+
+            return;
+        }
+
         var horizontal = (IsPressed("ArrowRight", "KeyD") ? 1 : 0) - (IsPressed("ArrowLeft", "KeyA") ? 1 : 0);
         var vertical = (IsPressed("ArrowDown", "KeyS") ? 1 : 0) - (IsPressed("ArrowUp", "KeyW") ? 1 : 0);
 
@@ -694,7 +802,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         PlayerX += deltaX * PlayerSpeed * deltaTime;
         PlayerY += deltaY * PlayerSpeed * deltaTime;
 
-        if (CurrentRoomState?.Puzzle is IBlockPushPuzzle blockPushPuzzle)
+        if (!IsCoopRun && CurrentRoomState?.Puzzle is IBlockPushPuzzle blockPushPuzzle)
         {
             var playerRect = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
             if (blockPushPuzzle.BlocksPlayer(playerRect))
@@ -752,10 +860,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return true;
         }
 
-        if (!CurrentRoomState.Puzzle.IsCompleted)
+        var roomSolvedForExit = IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState.Puzzle.IsCompleted;
+        if (!roomSolvedForExit)
         {
             ClampToBoundary(direction);
-            ShowBanner("Solve the room puzzle before leaving.", 1.0d);
+            ShowBanner(IsCoopRun ? "This room stays sealed until the shared solve syncs." : "Solve the room puzzle before leaving.", 1.0d);
             return true;
         }
 
@@ -771,6 +880,13 @@ public partial class Game : ComponentBase, IAsyncDisposable
         if (!ParsedSeed.TryGetRoom(nextPoint, out var nextRoom))
         {
             ClampToBoundary(direction);
+            return true;
+        }
+
+        if (IsCoopRun)
+        {
+            ClampToBoundary(direction);
+            _ = RequestCoopRoomMoveAsync(nextPoint);
             return true;
         }
 
@@ -891,38 +1007,73 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private static string FormatElapsed(TimeSpan elapsed) =>
         $"{elapsed.Hours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}:{elapsed.Milliseconds:000}";
 
+    private static bool TryMapDirectionKey(string keyCode, out PlayerDirection direction)
+    {
+        direction = keyCode switch
+        {
+            "ArrowUp" => PlayerDirection.Up,
+            "ArrowRight" => PlayerDirection.Right,
+            "ArrowDown" => PlayerDirection.Down,
+            "ArrowLeft" => PlayerDirection.Left,
+            _ => default,
+        };
+
+        return keyCode is "ArrowUp" or "ArrowRight" or "ArrowDown" or "ArrowLeft";
+    }
+
     private static double ToPercent(double value) => Math.Round((value / RoomSize) * 100d, 4);
 
     protected static string GetDirectionArrow(PlayerDirection direction) => direction switch
     {
-        PlayerDirection.Up => "↑",
-        PlayerDirection.Right => "→",
-        PlayerDirection.Down => "↓",
-        PlayerDirection.Left => "←",
+        PlayerDirection.Up => "\u2191",
+        PlayerDirection.Right => "\u2192",
+        PlayerDirection.Down => "\u2193",
+        PlayerDirection.Left => "\u2190",
         _ => "?",
     };
 
-    protected static string GetBinaryString(IEnumerable<bool> bits) => string.Concat(bits.Select(bit => bit ? '1' : '0'));
+protected static string GetBinaryString(IEnumerable<bool> bits) => string.Concat(bits.Select(bit => bit ? '1' : '0'));
 
     protected static string GetPipeGlyph(int mask) => mask switch
     {
-        0b0101 => "│",
-        0b1010 => "─",
-        0b0011 => "└",
-        0b0110 => "┌",
-        0b1100 => "┐",
-        0b1001 => "┘",
-        0b0111 => "├",
-        0b1110 => "┬",
-        0b1101 => "┤",
-        0b1011 => "┴",
-        0b1111 => "┼",
-        0b0001 => "╵",
-        0b0010 => "╶",
-        0b0100 => "╷",
-        0b1000 => "╴",
-        _ => "•",
+        0b0101 => "\u2502",
+        0b1010 => "\u2500",
+        0b0011 => "\u2514",
+        0b0110 => "\u250C",
+        0b1100 => "\u2510",
+        0b1001 => "\u2518",
+        0b0111 => "\u251C",
+        0b1110 => "\u252C",
+        0b1101 => "\u2524",
+        0b1011 => "\u2534",
+        0b1111 => "\u253C",
+        0b0001 => "\u2575",
+        0b0010 => "\u2576",
+        0b0100 => "\u2577",
+        0b1000 => "\u2574",
+        _ => "\u2022",
     };
+
+protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ringIndex)
+    {
+        var rotation = -(puzzle.Positions[ringIndex] * 45d);
+        return $"transform: translate(-50%, -50%) rotate({Math.Round(rotation, 2)}deg);";
+    }
+
+    protected static string GetTemporalSigilStyle(int ringIndex, int symbolIndex, int symbolCount)
+    {
+        var radius = ringIndex switch
+        {
+            0 => 118d,
+            1 => 84d,
+            _ => 52d,
+        };
+
+        var angle = ((Math.PI * 2d) / symbolCount) * symbolIndex - (Math.PI / 2d);
+        var x = Math.Cos(angle) * radius;
+        var y = Math.Sin(angle) * radius;
+        return $"left: calc(50% + {Math.Round(x, 2)}px); top: calc(50% + {Math.Round(y, 2)}px);";
+    }
 
     protected string GetConnectionLineStyle(PlayAreaPoint start, PlayAreaPoint end)
     {
@@ -1016,6 +1167,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
             UsedItems = [],
             Reason = reason,
             AbandonedAtUtc = DateTime.UtcNow.ToString("O"),
+            IsMultiplayer = IsCoopRun,
+            MultiplayerSessionId = CoopSessionId,
+            PartnerUsername = CoopPartnerName,
         };
     }
 
@@ -1094,6 +1248,12 @@ public partial class Game : ComponentBase, IAsyncDisposable
     {
         if (_abandonTriggered || ParsedSeed is null)
         {
+            return;
+        }
+
+        if (IsCoopRun)
+        {
+            await RedirectToCoopLossAsync(reason, submitLeave: true);
             return;
         }
 

@@ -102,4 +102,40 @@ public class ItemCatalogEntry
 
     [JsonPropertyName("stock")]
     public int Stock { get; set; }
+
+    [JsonPropertyName("always_available")]
+    public bool AlwaysAvailable { get; set; }
+
+    [JsonPropertyName("never_restock")]
+    public bool NeverRestock { get; set; }
+
+    [JsonPropertyName("purchase_limit")]
+    public int PurchaseLimit { get; set; }
+
+    [JsonPropertyName("requires_tasks")]
+    public bool RequiresTasks { get; set; }
+
+    [JsonPropertyName("is_owned")]
+    public bool IsOwned { get; set; }
+
+    [JsonPropertyName("can_purchase")]
+    public bool CanPurchase { get; set; } = true;
+
+    [JsonPropertyName("purchase_blocked_reason")]
+    public string? PurchaseBlockedReason { get; set; }
+
+    [JsonPropertyName("requirements")]
+    public List<ItemRequirementStatus> Requirements { get; set; } = [];
+}
+
+public class ItemRequirementStatus
+{
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = string.Empty;
+
+    [JsonPropertyName("completed")]
+    public bool Completed { get; set; }
 }

@@ -71,6 +71,14 @@ else
             <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
         }
 
+        @if (IsOwnProfile)
+        {
+            <section class="profile-retention-note" data-tour-id="profile-retention">
+                <span class="profile-eyebrow">Retention Rule</span>
+                <p>60 consecutive inactive days permanently delete this account and all owned maps.</p>
+            </section>
+        }
+
         <div class="profile-tabbar" data-tour-id="profile-tabs">
             @foreach (var tab in VisibleTabs)
             {

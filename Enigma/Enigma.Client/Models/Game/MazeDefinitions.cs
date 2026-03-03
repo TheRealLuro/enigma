@@ -121,6 +121,25 @@ public sealed class RoomRuntimeState
         RewardPickupCollected = true;
         return RewardPickupGold;
     }
+
+    public void SyncCoopProgress(bool puzzleSolved, bool rewardPickupCollected)
+    {
+        if (puzzleSolved)
+        {
+            Puzzle.SyncCompleted("Team sync complete. Doors unlocked.");
+            PuzzleRewardGranted = true;
+        }
+
+        if (rewardPickupCollected)
+        {
+            RewardPickupCollected = true;
+        }
+    }
+
+    public void MarkRewardPickupCollectedForSync()
+    {
+        RewardPickupCollected = true;
+    }
 }
 
 public sealed class PuzzleUpdateContext

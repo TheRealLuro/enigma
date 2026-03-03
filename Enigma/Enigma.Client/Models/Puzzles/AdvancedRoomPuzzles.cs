@@ -93,6 +93,8 @@ public sealed class PhaseRelayPuzzle : RoomPuzzle
 
 public sealed class DualPulseLockPuzzle : RoomPuzzle
 {
+    private const double HitTolerance = 0.004d;
+    private const double VisualMarkerHalfSpan = 0.01d;
     private int _directionA = 1;
     private int _directionB = -1;
 
@@ -120,8 +122,8 @@ public sealed class DualPulseLockPuzzle : RoomPuzzle
     public double SpeedB { get; }
     public bool IsStoppedA { get; private set; }
     public bool IsStoppedB { get; private set; }
-    public bool MeterAInWindow => MeterA >= TargetStartA && MeterA <= TargetStartA + TargetWidthA;
-    public bool MeterBInWindow => MeterB >= TargetStartB && MeterB <= TargetStartB + TargetWidthB;
+    public bool MeterAInWindow => MeterInWindow(MeterA, TargetStartA, TargetWidthA);
+    public bool MeterBInWindow => MeterInWindow(MeterB, TargetStartB, TargetWidthB);
 
     public override void Update(PuzzleUpdateContext context)
     {
@@ -181,6 +183,14 @@ public sealed class DualPulseLockPuzzle : RoomPuzzle
         }
 
         UpdateStatus();
+    }
+
+    private static bool MeterInWindow(double meterValue, double targetStart, double targetWidth)
+    {
+        var markerStart = Math.Max(0d, meterValue - VisualMarkerHalfSpan);
+        var markerEnd = Math.Min(1d, meterValue + VisualMarkerHalfSpan);
+        var targetEnd = targetStart + targetWidth;
+        return markerEnd >= targetStart - HitTolerance && markerStart <= targetEnd + HitTolerance;
     }
 
     private static double AdvanceMeter(double value, double speed, ref int direction, double deltaSeconds)
@@ -282,6 +292,7 @@ public sealed class SymbolLogicPuzzle : RoomPuzzle
 public sealed class FadingPathMemoryPuzzle : RoomPuzzle
 {
     private GridPoint? _lastVisitedCell;
+    private bool _pathFadeAnnounced;
 
     public FadingPathMemoryPuzzle(int gridSize, double boardOriginX, double boardOriginY, double cellSize, IReadOnlyList<GridPoint> path, double revealDurationSeconds)
         : base('s', "Fading Path Memory", "Watch the luminous path, then walk the exact route after it fades.")
@@ -292,6 +303,7 @@ public sealed class FadingPathMemoryPuzzle : RoomPuzzle
         CellSize = cellSize;
         Path = path;
         RevealDurationSeconds = revealDurationSeconds;
+        StatusText = "Watch the floor. The memory trail will fade quickly.";
     }
 
     public int GridSize { get; }
@@ -312,6 +324,12 @@ public sealed class FadingPathMemoryPuzzle : RoomPuzzle
         }
 
         ElapsedSeconds += context.DeltaTimeSeconds;
+        if (!_pathFadeAnnounced && !IsPathVisible)
+        {
+            _pathFadeAnnounced = true;
+            StatusText = "The path is gone. Walk the exact route from memory.";
+        }
+
         var currentCell = GetCellAt(context.PlayerBounds.CenterX, context.PlayerBounds.CenterY);
         if (currentCell is null || currentCell == _lastVisitedCell)
         {
@@ -550,6 +568,7 @@ public sealed class DirectionalEchoPuzzle : RoomPuzzle
     public double RevealDurationSeconds { get; }
     public double ElapsedSeconds { get; private set; }
     public bool IsPatternVisible => IsCompleted || ElapsedSeconds < RevealDurationSeconds;
+    public bool AcceptsInput => !IsCompleted && !IsPatternVisible;
     public string RuleDescription => TransformKind switch
     {
         DirectionTransformKind.Reverse => "Answer the pattern in reverse.",
@@ -576,7 +595,7 @@ public sealed class DirectionalEchoPuzzle : RoomPuzzle
 
     public void Press(PlayerDirection direction)
     {
-        if (IsCompleted)
+        if (IsCompleted || IsPatternVisible)
         {
             return;
         }
@@ -875,94 +894,134 @@ public sealed class BinaryShiftPuzzle : RoomPuzzle
 
 public sealed class CrossingPathPuzzle : RoomPuzzle
 {
-    private int? _selectedLeftIndex;
+    private int? _activeWordIndex;
+    private int? _lastTouchedWordIndex;
+    private int? _lastTouchedDescriptorIndex;
 
-    public CrossingPathPuzzle(IReadOnlyList<string> labels)
-        : base('y', "Crossing Path Puzzle", "Connect each left node to its matching right node. Any crossing line invalidates the network.")
+    public CrossingPathPuzzle(IReadOnlyList<(string Word, string Descriptor)> pairs, IReadOnlyList<int> descriptorOrder)
+        : base('y', "Crossing Path Puzzle", "Step on a word tile, then walk to the descriptor tile that matches it.")
     {
-        Labels = labels;
-        Connections = new int?[labels.Count];
-        LeftPoints = Enumerable.Range(0, labels.Count).Select(index => new PlayAreaPoint(220d, 260d + (index * 140d))).ToArray();
-        RightPoints = Enumerable.Range(0, labels.Count).Select(index => new PlayAreaPoint(860d, 260d + (index * 140d))).ToArray();
+        Words = pairs.Select(pair => pair.Word).ToArray();
+        DescriptorOrder = descriptorOrder.ToArray();
+        Descriptors = descriptorOrder.Select(index => pairs[index].Descriptor).ToArray();
+        DescriptorMatchIndices = descriptorOrder
+            .Select((sourceIndex, descriptorIndex) => new { sourceIndex, descriptorIndex })
+            .OrderBy(item => item.sourceIndex)
+            .Select(item => item.descriptorIndex)
+            .ToArray();
+        SolvedWords = new bool[pairs.Count];
+        WordTiles = Enumerable.Range(0, pairs.Count)
+            .Select(index => new PlayAreaRect(140d, 210d + (index * 150d), 220d, 104d))
+            .ToArray();
+        DescriptorTiles = Enumerable.Range(0, pairs.Count)
+            .Select(index => new PlayAreaRect(720d, 210d + (index * 150d), 220d, 104d))
+            .ToArray();
+        StatusText = "Step on a word tile to carry it, then walk to its matching descriptor.";
     }
 
-    public IReadOnlyList<string> Labels { get; }
-    public PlayAreaPoint[] LeftPoints { get; }
-    public PlayAreaPoint[] RightPoints { get; }
-    public int?[] Connections { get; }
-    public int? SelectedLeftIndex => _selectedLeftIndex;
+    public IReadOnlyList<string> Words { get; }
+    public IReadOnlyList<string> Descriptors { get; }
+    public int[] DescriptorOrder { get; }
+    public int[] DescriptorMatchIndices { get; }
+    public bool[] SolvedWords { get; }
+    public PlayAreaRect[] WordTiles { get; }
+    public PlayAreaRect[] DescriptorTiles { get; }
+    public int? ActiveWordIndex => _activeWordIndex;
+    public int SolvedCount => SolvedWords.Count(value => value);
 
-    public void SelectLeft(int index)
+    public override void Update(PuzzleUpdateContext context)
     {
-        if (IsCompleted || index < 0 || index >= Labels.Count)
+        if (IsCompleted)
         {
             return;
         }
 
-        _selectedLeftIndex = index;
-        StatusText = $"Route {Labels[index]} to the correct receiver.";
+        var touchedWord = GetTouchedTile(WordTiles, context.PlayerBounds);
+        if (touchedWord != _lastTouchedWordIndex)
+        {
+            _lastTouchedWordIndex = touchedWord;
+            if (touchedWord is int wordIndex && !SolvedWords[wordIndex])
+            {
+                _activeWordIndex = wordIndex;
+                StatusText = $"Carry \"{Words[wordIndex]}\" to its matching descriptor.";
+            }
+        }
+
+        var touchedDescriptor = GetTouchedTile(DescriptorTiles, context.PlayerBounds);
+        if (touchedDescriptor == _lastTouchedDescriptorIndex || touchedDescriptor is null || _activeWordIndex is null)
+        {
+            _lastTouchedDescriptorIndex = touchedDescriptor;
+            return;
+        }
+
+        _lastTouchedDescriptorIndex = touchedDescriptor;
+        if (DescriptorMatchIndices[_activeWordIndex.Value] == touchedDescriptor.Value)
+        {
+            SolvedWords[_activeWordIndex.Value] = true;
+            _activeWordIndex = null;
+            if (SolvedWords.All(value => value))
+            {
+                Complete("Every word found its correct descriptor.");
+                return;
+            }
+
+            StatusText = $"Match locked. {SolvedCount}/{SolvedWords.Length} pairs solved.";
+            return;
+        }
+
+        StatusText = $"\"{Descriptors[touchedDescriptor.Value]}\" does not match. Start from a word tile again.";
+        _activeWordIndex = null;
+    }
+
+    public void SelectLeft(int index)
+    {
+        if (IsCompleted || index < 0 || index >= Words.Count || SolvedWords[index])
+        {
+            return;
+        }
+
+        _activeWordIndex = index;
+        StatusText = $"Carry \"{Words[index]}\" to its matching descriptor.";
     }
 
     public void ConnectRight(int rightIndex)
     {
-        if (IsCompleted || _selectedLeftIndex is null || rightIndex < 0 || rightIndex >= Labels.Count)
+        if (IsCompleted || _activeWordIndex is null || rightIndex < 0 || rightIndex >= Descriptors.Count)
         {
             return;
         }
 
-        var leftIndex = _selectedLeftIndex.Value;
-        _selectedLeftIndex = null;
-        if (rightIndex != leftIndex)
+        if (DescriptorMatchIndices[_activeWordIndex.Value] == rightIndex)
         {
-            StatusText = "That receiver carries the wrong sigil.";
+            SolvedWords[_activeWordIndex.Value] = true;
+            _activeWordIndex = null;
+            if (SolvedWords.All(value => value))
+            {
+                Complete("Every word found its correct descriptor.");
+            }
+            else
+            {
+                StatusText = $"Match locked. {SolvedCount}/{SolvedWords.Length} pairs solved.";
+            }
+
             return;
         }
 
-        Connections[leftIndex] = rightIndex;
-        if (HasCrossing(leftIndex))
-        {
-            Connections[leftIndex] = null;
-            StatusText = "That path crosses another route. Rewire it differently.";
-            return;
-        }
-
-        if (Connections.All(connection => connection.HasValue))
-        {
-            Complete("All routes lock into a clean, non-crossing path.");
-            return;
-        }
-
-        StatusText = $"Routes stable: {Connections.Count(connection => connection.HasValue)}/{Connections.Length}";
+        StatusText = $"\"{Descriptors[rightIndex]}\" does not match. Start from a word tile again.";
+        _activeWordIndex = null;
     }
 
-    public IEnumerable<(PlayAreaPoint Start, PlayAreaPoint End)> GetLines()
+    private static int? GetTouchedTile(IReadOnlyList<PlayAreaRect> tiles, PlayAreaRect playerBounds)
     {
-        for (var index = 0; index < Connections.Length; index++)
+        for (var index = 0; index < tiles.Count; index++)
         {
-            if (Connections[index] is int rightIndex)
+            if (tiles[index].Intersects(playerBounds))
             {
-                yield return (LeftPoints[index], RightPoints[rightIndex]);
-            }
-        }
-    }
-
-    private bool HasCrossing(int latestLeft)
-    {
-        var latestRight = Connections[latestLeft]!.Value;
-        for (var index = 0; index < Connections.Length; index++)
-        {
-            if (index == latestLeft || Connections[index] is not int otherRight)
-            {
-                continue;
-            }
-
-            if ((index < latestLeft && otherRight > latestRight) || (index > latestLeft && otherRight < latestRight))
-            {
-                return true;
+                return index;
             }
         }
 
-        return false;
+        return null;
     }
 }
 
@@ -989,6 +1048,9 @@ public sealed class DelayedActivationSequencePuzzle : RoomPuzzle
     public bool IsWaitingForNextZone => _delayRemainingSeconds > 0d;
     public double HoldProgress => Math.Clamp(_holdSeconds / RequiredHoldSeconds, 0d, 1d);
     public int ActiveZoneIndex => Order[Math.Min(CurrentStepIndex, Order.Count - 1)];
+    public int? LockedZoneIndex => CurrentStepIndex == 0 ? null : Order[CurrentStepIndex - 1];
+
+    public bool IsZoneCompleted(int zoneIndex) => Order.Take(CurrentStepIndex).Contains(zoneIndex);
 
     public override void Update(PuzzleUpdateContext context)
     {
@@ -1030,7 +1092,7 @@ public sealed class DelayedActivationSequencePuzzle : RoomPuzzle
                 }
 
                 _delayRemainingSeconds = DelaySeconds;
-                StatusText = $"Zone {CurrentStepIndex} locked. Hold position until zone {CurrentStepIndex + 1} wakes.";
+                StatusText = $"Zone {LockedZoneIndex + 1} locked. Hold position until zone {ActiveZoneIndex + 1} wakes.";
             }
 
             return;
@@ -1076,6 +1138,7 @@ public sealed class DelayedActivationSequencePuzzle : RoomPuzzle
 public sealed class HarmonicPhasePuzzle : RoomPuzzle
 {
     private int? _lastTouchedNode;
+    private int? _pendingTone;
 
     public HarmonicPhasePuzzle(IReadOnlyList<PlayAreaRect> nodes, int[] frequencies, int modulus)
         : base('p', "Harmonic Phase Plates", "Step on the plates until every frequency resonates together. Each plate shifts itself and its neighbors.")
@@ -1089,6 +1152,7 @@ public sealed class HarmonicPhasePuzzle : RoomPuzzle
     public IReadOnlyList<PlayAreaRect> Nodes { get; }
     public int[] Frequencies { get; }
     public int Modulus { get; }
+    public int? LastActivatedNodeIndex { get; private set; }
 
     public override void Update(PuzzleUpdateContext context)
     {
@@ -1109,6 +1173,7 @@ public sealed class HarmonicPhasePuzzle : RoomPuzzle
             return;
         }
 
+        LastActivatedNodeIndex = touched.Value;
         ApplyPlateShift(touched.Value);
         if (Frequencies.All(value => value == Frequencies[0]))
         {
@@ -1137,6 +1202,14 @@ public sealed class HarmonicPhasePuzzle : RoomPuzzle
         Frequencies[index] = Wrap(Frequencies[index] + 2);
         Frequencies[(index - 1 + Frequencies.Length) % Frequencies.Length] = Wrap(Frequencies[(index - 1 + Frequencies.Length) % Frequencies.Length] + 1);
         Frequencies[(index + 1) % Frequencies.Length] = Wrap(Frequencies[(index + 1) % Frequencies.Length] + 1);
+        _pendingTone = Frequencies[index];
+    }
+
+    public int? ConsumePendingTone()
+    {
+        var tone = _pendingTone;
+        _pendingTone = null;
+        return tone;
     }
 
     private int Wrap(int value)
@@ -1147,7 +1220,7 @@ public sealed class HarmonicPhasePuzzle : RoomPuzzle
 
     private void UpdateStatus()
     {
-        StatusText = $"Frequencies: {string.Join(" | ", Frequencies)}";
+        StatusText = $"Active plate adds +2 to itself and +1 to adjacent plates. Current resonance: {string.Join(" | ", Frequencies)}";
     }
 }
 
@@ -1160,13 +1233,13 @@ public sealed class TemporalLockPuzzle : RoomPuzzle
         ["Eye", "Key", "Moon", "Flame", "Sun", "Wave", "Crown", "Star"],
     ];
 
-    public TemporalLockPuzzle(double[] speeds, int[] targetIndices, IReadOnlyList<string> clues)
+    public TemporalLockPuzzle(double[] speeds, int[] targetIndices, IReadOnlyList<string> clues, double[]? initialPositions = null)
         : base('q', "Multi-Layer Temporal Lock", "Stop each temporal ring on the sigil implied by the cryptic clues. No target window is shown.")
     {
         Speeds = speeds;
         TargetIndices = targetIndices;
         Clues = clues;
-        Positions = [0.4d, 2.1d, 5.3d];
+        Positions = initialPositions is { Length: 3 } ? initialPositions.ToArray() : [0.4d, 2.1d, 5.3d];
         IsStopped = new bool[3];
         Directions = [1, -1, 1];
         UpdateStatus();
@@ -1326,7 +1399,8 @@ public sealed class MemoryInterferencePuzzle : RoomPuzzle
         if (!string.Equals(expected, rune, StringComparison.Ordinal))
         {
             _entered.Clear();
-            StatusText = "Interference won that round. The true pattern resets.";
+            ElapsedSeconds = 0d;
+            StatusText = "Interference won that round. Watch the true pattern again from the start.";
             return;
         }
 
@@ -1416,6 +1490,7 @@ public sealed class DimensionalPatternShiftPuzzle : RoomPuzzle
     public double RevealDurationSeconds { get; }
     public double ElapsedSeconds { get; private set; }
     public bool IsPatternVisible => IsCompleted || ElapsedSeconds < RevealDurationSeconds;
+    public bool AcceptsInput => !IsCompleted && !IsPatternVisible;
 
     public override void Update(PuzzleUpdateContext context)
     {
@@ -1433,7 +1508,7 @@ public sealed class DimensionalPatternShiftPuzzle : RoomPuzzle
 
     public void Press(PlayerDirection direction)
     {
-        if (IsCompleted)
+        if (IsCompleted || IsPatternVisible)
         {
             return;
         }
@@ -1513,24 +1588,26 @@ public sealed class ConservationNetworkPuzzle : RoomPuzzle
 
 public sealed class WeightedEquilibriumPuzzle : WeightGridPuzzleBase
 {
-    public WeightedEquilibriumPuzzle(int gridSize, double boardOriginX, double boardOriginY, double cellSize, IReadOnlyList<WeightedBlockState> blocks, IReadOnlyList<WeightPadState> pads)
+    public WeightedEquilibriumPuzzle(int gridSize, double boardOriginX, double boardOriginY, double cellSize, IReadOnlyList<WeightedBlockState> blocks, IReadOnlyList<WeightPadState> pads, int minimumOccupiedPads)
         : base('w', "Weighted Equilibrium System", "Push the weights onto multiplier pads until the total equation balances at zero.", gridSize, boardOriginX, boardOriginY, cellSize, blocks, pads)
     {
+        MinimumOccupiedPads = Math.Max(2, minimumOccupiedPads);
         Evaluate();
     }
 
     public int CurrentEquation => Pads.Sum(GetPadContribution);
     public int OccupiedPads => Pads.Count(pad => Blocks.Any(block => block.CellX == pad.CellX && block.CellY == pad.CellY));
+    public int MinimumOccupiedPads { get; }
 
     protected override void Evaluate()
     {
-        if (CurrentEquation == 0 && OccupiedPads >= 2)
+        if (CurrentEquation == 0 && OccupiedPads >= MinimumOccupiedPads)
         {
             Complete("The equation balances in perfect equilibrium.");
             return;
         }
 
-        StatusText = $"Equation total: {CurrentEquation} (need 0)";
+        StatusText = $"Equation total: {CurrentEquation} (need 0 with at least {MinimumOccupiedPads} occupied pads)";
     }
 }
 
@@ -1677,6 +1754,9 @@ public sealed class KnotTopologyPuzzle : RoomPuzzle
         Strands = strands;
         Order = order;
         IllusionPairs = illusionPairs;
+        var verticalSpacing = strands.Count > 5 ? 104d : 130d;
+        LeftPoints = Enumerable.Range(0, strands.Count).Select(index => new PlayAreaPoint(220d, 180d + (index * verticalSpacing))).ToArray();
+        RightPoints = Enumerable.Range(0, strands.Count).Select(index => new PlayAreaPoint(860d, 180d + (index * verticalSpacing))).ToArray();
         UpdateStatus();
     }
 
@@ -1685,6 +1765,8 @@ public sealed class KnotTopologyPuzzle : RoomPuzzle
     public IReadOnlyList<(int A, int B)> IllusionPairs { get; }
     public int? SelectedIndex => _selectedIndex;
     public int RealCrossings => CountRealCrossings();
+    public PlayAreaPoint[] LeftPoints { get; }
+    public PlayAreaPoint[] RightPoints { get; }
 
     public void Select(int index)
     {
@@ -1716,9 +1798,7 @@ public sealed class KnotTopologyPuzzle : RoomPuzzle
     {
         for (var index = 0; index < Order.Length; index++)
         {
-            var start = new PlayAreaPoint(220d, 220d + (index * 130d));
-            var end = new PlayAreaPoint(860d, 220d + (Order[index] * 130d));
-            yield return (start, end, false);
+            yield return (LeftPoints[index], RightPoints[Order[index]], IsIllusionPair(index, Order[index]));
         }
     }
 
@@ -1779,9 +1859,10 @@ public sealed class RecursiveActivationSequencePuzzle : RoomPuzzle
 
     public IReadOnlyList<PlayAreaRect> Zones { get; }
     public List<int> CompletedOrder { get; }
-    public int CurrentZoneIndex => _remainingOrder.Peek();
-    public double CurrentRequiredHold => _zoneHoldDurations[CurrentZoneIndex];
+    public int CurrentZoneIndex => _remainingOrder.Count > 0 ? _remainingOrder.Peek() : -1;
+    public double CurrentRequiredHold => CurrentZoneIndex >= 0 ? _zoneHoldDurations[CurrentZoneIndex] : 1d;
     public double HoldProgress => Math.Clamp(_currentHoldSeconds / CurrentRequiredHold, 0d, 1d);
+    public bool IsZoneCompleted(int zoneIndex) => CompletedOrder.Contains(zoneIndex);
 
     public RecursiveZoneModifier GetModifierForZone(int zoneIndex) => _modifiers[zoneIndex];
 
@@ -1892,15 +1973,43 @@ public sealed class RecursiveActivationSequencePuzzle : RoomPuzzle
 
 public static class AdvancedPuzzleFactory
 {
-    private static readonly string[] LogicSymbols = ["Triangle", "Circle", "Square", "Spiral", "Crown", "Key", "Eye"];
+    private static readonly string[] LogicSymbols = ["Lantern", "Raven", "Crown", "Anchor", "Thorn", "Mirror", "Bell", "Bloom", "Spire", "Mask"];
     private static readonly string[] MemoryRunes = ["A", "B", "C", "D", "E"];
-    private static readonly string[] CrossingLabels = ["Sun", "Moon", "Key", "Eye"];
+    private static readonly (string Word, string Descriptor)[] WordDescriptorCorpus =
+    [
+        ("EMBER", "HOT"),
+        ("MOSS", "GREEN"),
+        ("GLASS", "FRAGILE"),
+        ("THORN", "SHARP"),
+        ("HONEY", "SWEET"),
+        ("STONE", "HEAVY"),
+        ("VELVET", "SOFT"),
+        ("INK", "DARK"),
+        ("SALT", "BRINY"),
+        ("FROST", "COLD"),
+        ("SPICE", "PUNGENT"),
+        ("AMBER", "GOLDEN"),
+        ("QUARTZ", "HARD"),
+        ("VIOLET", "PURPLE"),
+        ("IVORY", "PALE"),
+        ("CEDAR", "WOODY"),
+        ("THUNDER", "LOUD"),
+        ("VELVET", "LUXURIOUS"),
+        ("RUST", "CORRODED"),
+        ("ONYX", "BLACK"),
+        ("CINDER", "SMOKY"),
+        ("HARBOR", "SAFE"),
+    ];
     private static readonly (string Word, string Clue)[] CipherWords =
     [
         ("KEY", "What opens the hidden chamber?"),
         ("EYE", "What watches every corridor?"),
         ("ORB", "What hums at the heart of the maze?"),
         ("ARC", "What shape bridges the current?"),
+        ("GEM", "What prize glows inside the vault?"),
+        ("MAP", "What reveals a route without walking it?"),
+        ("SUN", "What burns without a wick?"),
+        ("OWL", "What sees in darkness?"),
     ];
 
     private static readonly (string[] Statements, int CorrectLeverIndex)[] ParadoxScenarios =
@@ -1908,6 +2017,11 @@ public static class AdvancedPuzzleFactory
         (["{0}: \"{1} lies.\"", "{1}: \"The left lever is false.\"", "{2}: \"Exactly one of us lies.\""], 1),
         (["{0}: \"{2} tells the truth.\"", "{1}: \"The right lever fails.\"", "{2}: \"{0} and I disagree.\""], 0),
         (["{0}: \"The center lever is safe.\"", "{1}: \"{0} lies.\"", "{2}: \"Only one of us tells the truth.\""], 2),
+        (["{0}: \"Either {1} lies or the center lever is false.\"", "{1}: \"{2} tells the truth.\"", "{2}: \"The right lever is safe only if {0} lies.\""], 2),
+        (["{0}: \"Exactly one of us speaks truly.\"", "{1}: \"The left lever fails.\"", "{2}: \"{1} lies.\""], 1),
+        (["{0}: \"If I lie, the right lever is safe.\"", "{1}: \"{0} tells the truth.\"", "{2}: \"The center lever fails.\""], 0),
+        (["{0}: \"If {1} speaks truly, the left lever fails.\"", "{1}: \"{2} lies exactly when the center lever is safe.\"", "{2}: \"The right lever is false and {0} is lying.\""], 1),
+        (["{0}: \"The true lever is not right, and {2} lies.\"", "{1}: \"{0} and I cannot both be truthful.\"", "{2}: \"If the center lever is false, then {1} tells the truth.\""], 0),
     ];
 
     public static RoomPuzzle Create(string seed, string runNonce, MazeRoomDefinition room, MazeDifficulty difficulty)
@@ -1943,7 +2057,7 @@ public static class AdvancedPuzzleFactory
         'v' => CreateFlowRedistribution(hash),
         'w' => CreateWeightedTrigger(hash),
         'x' => CreateBinaryShift(hash),
-        'y' => new CrossingPathPuzzle(CrossingLabels),
+        'y' => CreateWordDescriptorPath(hash),
         'z' => CreateDelayedActivation(hash),
         _ => throw new MazeSeedParseException($"Unknown medium puzzle type '{key}'."),
     };
@@ -1966,29 +2080,31 @@ public static class AdvancedPuzzleFactory
 
     private static PhaseRelayPuzzle CreatePhaseRelay(int hash)
     {
-        var count = 3 + (hash % 3);
+        var count = 4 + (hash % 2);
         var nodes = CreateRingNodes(hash, count, 112d, 250d, 320d);
-        var sequence = Shuffle(Enumerable.Range(0, count).ToList(), hash);
+        var sequence = CreateRelaySequence(hash, count, count + 2 + (hash % 2));
         return new PhaseRelayPuzzle(nodes, sequence, 2d);
     }
 
     private static SymbolLogicPuzzle CreateSymbolLogic(int hash)
     {
-        var symbols = Shuffle(LogicSymbols.Take(5).ToList(), hash).Take(3).ToArray();
+        var symbolCount = 4;
+        var symbols = Shuffle(LogicSymbols.ToList(), hash).Take(symbolCount).ToArray();
         var solution = Shuffle(symbols.ToList(), hash ^ 0x3311).ToArray();
-        var statements = BuildUniqueLogicClues(solution);
+        var statements = BuildUniqueLogicClues(solution, 4);
         return new SymbolLogicPuzzle(symbols, statements, solution);
     }
 
     private static FadingPathMemoryPuzzle CreateFadingPath(int hash)
     {
-        var path = CreateSelfAvoidingPath(hash, 6, 7 + (hash % 2));
-        return new FadingPathMemoryPuzzle(6, 210d, 210d, 110d, path, 2.4d);
+        var gridSize = 6;
+        var path = CreateSelfAvoidingPath(hash, gridSize, 8 + (hash % 3));
+        return new FadingPathMemoryPuzzle(gridSize, 210d, 210d, 110d, path, 2.05d);
     }
 
     private static SignalRotationNetworkPuzzle CreateSignalNetwork(int hash)
     {
-        const int gridSize = 4;
+        const int gridSize = 5;
         var masks = new int[gridSize * gridSize];
         var path = CreateMonotonicTilePath(hash, gridSize);
         for (var index = 0; index < path.Count - 1; index++)
@@ -1997,7 +2113,7 @@ public static class AdvancedPuzzleFactory
         }
 
         var state = hash;
-        for (var edge = 0; edge < 4; edge++)
+        for (var edge = 0; edge < 9; edge++)
         {
             state = NextState(state + edge);
             var from = state % masks.Length;
@@ -2016,7 +2132,12 @@ public static class AdvancedPuzzleFactory
         for (var index = 0; index < rotations.Length; index++)
         {
             state = NextState(state + index);
-            rotations[index] = 1 + (state % 3);
+            rotations[index] = state % 4;
+        }
+
+        if (rotations.All(rotation => rotation == 0))
+        {
+            rotations[^1] = 1;
         }
 
         return new SignalRotationNetworkPuzzle(gridSize, masks, rotations, 0, masks.Length - 1);
@@ -2024,30 +2145,35 @@ public static class AdvancedPuzzleFactory
 
     private static DirectionalEchoPuzzle CreateDirectionalEcho(int hash)
     {
-        var pattern = CreateDirectionPattern(hash, 6);
+        var pattern = CreateDirectionPattern(hash, 7 + (hash % 2));
         var kinds = new[]
         {
             DirectionTransformKind.Reverse,
             DirectionTransformKind.RotateClockwise,
+            DirectionTransformKind.RotateCounterClockwise,
             DirectionTransformKind.MirrorHorizontal,
+            DirectionTransformKind.RotateHalfTurn,
         };
         var kind = kinds[hash % kinds.Length];
         var solution = ApplyDirectionTransform(pattern, kind);
-        return new DirectionalEchoPuzzle(pattern, solution, kind, 2.25d);
+        return new DirectionalEchoPuzzle(pattern, solution, kind, 1.9d);
     }
 
     private static FlowRedistributionPuzzle CreateFlowRedistribution(int hash)
     {
-        var outputs = new[] { 8, 8, 8 };
+        var target = new[] { 9, 9, 9, 9 };
+        var outputs = target.ToArray();
         var valves = new[]
         {
-            new[] { 2, -1, -1 },
-            new[] { -1, 2, -1 },
-            new[] { -1, -1, 2 },
+            new[] { 3, -1, -1, -1 },
+            new[] { -1, 3, -1, -1 },
+            new[] { -1, -1, 3, -1 },
+            new[] { -1, -1, -1, 3 },
+            new[] { 2, -2, 1, -1 },
         };
 
         var state = hash;
-        for (var step = 0; step < 6; step++)
+        for (var step = 0; step < 8; step++)
         {
             state = NextState(state + step);
             _ = TryApplyDelta(outputs, valves[state % valves.Length]);
@@ -2065,9 +2191,10 @@ public static class AdvancedPuzzleFactory
     {
         var blocks = new[]
         {
-            new WeightedBlockState { Id = 0, Value = 2, CellX = 0, CellY = 4 },
-            new WeightedBlockState { Id = 1, Value = 3, CellX = 2, CellY = 4 },
-            new WeightedBlockState { Id = 2, Value = 4, CellX = 4, CellY = 4 },
+            new WeightedBlockState { Id = 0, Value = 2, CellX = 0, CellY = 5 },
+            new WeightedBlockState { Id = 1, Value = 3, CellX = 2, CellY = 5 },
+            new WeightedBlockState { Id = 2, Value = 5, CellX = 4, CellY = 5 },
+            new WeightedBlockState { Id = 3, Value = 7, CellX = 5, CellY = 4 },
         };
 
         var pads = new[]
@@ -2075,22 +2202,24 @@ public static class AdvancedPuzzleFactory
             new WeightPadState { CellX = 0, CellY = 1, Multiplier = 1, Label = "x1" },
             new WeightPadState { CellX = 2, CellY = 1, Multiplier = 2, Label = "x2" },
             new WeightPadState { CellX = 4, CellY = 1, Multiplier = 3, Label = "x3" },
+            new WeightPadState { CellX = 5, CellY = 2, Multiplier = 4, Label = "x4" },
         };
 
-        var ordering = Shuffle(new List<int> { 0, 1, 2 }, hash);
+        var ordering = Shuffle(new List<int> { 0, 1, 2, 3 }, hash);
         var target = (blocks[ordering[0]].Value * pads[0].Multiplier) +
                      (blocks[ordering[1]].Value * pads[1].Multiplier) +
-                     (blocks[ordering[2]].Value * pads[2].Multiplier);
+                     (blocks[ordering[2]].Value * pads[2].Multiplier) +
+                     (blocks[ordering[3]].Value * pads[3].Multiplier);
 
-        return new WeightedTriggerZonesPuzzle(5, 240d, 240d, 120d, blocks, pads, target);
+        return new WeightedTriggerZonesPuzzle(6, 222d, 222d, 96d, blocks, pads, target);
     }
 
     private static BinaryShiftPuzzle CreateBinaryShift(int hash)
     {
-        var target = CreateBitPattern(hash, 5);
+        var target = CreateBitPattern(hash, 6);
         var current = target.ToArray();
         var state = hash;
-        for (var step = 0; step < 4; step++)
+        for (var step = 0; step < 7; step++)
         {
             state = NextState(state + step);
             ApplyBinaryShiftScramble(current, state % 3);
@@ -2104,22 +2233,29 @@ public static class AdvancedPuzzleFactory
         return new BinaryShiftPuzzle(current, target);
     }
 
+    private static CrossingPathPuzzle CreateWordDescriptorPath(int hash)
+    {
+        var pairs = Shuffle(WordDescriptorCorpus.ToList(), hash).Take(5).ToArray();
+        var descriptorOrder = Shuffle(Enumerable.Range(0, pairs.Length).ToList(), hash ^ 0x71ab);
+        return new CrossingPathPuzzle(pairs, descriptorOrder);
+    }
+
     private static DelayedActivationSequencePuzzle CreateDelayedActivation(int hash)
     {
-        var zones = CreateZoneRing(hash, 4, 120d, 280d);
-        var order = Shuffle(Enumerable.Range(0, 4).ToList(), hash ^ 0x9f11);
-        return new DelayedActivationSequencePuzzle(zones, order, 0.72d, 0.95d);
+        var zones = CreateZoneRing(hash, 5, 108d, 300d);
+        var order = Shuffle(Enumerable.Range(0, 5).ToList(), hash ^ 0x9f11);
+        return new DelayedActivationSequencePuzzle(zones, order, 0.86d, 1.08d);
     }
 
     private static HarmonicPhasePuzzle CreateHarmonicPhase(int hash)
     {
-        var count = 3 + (hash % 2);
-        var modulus = 7;
-        var nodes = CreateRingNodes(hash, count, 128d, 240d, 300d);
+        var count = 5;
+        var modulus = 11;
+        var nodes = CreateRingNodes(hash, count, 118d, 230d, 300d);
         var targetFrequency = 1 + (hash % modulus);
         var frequencies = Enumerable.Repeat(targetFrequency, count).ToArray();
         var state = hash;
-        for (var step = 0; step < 5; step++)
+        for (var step = 0; step < 11; step++)
         {
             state = NextState(state + step);
             ApplyHarmonicShift(frequencies, state % count, modulus);
@@ -2144,25 +2280,34 @@ public static class AdvancedPuzzleFactory
 
         var clues = new[]
         {
-            $"Outer ring: stop on the sigil after {TemporalLockPuzzle.RingSymbolSets[0][(targetIndices[0] - 1 + 8) % 8]}.",
-            $"Middle ring: stop on the sigil opposite {TemporalLockPuzzle.RingSymbolSets[1][(targetIndices[1] + 4) % 8]}.",
-            $"Inner ring: stop on the sigil before {TemporalLockPuzzle.RingSymbolSets[2][(targetIndices[2] + 1) % 8]}.",
+            $"Outer ring: land two sigils after {TemporalLockPuzzle.RingSymbolSets[0][(targetIndices[0] - 2 + 8) % 8]}.",
+            $"Middle ring: stop opposite {TemporalLockPuzzle.RingSymbolSets[1][(targetIndices[1] + 4) % 8]}.",
+            $"Inner ring: land one sigil before {TemporalLockPuzzle.RingSymbolSets[2][(targetIndices[2] + 1) % 8]}.",
+            $"The outer ring must not stop on {TemporalLockPuzzle.RingSymbolSets[0][(targetIndices[0] + 3) % 8]}.",
+            $"The inner sigil is neither {TemporalLockPuzzle.RingSymbolSets[2][(targetIndices[2] + 2) % 8]} nor {TemporalLockPuzzle.RingSymbolSets[2][(targetIndices[2] + 5) % 8]}.",
         };
 
         var speeds = new[]
         {
-            0.95d + ((hash % 6) * 0.08d),
-            1.2d + (((hash / 11) % 6) * 0.09d),
-            1.45d + (((hash / 23) % 6) * 0.09d),
+            1.18d + ((hash % 6) * 0.1d),
+            1.5d + (((hash / 11) % 6) * 0.11d),
+            1.82d + (((hash / 23) % 6) * 0.11d),
         };
 
-        return new TemporalLockPuzzle(speeds, targetIndices, clues);
+        var initialPositions = new[]
+        {
+            0.35d + ((hash % 700) / 100d) % 8d,
+            1.4d + (((hash / 13) % 700) / 100d) % 8d,
+            3.1d + (((hash / 29) % 700) / 100d) % 8d,
+        };
+
+        return new TemporalLockPuzzle(speeds, targetIndices, clues, initialPositions);
     }
 
     private static LogicalParadoxPuzzle CreateLogicalParadox(int hash)
     {
         var scenario = ParadoxScenarios[hash % ParadoxScenarios.Length];
-        var names = Shuffle(new List<string> { "Astra", "Cinder", "Vale", "Morrow", "Nyx" }, hash).Take(3).ToArray();
+        var names = Shuffle(new List<string> { "Astra", "Cinder", "Vale", "Morrow", "Nyx", "Rook", "Sable" }, hash).Take(3).ToArray();
         var statements = scenario.Statements.Select(statement => string.Format(statement, names[0], names[1], names[2])).ToArray();
         var levers = new[] { "Left Lever", "Center Lever", "Right Lever" };
         return new LogicalParadoxPuzzle(names, statements, levers, scenario.CorrectLeverIndex);
@@ -2170,13 +2315,15 @@ public static class AdvancedPuzzleFactory
 
     private static MemoryInterferencePuzzle CreateMemoryInterference(int hash)
     {
-        var primary = CreateRuneSequence(hash, 7);
+        var primary = CreateRuneSequence(hash, 9 + (hash % 2));
         var secondary = primary.ToArray();
         secondary[(hash / 5) % secondary.Length] = MemoryRunes[(hash / 13) % MemoryRunes.Length];
         secondary[(hash / 17) % secondary.Length] = MemoryRunes[(hash / 29) % MemoryRunes.Length];
+        secondary[(hash / 31) % secondary.Length] = MemoryRunes[(hash / 37) % MemoryRunes.Length];
+        secondary[(hash / 41) % secondary.Length] = MemoryRunes[(hash / 43) % MemoryRunes.Length];
         var reverse = (hash & 1) == 0;
         var answer = reverse ? primary.Reverse().ToArray() : primary.ToArray();
-        return new MemoryInterferencePuzzle(primary, secondary, answer, reverse, 1.45d, 1.1d);
+        return new MemoryInterferencePuzzle(primary, secondary, answer, reverse, 1.15d, 0.82d);
     }
 
     private static RotationalCipherGridPuzzle CreateCipherGrid(int hash)
@@ -2194,7 +2341,7 @@ public static class AdvancedPuzzleFactory
         grid[4] = choice.Word[1];
         grid[5] = choice.Word[2];
 
-        for (var step = 0; step < 6; step++)
+        for (var step = 0; step < 11; step++)
         {
             state = NextState(state + step);
             if ((state & 1) == 0)
@@ -2217,33 +2364,37 @@ public static class AdvancedPuzzleFactory
 
     private static DimensionalPatternShiftPuzzle CreateDimensionalShift(int hash)
     {
-        var pattern = CreateDirectionPattern(hash, 7);
-        var ruleIndex = hash % 4;
+        var pattern = CreateDirectionPattern(hash, 9 + (hash % 2));
+        var ruleIndex = hash % 5;
         var (answer, description) = ruleIndex switch
         {
             0 => (ApplyDirectionTransform(pattern, DirectionTransformKind.RotateHalfTurn), "Invert the pattern across the axis."),
             1 => (ApplyDirectionTransform(pattern, DirectionTransformKind.MirrorHorizontal), "Reflect the pattern through the mirror axis."),
             2 => (ApplyDirectionTransform(pattern, DirectionTransformKind.RotateCounterClockwise), "Rotate the pattern 90 degrees counterclockwise."),
-            _ => (ApplyDirectionTransform(pattern, DirectionTransformKind.Reverse), "The first becomes the last; answer in reverse."),
+            3 => (ApplyCompositeDirectionTransform(pattern, [DirectionTransformKind.Reverse, DirectionTransformKind.RotateClockwise]), "Reverse the pattern, then rotate every direction clockwise."),
+            _ => (ApplyCompositeDirectionTransform(pattern, [DirectionTransformKind.MirrorHorizontal, DirectionTransformKind.RotateHalfTurn]), "Mirror the pattern, then invert it across a half turn."),
         };
 
-        return new DimensionalPatternShiftPuzzle(pattern, answer, description, 1.55d);
+        return new DimensionalPatternShiftPuzzle(pattern, answer, description, 1.18d);
     }
 
     private static ConservationNetworkPuzzle CreateConservationNetwork(int hash)
     {
-        var target = new[] { 5, 7, 9 };
+        var target = new[] { 4, 6, 8, 10, 12 };
         var outputs = target.ToArray();
         var valves = new[]
         {
-            new[] { 3, -2, -1 },
-            new[] { -2, 3, -1 },
-            new[] { -1, -2, 3 },
-            new[] { 2, -3, 1 },
+            new[] { 3, -2, -1, 0, 0 },
+            new[] { -2, 3, -1, 0, 0 },
+            new[] { -1, -1, 3, -1, 0 },
+            new[] { 0, -2, 1, 1, 0 },
+            new[] { 2, -3, 0, 1, 0 },
+            new[] { 0, 1, -2, -1, 2 },
+            new[] { -1, 0, 1, -2, 2 },
         };
 
         var state = hash;
-        for (var step = 0; step < 6; step++)
+        for (var step = 0; step < 12; step++)
         {
             state = NextState(state + step);
             _ = TryApplyDelta(outputs, valves[state % valves.Length]);
@@ -2261,29 +2412,33 @@ public static class AdvancedPuzzleFactory
     {
         var blocks = new[]
         {
-            new WeightedBlockState { Id = 0, Value = 2, CellX = 0, CellY = 4 },
-            new WeightedBlockState { Id = 1, Value = 4, CellX = 2, CellY = 4 },
-            new WeightedBlockState { Id = 2, Value = 6, CellX = 4, CellY = 4 },
+            new WeightedBlockState { Id = 0, Value = 2, CellX = 0, CellY = 6 },
+            new WeightedBlockState { Id = 1, Value = 4, CellX = 2, CellY = 6 },
+            new WeightedBlockState { Id = 2, Value = 5, CellX = 4, CellY = 6 },
+            new WeightedBlockState { Id = 3, Value = 7, CellX = 6, CellY = 5 },
+            new WeightedBlockState { Id = 4, Value = 9, CellX = 5, CellY = 6 },
         };
 
         var pads = new[]
         {
             new WeightPadState { CellX = 0, CellY = 1, Multiplier = 2, Label = "x2" },
             new WeightPadState { CellX = 2, CellY = 1, Multiplier = -1, Label = "x-1" },
-            new WeightPadState { CellX = 4, CellY = 1, Multiplier = -1, Label = "x-1" },
-            new WeightPadState { CellX = 2, CellY = 2, Multiplier = 1, Label = "x1" },
+            new WeightPadState { CellX = 4, CellY = 1, Multiplier = 3, Label = "x3" },
+            new WeightPadState { CellX = 1, CellY = 2, Multiplier = -2, Label = "x-2" },
+            new WeightPadState { CellX = 5, CellY = 2, Multiplier = 1, Label = "x1" },
+            new WeightPadState { CellX = 6, CellY = 3, Multiplier = -3, Label = "x-3" },
         };
 
-        return new WeightedEquilibriumPuzzle(5, 240d, 240d, 120d, blocks, pads);
+        return new WeightedEquilibriumPuzzle(7, 174d, 174d, 108d, blocks, pads, 4);
     }
 
     private static BinaryTransformationPuzzle CreateBinaryTransformation(int hash)
     {
-        var target = CreateBitPattern(hash, 5);
+        var target = CreateBitPattern(hash, 7);
         var current = target.ToArray();
-        var xorMask = 0b10101 ^ ((hash >> 3) & 0b11111);
+        var xorMask = 0b1010110 ^ ((hash >> 3) & 0b1111111);
         var state = hash;
-        for (var step = 0; step < 5; step++)
+        for (var step = 0; step < 10; step++)
         {
             state = NextState(state + step);
             ApplyBinaryTransformationScramble(current, state % 5, xorMask);
@@ -2294,17 +2449,17 @@ public static class AdvancedPuzzleFactory
             ApplyBinaryTransformationScramble(current, 3, xorMask);
         }
 
-        return new BinaryTransformationPuzzle(current, target, 6, xorMask, "Mirror before you invert.");
+        return new BinaryTransformationPuzzle(current, target, 6, xorMask, "Mirror before you invert, then check the masked bits.");
     }
 
     private static KnotTopologyPuzzle CreateKnotTopology(int hash)
     {
-        var strands = new[] { "Moon", "Key", "Eye", "Wave", "Flame" };
-        var target = new[] { 0, 2, 1, 3, 4 };
-        var illusionPairs = new List<(int, int)> { (1, 2) };
+        var strands = new[] { "Ash", "Bell", "Crown", "Fox", "Reed", "Vale", "Wren" };
+        var target = new[] { 0, 2, 1, 4, 3, 6, 5 };
+        var illusionPairs = new List<(int, int)> { (1, 2), (3, 4), (5, 6) };
         var order = target.ToArray();
         var state = hash;
-        for (var step = 0; step < 5; step++)
+        for (var step = 0; step < 12; step++)
         {
             state = NextState(state + step);
             var a = state % order.Length;
@@ -2317,21 +2472,21 @@ public static class AdvancedPuzzleFactory
 
     private static RecursiveActivationSequencePuzzle CreateRecursiveSequence(int hash)
     {
-        var zones = CreateZoneRing(hash, 4, 120d, 300d);
-        var order = Shuffle(Enumerable.Range(0, 4).ToList(), hash);
+        var zones = CreateZoneRing(hash, 6, 96d, 336d);
+        var order = Shuffle(Enumerable.Range(0, 6).ToList(), hash);
         var modifierValues = Enum.GetValues<RecursiveZoneModifier>().ToArray();
         var modifiers = new Dictionary<int, RecursiveZoneModifier>();
         var state = hash;
-        for (var zone = 0; zone < 4; zone++)
+        for (var zone = 0; zone < zones.Count; zone++)
         {
             state = NextState(state + zone);
             modifiers[zone] = modifierValues[state % modifierValues.Length];
         }
 
-        return new RecursiveActivationSequencePuzzle(zones, order, modifiers, 0.9d);
+        return new RecursiveActivationSequencePuzzle(zones, order, modifiers, 1.18d);
     }
 
-    private static IReadOnlyList<string> BuildUniqueLogicClues(IReadOnlyList<string> solution)
+    private static IReadOnlyList<string> BuildUniqueLogicClues(IReadOnlyList<string> solution, int clueCount)
     {
         var permutations = GetPermutations(solution.ToArray(), 0).Select(items => items.ToArray()).ToArray();
         var candidates = new List<(string Text, Func<string[], bool> Matches)>();
@@ -2340,7 +2495,11 @@ public static class AdvancedPuzzleFactory
         {
             candidates.Add(($"{symbol} is not first.", order => order[0] != symbol));
             candidates.Add(($"{symbol} is not last.", order => order[^1] != symbol));
-            candidates.Add(($"{symbol} stands in the middle.", order => order[1] == symbol));
+            for (var position = 0; position < solution.Count; position++)
+            {
+                var capturedPosition = position;
+                candidates.Add(($"{symbol} stands in position {capturedPosition + 1}.", order => order[capturedPosition] == symbol));
+            }
         }
 
         for (var left = 0; left < solution.Count; left++)
@@ -2355,32 +2514,53 @@ public static class AdvancedPuzzleFactory
                 var first = solution[left];
                 var second = solution[right];
                 candidates.Add(($"{first} comes before {second}.", order => Array.IndexOf(order, first) < Array.IndexOf(order, second)));
+                candidates.Add(($"{first} comes immediately before {second}.", order => Array.IndexOf(order, first) + 1 == Array.IndexOf(order, second)));
+                candidates.Add(($"{first} is adjacent to {second}.", order => Math.Abs(Array.IndexOf(order, first) - Array.IndexOf(order, second)) == 1));
                 candidates.Add(($"{first} is not adjacent to {second}.", order => Math.Abs(Array.IndexOf(order, first) - Array.IndexOf(order, second)) > 1));
             }
         }
 
-        for (var first = 0; first < candidates.Count - 2; first++)
-        {
-            for (var second = first + 1; second < candidates.Count - 1; second++)
-            {
-                for (var third = second + 1; third < candidates.Count; third++)
-                {
-                    var trio = new[] { candidates[first], candidates[second], candidates[third] };
-                    if (trio.Any(clue => !clue.Matches(solution.ToArray())))
-                    {
-                        continue;
-                    }
+        return FindUniqueClueSet(solution, permutations, candidates, clueCount) ??
+               Enumerable.Range(0, Math.Min(clueCount, solution.Count - 1))
+                   .Select(index => $"{solution[index]} comes before {solution[index + 1]}.")
+                   .ToArray();
+    }
 
-                    var matchingPermutations = permutations.Count(order => trio.All(clue => clue.Matches(order)));
-                    if (matchingPermutations == 1)
-                    {
-                        return trio.Select(clue => clue.Text).ToArray();
-                    }
+    private static IReadOnlyList<string>? FindUniqueClueSet(
+        IReadOnlyList<string> solution,
+        IReadOnlyList<string[]> permutations,
+        IReadOnlyList<(string Text, Func<string[], bool> Matches)> candidates,
+        int clueCount)
+    {
+        var current = new List<(string Text, Func<string[], bool> Matches)>(clueCount);
+
+        bool Search(int startIndex)
+        {
+            if (current.Count == clueCount)
+            {
+                if (current.Any(clue => !clue.Matches(solution.ToArray())))
+                {
+                    return false;
                 }
+
+                return permutations.Count(order => current.All(clue => clue.Matches(order))) == 1;
             }
+
+            for (var index = startIndex; index <= candidates.Count - (clueCount - current.Count); index++)
+            {
+                current.Add(candidates[index]);
+                if (Search(index + 1))
+                {
+                    return true;
+                }
+
+                current.RemoveAt(current.Count - 1);
+            }
+
+            return false;
         }
 
-        return [$"{solution[0]} comes before {solution[1]}.", $"{solution[1]} comes before {solution[2]}.", $"{solution[2]} is not first."];
+        return Search(0) ? current.Select(clue => clue.Text).ToArray() : null;
     }
 
     private static IEnumerable<T[]> GetPermutations<T>(T[] items, int index)
@@ -2498,6 +2678,38 @@ public static class AdvancedPuzzleFactory
         return path;
     }
 
+    private static IReadOnlyList<int> CreateRelaySequence(int hash, int nodeCount, int length)
+    {
+        var sequence = new List<int>(length);
+        var state = hash;
+        int? previous = null;
+        var seen = new HashSet<int>();
+
+        while (sequence.Count < length)
+        {
+            state = NextState(state + sequence.Count + seen.Count);
+            var candidates = Enumerable.Range(0, nodeCount)
+                .Where(index => previous is null || index != previous.Value)
+                .ToList();
+
+            if ((length - sequence.Count) <= (nodeCount - seen.Count))
+            {
+                var unseen = candidates.Where(index => !seen.Contains(index)).ToList();
+                if (unseen.Count > 0)
+                {
+                    candidates = unseen;
+                }
+            }
+
+            var selected = candidates[state % candidates.Count];
+            sequence.Add(selected);
+            seen.Add(selected);
+            previous = selected;
+        }
+
+        return sequence;
+    }
+
     private static void AddPipeConnection(int[] masks, int from, int to, int gridSize)
     {
         var difference = to - from;
@@ -2528,10 +2740,26 @@ public static class AdvancedPuzzleFactory
         var directions = new List<PlayerDirection>(length);
         var state = hash;
         var available = Enum.GetValues<PlayerDirection>();
+        PlayerDirection? previous = null;
+        var distinct = new HashSet<PlayerDirection>();
+        var minimumDistinct = Math.Min(available.Length, length >= 8 ? 4 : 3);
         for (var index = 0; index < length; index++)
         {
-            state = NextState(state + index);
-            directions.Add(available[state % available.Length]);
+            state = NextState(state + index + distinct.Count);
+            var candidates = available.Where(direction => previous is null || direction != previous.Value).ToArray();
+            if ((length - index) <= (minimumDistinct - distinct.Count))
+            {
+                var unseen = candidates.Where(direction => !distinct.Contains(direction)).ToArray();
+                if (unseen.Length > 0)
+                {
+                    candidates = unseen;
+                }
+            }
+
+            var selected = candidates[state % candidates.Length];
+            directions.Add(selected);
+            distinct.Add(selected);
+            previous = selected;
         }
 
         return directions;
@@ -2576,6 +2804,17 @@ public static class AdvancedPuzzleFactory
         };
 
         return transformed.ToArray();
+    }
+
+    private static IReadOnlyList<PlayerDirection> ApplyCompositeDirectionTransform(IReadOnlyList<PlayerDirection> pattern, IReadOnlyList<DirectionTransformKind> kinds)
+    {
+        IReadOnlyList<PlayerDirection> transformed = pattern.ToArray();
+        foreach (var kind in kinds)
+        {
+            transformed = ApplyDirectionTransform(transformed, kind);
+        }
+
+        return transformed;
     }
 
     private static bool TryApplyDelta(int[] outputs, int[] delta)
@@ -2700,10 +2939,26 @@ public static class AdvancedPuzzleFactory
     {
         var sequence = new List<string>(length);
         var state = hash;
+        string? previous = null;
+        var distinct = new HashSet<string>(StringComparer.Ordinal);
+        var minimumDistinct = Math.Min(MemoryRunes.Length, length >= 8 ? 5 : 4);
         for (var index = 0; index < length; index++)
         {
-            state = NextState(state + index);
-            sequence.Add(MemoryRunes[state % MemoryRunes.Length]);
+            state = NextState(state + index + distinct.Count);
+            var candidates = MemoryRunes.Where(rune => !string.Equals(rune, previous, StringComparison.Ordinal)).ToArray();
+            if ((length - index) <= (minimumDistinct - distinct.Count))
+            {
+                var unseen = candidates.Where(rune => !distinct.Contains(rune)).ToArray();
+                if (unseen.Length > 0)
+                {
+                    candidates = unseen;
+                }
+            }
+
+            var selected = candidates[state % candidates.Length];
+            sequence.Add(selected);
+            distinct.Add(selected);
+            previous = selected;
         }
 
         return sequence;

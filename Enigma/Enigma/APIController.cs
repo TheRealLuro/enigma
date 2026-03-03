@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Globalization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +23,7 @@ public class APIController : ControllerBase
     }
 
     private static string Esc(string value) => Uri.EscapeDataString(value ?? string.Empty);
+    private static string FormatBackendTime(TimeOnly value) => value.ToString("HH:mm:ss:fff", CultureInfo.InvariantCulture);
 
     private HttpClient CreateClient()
     {
@@ -194,7 +196,7 @@ public class APIController : ControllerBase
         using var client = CreateClient();
         var founder = RequireAuthenticatedUsername();
         using var response = await client.PostAsync(
-            $"database/maps/add?map_name={Esc(request.Name)}&seed={Esc(request.Seed)}&size={request.Size}&difficulty={Esc(request.Difficulty)}&founder={Esc(founder)}&time_completed={Esc(request.Time.ToString())}&first_rating={request.Rating}",
+            $"database/maps/add?map_name={Esc(request.Name)}&seed={Esc(request.Seed)}&size={request.Size}&difficulty={Esc(request.Difficulty)}&founder={Esc(founder)}&time_completed={Esc(FormatBackendTime(request.Time))}&first_rating={request.Rating}",
             null);
         return await RelayAsync(response);
     }
@@ -206,7 +208,7 @@ public class APIController : ControllerBase
         using var client = CreateClient();
         var username = RequireAuthenticatedUsername();
         using var response = await client.PutAsync(
-            $"database/maps/update_map?seed={Esc(request.Seed)}&username={Esc(username)}&completion_time={Esc(request.Time.ToString())}&rating={request.Rating}",
+            $"database/maps/update_map?seed={Esc(request.Seed)}&username={Esc(username)}&completion_time={Esc(FormatBackendTime(request.Time))}&rating={request.Rating}",
             null);
         return await RelayAsync(response);
     }
@@ -416,7 +418,8 @@ public class APIController : ControllerBase
     public async Task<IActionResult> GetItemShop()
     {
         using var client = CreateClient();
-        using var response = await client.GetAsync("database/merchant/items");
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.GetAsync($"database/merchant/items?username={Esc(username)}");
         return await RelayAsync(response);
     }
 
@@ -484,6 +487,195 @@ public class APIController : ControllerBase
         using var response = await client.PostAsync(
             $"database/maps/recycle?username={Esc(username)}&map_name={Esc(request.MapName)}",
             null);
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpGet("multiplayer/puzzles")]
+    public async Task<IActionResult> GetMultiplayerPuzzleCatalog()
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync("database/multiplayer/puzzle_catalog");
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/create")]
+    public async Task<IActionResult> CreateMultiplayerSession([FromBody] CreateMultiplayerSessionRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/create", new
+        {
+            username,
+            seed = request.Seed,
+            map_name = request.MapName,
+            source = request.Source,
+            invited_friends = request.InvitedFriends,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/invite")]
+    public async Task<IActionResult> InviteToMultiplayerSession([FromBody] MultiplayerInviteRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/invite", new
+        {
+            username,
+            session_id = request.SessionId,
+            friend_username = request.FriendUsername,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/join")]
+    public async Task<IActionResult> JoinMultiplayerSession([FromBody] MultiplayerSessionRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/join", new
+        {
+            username,
+            session_id = request.SessionId,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/ready")]
+    public async Task<IActionResult> SetMultiplayerReady([FromBody] MultiplayerReadyRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/ready", new
+        {
+            username,
+            session_id = request.SessionId,
+            ready = request.Ready,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpGet("multiplayer/session")]
+    public async Task<IActionResult> GetMultiplayerSession([FromQuery] string sessionId)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.GetAsync($"database/multiplayer/session?session_id={Esc(sessionId)}&username={Esc(username)}");
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPut("multiplayer/session/state")]
+    public async Task<IActionResult> UpdateMultiplayerState([FromBody] MultiplayerStateRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PutAsJsonAsync("database/multiplayer/session/state", new
+        {
+            username,
+            session_id = request.SessionId,
+            room_x = request.RoomX,
+            room_y = request.RoomY,
+            position = new
+            {
+                x = request.Position.X,
+                y = request.Position.Y,
+                width = request.Position.Width,
+                height = request.Position.Height,
+                x_percent = request.Position.XPercent,
+                y_percent = request.Position.YPercent,
+            },
+            facing = request.Facing,
+            is_on_black_hole = request.IsOnBlackHole,
+            gold_collected = request.GoldCollected,
+            puzzle_solved = request.PuzzleSolved,
+            reward_pickup_collected = request.RewardPickupCollected,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/room/move")]
+    public async Task<IActionResult> MoveMultiplayerRoom([FromBody] MultiplayerMoveRoomRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/room/move", new
+        {
+            username,
+            session_id = request.SessionId,
+            target_room_x = request.TargetRoomX,
+            target_room_y = request.TargetRoomY,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/puzzle/action")]
+    public async Task<IActionResult> MultiplayerPuzzleAction([FromBody] MultiplayerPuzzleActionRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        object args = request.Args.ValueKind == JsonValueKind.Undefined
+            ? new Dictionary<string, object?>()
+            : request.Args;
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/puzzle_action", new
+        {
+            username,
+            session_id = request.SessionId,
+            action = request.Action,
+            args,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/finish")]
+    public async Task<IActionResult> FinishMultiplayerSession([FromBody] MultiplayerSessionRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/finish", new
+        {
+            username,
+            session_id = request.SessionId,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/leave")]
+    public async Task<IActionResult> LeaveMultiplayerSession([FromBody] MultiplayerLeaveRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/leave", new
+        {
+            username,
+            session_id = request.SessionId,
+            reason = request.Reason,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("multiplayer/session/sync-saved-map")]
+    public async Task<IActionResult> SyncSavedMultiplayerMap([FromBody] MultiplayerSyncSavedMapRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/multiplayer/session/sync_saved_map", new
+        {
+            username,
+            session_id = request.SessionId,
+            map_name = request.MapName,
+        });
         return await RelayAsync(response);
     }
 }
@@ -584,6 +776,80 @@ public sealed class PurchaseItemRequest
 {
     public string ItemId { get; set; } = string.Empty;
     public int Quantity { get; set; } = 1;
+}
+
+public sealed class CreateMultiplayerSessionRequest
+{
+    public string Seed { get; set; } = string.Empty;
+    public string? MapName { get; set; }
+    public string Source { get; set; } = "new";
+    public List<string> InvitedFriends { get; set; } = [];
+}
+
+public sealed class MultiplayerInviteRequest
+{
+    public string SessionId { get; set; } = string.Empty;
+    public string FriendUsername { get; set; } = string.Empty;
+}
+
+public sealed class MultiplayerSessionRequest
+{
+    public string SessionId { get; set; } = string.Empty;
+}
+
+public sealed class MultiplayerReadyRequest
+{
+    public string SessionId { get; set; } = string.Empty;
+    public bool Ready { get; set; } = true;
+}
+
+public sealed class MultiplayerPositionRequest
+{
+    public double X { get; set; }
+    public double Y { get; set; }
+    public double Width { get; set; } = 8;
+    public double Height { get; set; } = 8;
+    public double XPercent { get; set; } = 50;
+    public double YPercent { get; set; } = 50;
+}
+
+public sealed class MultiplayerStateRequest
+{
+    public string SessionId { get; set; } = string.Empty;
+    public int RoomX { get; set; }
+    public int RoomY { get; set; }
+    public MultiplayerPositionRequest Position { get; set; } = new();
+    public string Facing { get; set; } = "Down";
+    public bool IsOnBlackHole { get; set; }
+    public int GoldCollected { get; set; }
+    public bool PuzzleSolved { get; set; }
+    public bool RewardPickupCollected { get; set; }
+}
+
+public sealed class MultiplayerMoveRoomRequest
+{
+    public string SessionId { get; set; } = string.Empty;
+    public int TargetRoomX { get; set; }
+    public int TargetRoomY { get; set; }
+}
+
+public sealed class MultiplayerPuzzleActionRequest
+{
+    public string SessionId { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public JsonElement Args { get; set; }
+}
+
+public sealed class MultiplayerLeaveRequest
+{
+    public string SessionId { get; set; } = string.Empty;
+    public string Reason { get; set; } = "left_session";
+}
+
+public sealed class MultiplayerSyncSavedMapRequest
+{
+    public string SessionId { get; set; } = string.Empty;
+    public string? MapName { get; set; }
 }
 
 public sealed class MarketplaceAddRequest

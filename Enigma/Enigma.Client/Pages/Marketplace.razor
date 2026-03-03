@@ -57,159 +57,202 @@ else
             <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
         }
 
-        <div class="marketplace-top-grid">
-            <section class="panel marketplace-sell-panel">
-                <div class="panel-heading">
-                    <div>
-                        <span class="profile-eyebrow">Sell</span>
-                        <h2>List a Map</h2>
-                    </div>
-                    <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="LoadMarketplaceAsync">
-                        @(IsLoading ? "Refreshing..." : "Refresh")
-                    </button>
-                </div>
-
-                @if (AvailableOwnedMaps.Count == 0)
-                {
-                    <div class="empty-state-inline">You do not have any unlisted owned maps available for sale.</div>
-                }
-                else
-                {
-                    <EditForm FormName="MarketplaceSellForm" Model="SellRequest" OnValidSubmit="ListMapAsync" class="marketplace-sell-form">
-                        <DataAnnotationsValidator />
-
-                        <div>
-                            <label class="form-label">Owned Map</label>
-                            <InputSelect class="form-control" @bind-Value="SellRequest.MapName">
-                                @foreach (var map in AvailableOwnedMaps)
-                                {
-                                    <option value="@map.MapName">@map.MapName</option>
-                                }
-                            </InputSelect>
-                        </div>
-
-                        <div>
-                            <label class="form-label">Listing Price</label>
-                            <InputNumber class="form-control" @bind-Value="SellRequest.Price" />
-                            <ValidationMessage For="() => SellRequest.Price" />
-                        </div>
-
-                        <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">
-                            @(IsActionBusy ? "Listing..." : "List Map")
-                        </button>
-                    </EditForm>
-                }
-            </section>
-
-            <section class="panel marketplace-info-panel">
-                <div class="panel-heading">
-                    <div>
-                        <span class="profile-eyebrow">Market</span>
-                        <h2>How It Works</h2>
-                    </div>
-                </div>
-                <div class="marketplace-bullet-list">
-                    <div>Listings use the map marketplace APIs and refresh live from the backend.</div>
-                    <div>Buying transfers ownership, updates the seller payout, and moves the map into your collection.</div>
-                    <div>The item shop uses the same secured session flow as the rest of the app and updates your inventory immediately.</div>
-                </div>
-            </section>
+        <div class="profile-tabbar marketplace-tabbar" data-tour-id="marketplace-tabs">
+            <button class="@(GetMarketplaceTabClass(MapShopTab))" type="button" @onclick='@(() => SetActiveMarketplaceTab(MapShopTab))'>Map Shop</button>
+            <button class="@(GetMarketplaceTabClass(ItemShopTab))" type="button" @onclick='@(() => SetActiveMarketplaceTab(ItemShopTab))'>Item Shop</button>
         </div>
 
-        <section class="panel marketplace-shop-panel" data-tour-id="marketplace-shop">
-            <div class="panel-heading maps-heading">
-                <div>
-                    <span class="profile-eyebrow">Item Shop</span>
-                    <h2>Daily Merchant Stock</h2>
-                </div>
-                <span class="section-count">@ShopItems.Count</span>
+        @if (ActiveMarketplaceTab == MapShopTab)
+        {
+            <div class="marketplace-top-grid">
+                <section class="panel marketplace-sell-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Map Shop</span>
+                            <h2>List a Map</h2>
+                        </div>
+                        <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="LoadMarketplaceAsync">
+                            @(IsLoading ? "Refreshing..." : "Refresh")
+                        </button>
+                    </div>
+
+                    @if (AvailableOwnedMaps.Count == 0)
+                    {
+                        <div class="empty-state-inline">You do not have any unlisted owned maps available for sale.</div>
+                    }
+                    else
+                    {
+                        <EditForm FormName="MarketplaceSellForm" Model="SellRequest" OnValidSubmit="ListMapAsync" class="marketplace-sell-form">
+                            <DataAnnotationsValidator />
+
+                            <div>
+                                <label class="form-label">Owned Map</label>
+                                <InputSelect class="form-control" @bind-Value="SellRequest.MapName">
+                                    @foreach (var map in AvailableOwnedMaps)
+                                    {
+                                        <option value="@map.MapName">@map.MapName</option>
+                                    }
+                                </InputSelect>
+                            </div>
+
+                            <div>
+                                <label class="form-label">Listing Price</label>
+                                <InputNumber class="form-control" @bind-Value="SellRequest.Price" />
+                                <ValidationMessage For="() => SellRequest.Price" />
+                            </div>
+
+                            <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">
+                                @(IsActionBusy ? "Listing..." : "List Map")
+                            </button>
+                        </EditForm>
+                    }
+                </section>
+
+                <section class="panel marketplace-info-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Map Shop</span>
+                            <h2>How It Works</h2>
+                        </div>
+                    </div>
+                    <div class="marketplace-bullet-list">
+                        <div>Listings refresh live from the backend marketplace APIs.</div>
+                        <div>Buying transfers ownership, the buyer pays full price, the seller receives 90%, and Enigma Bank receives 10%.</div>
+                        <div>Use this section when you want to trade mazes, not items.</div>
+                    </div>
+                </section>
             </div>
 
-            @if (ShopItems.Count == 0)
+            @if (IsLoading)
             {
-                <div class="empty-state-inline">No item shop stock was returned.</div>
+                <div class="card enigma-game-message">
+                    <div class="loader"></div>
+                    <p>Refreshing listings...</p>
+                </div>
+            }
+            else if (Listings.Count == 0)
+            {
+                <section class="panel leaderboard-empty-panel">
+                    <h2>No active listings</h2>
+                    <p>The marketplace is empty right now.</p>
+                </section>
             }
             else
             {
-                <div class="catalog-card-grid marketplace-shop-grid">
-                    @foreach (var item in ShopItems.OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase))
+                <section class="catalog-card-grid marketplace-grid">
+                    @foreach (var listing in Listings)
                     {
-                        <article class="catalog-card marketplace-item-card">
+                        <article class="catalog-card marketplace-card">
+                            <MapImageFrame ImageUrl="@listing.MapImage" AltText="@($"{listing.MapName} artwork")" FallbackText="@listing.MapName" Class="poster" />
+
                             <div class="catalog-card-body">
-                                <span class="catalog-card-kicker">@item.Rarity @item.SlotKind</span>
-                                <h3>@item.Name</h3>
-                                <p class="catalog-card-subline">@item.Description</p>
-                                <strong class="catalog-card-price">@item.Price.ToString("N0") MN</strong>
+                                <span class="catalog-card-kicker">Listed by @listing.Seller</span>
+                                <h3>@listing.MapName</h3>
+                                <p>@FormatThemeLabel(listing.Theme) | Listed @listing.ListedAtDisplay</p>
+
+                                <strong class="catalog-card-price">@listing.Price.ToString("N0") MN</strong>
+
                                 <div class="catalog-card-meta">
-                                    <span class="catalog-card-meta-pill">Stock @item.Stock</span>
-                                    <span class="catalog-card-meta-pill">Owned @GetOwnedCount(item.ItemId)</span>
-                                    <span class="catalog-card-meta-pill">@item.Kind</span>
-                                    <span class="catalog-card-meta-pill">Max @item.MaxPerRun</span>
+                                    <span>Value @listing.Value.ToString("N0")</span>
+                                    <span>Size @listing.Size x @listing.Size</span>
+                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(listing.Difficulty)">@listing.Difficulty</span>
                                 </div>
-                                <button class="btn btn-primary" type="button" disabled="@(!CanPurchase(item) || IsActionBusy)" @onclick="() => PurchaseItemAsync(item)">
-                                    @GetPurchaseLabel(item)
-                                </button>
+
+                                <div class="marketplace-card-footer">
+                                    <button class="inline-link-button" type="button" @onclick="() => OpenProfile(listing.Seller)">
+                                        View seller
+                                    </button>
+                                    <span class="marketplace-last-sale">Last sale @DisplayLastSale(listing)</span>
+                                </div>
+
+                                @if (IsOwnListing(listing))
+                                {
+                                    <span class="profile-status-pill">Your listing</span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-primary" disabled="@(!CanBuy(listing) || IsActionBusy)" @onclick="() => BuyListingAsync(listing)">
+                                        @GetBuyLabel(listing)
+                                    </button>
+                                }
                             </div>
                         </article>
                     }
-                </div>
+                </section>
             }
-        </section>
-
-        @if (IsLoading)
-        {
-            <div class="card enigma-game-message">
-                <div class="loader"></div>
-                <p>Refreshing listings...</p>
-            </div>
-        }
-        else if (Listings.Count == 0)
-        {
-            <section class="panel leaderboard-empty-panel">
-                <h2>No active listings</h2>
-                <p>The marketplace is empty right now.</p>
-            </section>
         }
         else
         {
-            <section class="catalog-card-grid marketplace-grid">
-                @foreach (var listing in Listings)
+            <section class="panel marketplace-shop-panel" data-tour-id="marketplace-shop">
+                <div class="panel-heading maps-heading">
+                    <div>
+                        <span class="profile-eyebrow">Item Shop</span>
+                        <h2>Daily Merchant Stock</h2>
+                    </div>
+                    <span class="section-count">@ShopItems.Count</span>
+                </div>
+
+                <div class="marketplace-bullet-list marketplace-item-shop-copy">
+                    <div>Item purchases update your inventory immediately.</div>
+                    <div>Use the Play page to select items for your next run.</div>
+                    <div>Item shop payments go 100% to Enigma Bank.</div>
+                </div>
+
+                @if (ShopItems.Count == 0)
                 {
-                    <article class="catalog-card marketplace-card">
-                        <MapImageFrame ImageUrl="@listing.MapImage" AltText="@($"{listing.MapName} artwork")" FallbackText="@listing.MapName" Class="poster" />
-
-                        <div class="catalog-card-body">
-                            <span class="catalog-card-kicker">Listed by @listing.Seller</span>
-                            <h3>@listing.MapName</h3>
-                            <p>@FormatThemeLabel(listing.Theme) | Listed @listing.ListedAtDisplay</p>
-
-                            <strong class="catalog-card-price">@listing.Price.ToString("N0") MN</strong>
-
-                            <div class="catalog-card-meta">
-                                <span>Value @listing.Value.ToString("N0")</span>
-                                <span>Size @listing.Size x @listing.Size</span>
-                                <span class="difficulty-badge difficulty-@GetDifficultyClass(listing.Difficulty)">@listing.Difficulty</span>
-                            </div>
-
-                            <div class="marketplace-card-footer">
-                                <button class="inline-link-button" type="button" @onclick="() => OpenProfile(listing.Seller)">
-                                    View seller
-                                </button>
-                                <span class="marketplace-last-sale">Last sale @DisplayLastSale(listing)</span>
-                            </div>
-
-                            @if (IsOwnListing(listing))
-                            {
-                                <span class="profile-status-pill">Your listing</span>
-                            }
-                            else
-                            {
-                                <button class="btn btn-primary" disabled="@(!CanBuy(listing) || IsActionBusy)" @onclick="() => BuyListingAsync(listing)">
-                                    @GetBuyLabel(listing)
-                                </button>
-                            }
-                        </div>
-                    </article>
+                    <div class="empty-state-inline">No item shop stock was returned.</div>
+                }
+                else
+                {
+                    <div class="catalog-card-grid marketplace-shop-grid">
+                        @foreach (var item in ShopItems.OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <article class="catalog-card marketplace-item-card">
+                                <div class="catalog-card-body">
+                                    <div class="marketplace-item-topline">
+                                        <span class="catalog-card-kicker">@item.Rarity @item.SlotKind</span>
+                                        @if (item.AlwaysAvailable && item.NeverRestock)
+                                        {
+                                            <span class="catalog-card-meta-pill limited">Limited 10</span>
+                                        }
+                                    </div>
+                                    <h3>@item.Name</h3>
+                                    <p class="catalog-card-subline">@item.Description</p>
+                                    <strong class="catalog-card-price">@item.Price.ToString("N0") MN</strong>
+                                    <div class="catalog-card-meta">
+                                        <span class="catalog-card-meta-pill">Stock @item.Stock</span>
+                                        <span class="catalog-card-meta-pill">Owned @GetOwnedCount(item.ItemId)</span>
+                                        <span class="catalog-card-meta-pill">@item.Kind</span>
+                                        <span class="catalog-card-meta-pill">Max @item.MaxPerRun</span>
+                                    </div>
+                                    @if (item.Requirements.Count > 0)
+                                    {
+                                        <div class="marketplace-item-requirements">
+                                            <strong>Beta Tester Checklist</strong>
+                                            @foreach (var requirement in item.Requirements)
+                                            {
+                                                <div class="marketplace-requirement-row @(requirement.Completed ? "complete" : string.Empty)">
+                                                    <span>@(requirement.Completed ? "Complete" : "Pending")</span>
+                                                    <span>@requirement.Label</span>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(item.PurchaseBlockedReason))
+                                    {
+                                        <div class="marketplace-item-note">@item.PurchaseBlockedReason</div>
+                                    }
+                                    @if (item.AlwaysAvailable && item.NeverRestock)
+                                    {
+                                        <div class="marketplace-item-note">This founder item never restocks. Once all ten are claimed, it is gone permanently.</div>
+                                    }
+                                    <button class="btn btn-primary" type="button" disabled="@(!CanPurchase(item) || IsActionBusy)" @onclick="() => PurchaseItemAsync(item)">
+                                        @GetPurchaseLabel(item)
+                                    </button>
+                                </div>
+                            </article>
+                        }
+                    </div>
                 }
             </section>
         }
@@ -225,10 +268,13 @@ else
     private bool HasLoadedOnce { get; set; }
     private bool HasError { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private string ActiveMarketplaceTab { get; set; } = MapShopTab;
     private LoginUserSummary? Session { get; set; }
     private List<MarketplaceListing> Listings { get; set; } = [];
     private List<ItemCatalogEntry> ShopItems { get; set; } = [];
     private MarketplaceSellForm SellRequest { get; set; } = new();
+    private const string MapShopTab = "maps";
+    private const string ItemShopTab = "items";
 
     private List<MapSummary> AvailableOwnedMaps =>
         Session?.MapsOwned
@@ -276,7 +322,7 @@ else
                 return;
             }
 
-            var payload = await response.Content.ReadFromJsonAsync<MarketplaceResponse>();
+            var payload = await Api.ReadJsonAsync<MarketplaceResponse>(response);
             Listings = payload?.Listings ?? [];
             ShopItems = (await Api.GetFromJsonAsync<ItemShopResponse>("api/auth/items/shop"))?.Items ?? [];
 
@@ -364,7 +410,7 @@ else
         try
         {
             using var response = await requestFactory();
-            var payload = await response.Content.ReadFromJsonAsync<ApiStatusResponse>();
+            var payload = await Api.ReadJsonAsync<ApiStatusResponse>(response);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -406,12 +452,28 @@ else
 
     private bool CanPurchase(ItemCatalogEntry item)
     {
-        return Session is not null && item.Stock > 0 && Session.MazeNuggets >= item.Price;
+        return Session is not null
+            && item.Stock > 0
+            && item.CanPurchase
+            && !item.IsOwned
+            && Session.MazeNuggets >= item.Price;
     }
 
     private bool IsOwnListing(MarketplaceListing listing)
     {
         return Session is not null && EqualsIgnoreCase(Session.Username, listing.Seller);
+    }
+
+    private void SetActiveMarketplaceTab(string tab)
+    {
+        ActiveMarketplaceTab = string.Equals(tab, ItemShopTab, StringComparison.OrdinalIgnoreCase)
+            ? ItemShopTab
+            : MapShopTab;
+    }
+
+    private string GetMarketplaceTabClass(string tab)
+    {
+        return ActiveMarketplaceTab == tab ? "profile-tab active" : "profile-tab";
     }
 
     private static bool EqualsIgnoreCase(string? left, string? right)
@@ -459,6 +521,16 @@ else
         if (item.Stock <= 0)
         {
             return "Out of stock";
+        }
+
+        if (item.IsOwned)
+        {
+            return "Claimed";
+        }
+
+        if (!item.CanPurchase)
+        {
+            return "Locked";
         }
 
         if (Session.MazeNuggets < item.Price)

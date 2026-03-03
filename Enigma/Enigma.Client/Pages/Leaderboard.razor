@@ -215,7 +215,7 @@
                         </div>
                         <div class="podium-best-time-card">
                             <span>Best Time</span>
-                            <strong>@FormatHumanTime(entry.Map.BestTimeDisplay)</strong>
+                            <strong>@FormatHumanTime(entry.Map)</strong>
                             @if (!string.IsNullOrWhiteSpace(entry.Map.UserWithBestTime))
                             {
                                 <button class="inline-link-button compact podium-record-link" type="button" @onclick="() => GoToProfile(entry.Map.UserWithBestTime)">
@@ -303,7 +303,7 @@
                                 </td>
                                 <td>
                                     <div class="leaderboard-time-cell">
-                                        <strong>@FormatHumanTime(entry.Map.BestTimeDisplay)</strong>
+                                        <strong>@FormatHumanTime(entry.Map)</strong>
                                         @if (!string.IsNullOrWhiteSpace(entry.Map.UserWithBestTime))
                                         {
                                             <button class="inline-link-button compact leaderboard-user-link" type="button" @onclick="() => GoToProfile(entry.Map.UserWithBestTime)">
@@ -405,7 +405,7 @@
                     return;
                 }
 
-                var playerPayload = await playerResponse.Content.ReadFromJsonAsync<PlayerLeaderboardResponse>();
+                var playerPayload = await Api.ReadJsonAsync<PlayerLeaderboardResponse>(playerResponse);
                 Players = playerPayload?.Players ?? [];
                 Maps = [];
             }
@@ -421,7 +421,7 @@
                     return;
                 }
 
-                var payload = await response.Content.ReadFromJsonAsync<LeaderboardResponse>();
+                var payload = await Api.ReadJsonAsync<LeaderboardResponse>(response);
                 Maps = payload?.Maps ?? [];
                 Players = [];
             }
@@ -484,8 +484,7 @@
 
         try
         {
-            var response = await Api.GetFromJsonAsync<SeedApiResponse>(
-                $"api/auth/loadMap?name={Uri.EscapeDataString(mapName)}");
+            var response = await Api.GetFromJsonAsync<SeedApiResponse>($"api/auth/loadMap?name={Uri.EscapeDataString(mapName)}");
 
             if (string.IsNullOrWhiteSpace(response?.Seed))
             {
@@ -514,9 +513,9 @@
 
     private static string FormatFoundedDate(MapSummary map)
     {
-        var source = !string.IsNullOrWhiteSpace(map.TimeFoundedDisplay)
-            ? map.TimeFoundedDisplay
-            : map.TimeFounded;
+        var source = !string.IsNullOrWhiteSpace(map.TimeFounded)
+            ? map.TimeFounded
+            : map.TimeFoundedDisplay;
 
         if (string.IsNullOrWhiteSpace(source))
         {
@@ -530,6 +529,27 @@
         }
 
         return source;
+    }
+
+    private static string FormatHumanTime(MapSummary map)
+    {
+        if (map.BestTimeMs is int bestTimeMs && bestTimeMs >= 0)
+        {
+            var duration = TimeSpan.FromMilliseconds(bestTimeMs);
+            if (duration.TotalHours >= 1)
+            {
+                return $"{(int)duration.TotalHours}h {duration.Minutes:D2}m {duration.Seconds:D2}.{duration.Milliseconds:D3}s";
+            }
+
+            if (duration.TotalMinutes >= 1)
+            {
+                return $"{(int)duration.TotalMinutes}m {duration.Seconds:D2}.{duration.Milliseconds:D3}s";
+            }
+
+            return $"{duration.Seconds}.{duration.Milliseconds:D3}s";
+        }
+
+        return FormatHumanTime(map.BestTimeDisplay);
     }
 
     private static string FormatHumanTime(string? value)

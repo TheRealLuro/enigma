@@ -11,7 +11,8 @@ from pymongo.errors import DuplicateKeyError
 from main import limiter
 
 from .account_cleanup import delete_user_account
-from .db import item_inventory, maps_collection, run_results, users_collection
+from .db import client, item_inventory, maps_collection, run_results, users_collection
+from .economy_rules import compute_loss_fee, credit_bank_dividend
 from .item_catalog import serialize_shop_item
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
@@ -279,23 +280,7 @@ def abandon_run(request: Request, payload: AbandonRunPayload):
         raise HTTPException(status_code=403, detail="System accounts cannot submit runs")
 
     run_results.create_index("run_nonce", unique=True)
-    try:
-        run_results.insert_one(
-            {
-                "run_nonce": payload.run_nonce,
-                "username": payload.username,
-                "seed": payload.seed,
-                "map_name": payload.map_name,
-                "source": payload.source,
-                "reason": payload.reason,
-                "used_items": payload.used_items,
-                "forfeited_run_payout": int(payload.forfeited_run_payout or 0),
-                "projected_completion_payout": int(payload.projected_completion_payout or 0),
-                "map_value": int(payload.map_value or 0),
-                "created_at": datetime.now(timezone.utc),
-            }
-        )
-    except DuplicateKeyError:
+    if run_results.find_one({"run_nonce": payload.run_nonce}):
         refreshed_user = _sync_user(payload.username)
         return {"status": "success", "already_processed": True, "user": serialize_session_user(refreshed_user, maps_collection)}
 
@@ -308,13 +293,58 @@ def abandon_run(request: Request, payload: AbandonRunPayload):
         if int(item_counts.get(item_id, 0) or 0) < amount:
             raise HTTPException(status_code=400, detail=f"Insufficient item quantity: {item_id}")
 
+    loss_fee = compute_loss_fee(user)
+
     inc_query: dict[str, int] = {
         "number_of_maps_played": 1,
         "maps_lost": 1,
     }
+    if loss_fee["applied_fee"] > 0:
+        inc_query["maze_nuggets"] = -loss_fee["applied_fee"]
     for item_id, amount in requested_use_counts.items():
         inc_query[f"item_counts.{item_id}"] = -amount
 
-    users_collection.update_one({"_id": user["_id"]}, {"$inc": inc_query})
+    update_filter: dict[str, Any] = {"_id": user["_id"]}
+    if loss_fee["applied_fee"] > 0:
+        update_filter["maze_nuggets"] = {"$gte": loss_fee["applied_fee"]}
+    for item_id, amount in requested_use_counts.items():
+        update_filter[f"item_counts.{item_id}"] = {"$gte": amount}
+
+    try:
+        with client.start_session() as session:
+            with session.start_transaction():
+                update_result = users_collection.update_one(update_filter, {"$inc": inc_query}, session=session)
+                if update_result.modified_count != 1:
+                    raise HTTPException(status_code=409, detail="Unable to record this abandoned run")
+
+                if loss_fee["applied_fee"] > 0:
+                    credit_bank_dividend(users_collection, loss_fee["applied_fee"], session)
+
+                run_results.insert_one(
+                    {
+                        "run_nonce": payload.run_nonce,
+                        "username": payload.username,
+                        "seed": payload.seed,
+                        "map_name": payload.map_name,
+                        "source": payload.source,
+                        "reason": payload.reason,
+                        "used_items": payload.used_items,
+                        "forfeited_run_payout": int(payload.forfeited_run_payout or 0),
+                        "projected_completion_payout": int(payload.projected_completion_payout or 0),
+                        "map_value": int(payload.map_value or 0),
+                        "loss_fee_applied": int(loss_fee["applied_fee"]),
+                        "created_at": datetime.now(timezone.utc),
+                    },
+                    session=session,
+                )
+    except DuplicateKeyError:
+        refreshed_user = _sync_user(payload.username)
+        return {"status": "success", "already_processed": True, "user": serialize_session_user(refreshed_user, maps_collection)}
+
     refreshed = _sync_user(payload.username)
-    return {"status": "success", "already_processed": False, "user": serialize_session_user(refreshed, maps_collection)}
+    return {
+        "status": "success",
+        "already_processed": False,
+        "loss_fee_applied": loss_fee["applied_fee"],
+        "user": serialize_session_user(refreshed, maps_collection),
+    }

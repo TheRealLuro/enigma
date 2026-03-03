@@ -68,6 +68,7 @@ html, body {
     color: var(--epic-text);
     margin: 0;
     padding: 0;
+    min-height: 100%;
     overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -75,6 +76,7 @@ html, body {
 
 #app {
     min-height: 100vh;
+    min-height: -webkit-fill-available;
     display: flex;
     flex-direction: column;
 }
@@ -89,9 +91,11 @@ html, body {
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid rgba(124, 166, 255, 0.12);
+    position: -webkit-sticky;
     position: sticky;
     top: 0;
     z-index: 1000;
+    -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
     box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
 }
@@ -176,23 +180,27 @@ html, body {
 
 .btn, .btn-primary {
     font-family: 'Inter', sans-serif;
-    border: none;
+    border: 1px solid transparent;
     color: var(--epic-text);
-    padding: 12px 24px;
+    padding: 12px 20px;
+    min-height: 46px;
     font-size: 0.95rem;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: 0.01em;
     cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    border-radius: 14px;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
+    text-decoration: none;
 }
 
 .btn:hover, .btn-primary:hover {
     background: var(--epic-hover);
     transform: translateY(-1px);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
 }
 
 .btn:active, .btn-primary:active {
@@ -206,8 +214,9 @@ html, body {
 }
 
 .btn-primary {
-    background: var(--epic-primary);
+    background: linear-gradient(135deg, var(--epic-primary), var(--epic-primary-hover));
     color: white;
+    box-shadow: 0 14px 32px rgba(0, 120, 242, 0.18);
 }
 
 .btn-primary:hover {
@@ -217,6 +226,7 @@ html, body {
 .btn-danger {
     background: var(--epic-danger);
     color: white;
+    box-shadow: 0 14px 30px rgba(231, 76, 60, 0.18);
 }
 
 .btn-danger:hover {
@@ -226,6 +236,7 @@ html, body {
 .btn-success {
     background: var(--epic-success);
     color: white;
+    box-shadow: 0 14px 30px rgba(46, 204, 113, 0.18);
 }
 
 .btn-success:hover {
@@ -266,6 +277,36 @@ html, body {
 
 .form-group, .input-group {
     margin-bottom: 20px;
+}
+
+.password-field-wrap {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 10px;
+}
+
+.password-field-wrap .form-control {
+    min-width: 0;
+}
+
+.password-toggle-button {
+    min-width: 88px;
+    padding: 0 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(143, 183, 255, 0.22);
+    background: linear-gradient(180deg, rgba(23, 33, 54, 0.98), rgba(15, 21, 34, 0.98));
+    color: var(--epic-text);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.password-toggle-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(143, 183, 255, 0.4);
+    background: linear-gradient(180deg, rgba(31, 45, 71, 0.98), rgba(17, 24, 38, 0.98));
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
 
@@ -341,6 +382,62 @@ html, body {
     aspect-ratio: 16/9;
     object-fit: cover;
     background: var(--epic-surface);
+}
+
+.menu-image-card,
+.menu-text-card {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+    text-align: left;
+}
+
+.home-tab-grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    align-items: stretch;
+}
+
+.menu-card-media {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 16 / 9;
+    padding: 0;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at top left, rgba(67, 132, 255, 0.16), transparent 38%),
+        linear-gradient(180deg, rgba(15, 21, 34, 0.98), rgba(11, 15, 24, 0.98));
+}
+
+.menu-card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 0;
+}
+
+.menu-card-placeholder {
+    background:
+        radial-gradient(circle at top left, rgba(67, 132, 255, 0.22), transparent 38%),
+        linear-gradient(135deg, rgba(19, 34, 63, 0.98), rgba(10, 14, 24, 0.98));
+}
+
+.menu-card-glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 132px;
+    min-height: 132px;
+    padding: 20px;
+    border-radius: 26px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(143, 183, 255, 0.18);
+    color: var(--epic-text);
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
 }
 
 .game-card-content {
@@ -666,7 +763,7 @@ a:hover, .btn-link:hover {
 
 .hero p {
     font-size: 1.1rem;
-    color: var(--epic-text-secondary);
+    color: var(--epic-text);
     max-width: 600px;
     margin: 0 auto;
 }
@@ -702,7 +799,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 p {
-    color: var(--epic-text-secondary);
+    color: var(--epic-text);
     font-size: 1rem;
     line-height: 1.6;
     margin-bottom: 16px;
@@ -1086,6 +1183,7 @@ h1:focus {
     z-index: 6;
     padding: 10px 14px;
     border-radius: 999px;
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     background: rgba(8, 12, 18, 0.66);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -1164,6 +1262,174 @@ h1:focus {
     will-change: width;
 }
 
+.enigma-coop-stage-target {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 28px;
+    background: rgba(16, 26, 48, 0.58);
+    border: 2px solid rgba(125, 166, 255, 0.4);
+    color: #f7fbff;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.enigma-coop-stage-target.target {
+    border-color: rgba(84, 163, 255, 0.88);
+    box-shadow: 0 0 0 1px rgba(84, 163, 255, 0.22), 0 0 28px rgba(84, 163, 255, 0.26);
+}
+
+.enigma-coop-stage-target.active {
+    background: rgba(50, 120, 255, 0.24);
+}
+
+.enigma-coop-stage-target.complete {
+    background: rgba(42, 150, 104, 0.28);
+    border-color: rgba(82, 219, 163, 0.68);
+}
+
+.co-op-tile-active {
+    border-color: rgba(104, 160, 255, 0.72);
+}
+
+.co-op-tile-locked {
+    opacity: 0.56;
+}
+
+.coop-rotation-shell {
+    display: grid;
+    gap: 1rem;
+}
+
+.coop-rotation-board {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(6, 16, 32, 0.94), rgba(10, 20, 38, 0.82));
+    border: 1px solid rgba(104, 160, 255, 0.18);
+}
+
+.enigma-rotation-tile {
+    position: relative;
+    min-height: 108px;
+    padding: 12px;
+    align-content: center;
+    text-align: center;
+    background:
+        radial-gradient(circle at top, rgba(118, 184, 255, 0.12), transparent 62%),
+        rgba(10, 18, 31, 0.92);
+}
+
+.enigma-rotation-tile .enigma-tile-arrow {
+    width: auto;
+    min-width: 72px;
+    height: auto;
+    padding: 12px 16px;
+    font-size: 0.92rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.enigma-rotation-tile.aligned {
+    border-color: rgba(92, 228, 170, 0.66);
+    box-shadow: 0 0 22px rgba(92, 228, 170, 0.14);
+}
+
+.enigma-rotation-target {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(228, 241, 255, 0.82);
+    font-size: 0.67rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.coop-signal-board {
+    position: relative;
+    min-height: 320px;
+    margin-bottom: 1rem;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(8, 17, 32, 0.96), rgba(10, 18, 32, 0.84));
+    border: 1px solid rgba(104, 160, 255, 0.18);
+    overflow: hidden;
+}
+
+.coop-signal-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.coop-signal-line {
+    stroke-width: 2.25;
+    fill: none;
+    stroke-linecap: round;
+}
+
+.coop-signal-line.blocked {
+    stroke: rgba(255, 159, 159, 0.44);
+    stroke-dasharray: 3 3;
+}
+
+.coop-signal-line.active {
+    stroke: rgba(92, 178, 255, 0.86);
+    filter: drop-shadow(0 0 8px rgba(92, 178, 255, 0.2));
+}
+
+.coop-signal-line.active.partner {
+    stroke: rgba(178, 214, 255, 0.56);
+}
+
+.coop-signal-node {
+    position: absolute;
+    z-index: 1;
+    width: 100px;
+    min-height: 48px;
+    padding: 10px 10px 8px;
+    border-radius: 14px;
+    transform: translate(-50%, -50%);
+    background: rgba(11, 20, 34, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    color: #f4fbff;
+    display: grid;
+    gap: 0.2rem;
+    text-align: center;
+}
+
+.coop-signal-node.left.controllable {
+    border-color: rgba(92, 178, 255, 0.52);
+    box-shadow: 0 0 18px rgba(92, 178, 255, 0.12);
+}
+
+.coop-signal-node.left.partner {
+    opacity: 0.7;
+}
+
+.coop-signal-node small {
+    color: rgba(220, 237, 255, 0.76);
+    font-size: 0.67rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.coop-weight-card {
+    gap: 0.9rem;
+}
+
+.enigma-signal-row {
+    display: grid;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
 .enigma-timing-window {
     position: absolute;
     top: 0;
@@ -1176,10 +1442,11 @@ h1:focus {
     top: 0;
     bottom: 0;
     width: 10px;
-    background: #ffffff;
+    background: linear-gradient(180deg, #ffffff, #d9f4ff);
     transform: translateX(-50%);
-    transition: left 0.05s linear;
     will-change: left;
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
 }
 
 .enigma-option-grid,
@@ -1215,6 +1482,33 @@ h1:focus {
     min-width: 34px;
 }
 
+.enigma-direction-sequence {
+    gap: 10px;
+}
+
+.enigma-direction-token {
+    min-width: 46px;
+    min-height: 46px;
+    display: grid;
+    place-items: center;
+    font-size: 1.35rem;
+    background: rgba(12, 18, 30, 0.92) !important;
+    border: 1px solid rgba(103, 180, 255, 0.26) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.enigma-direction-token.visible {
+    color: #f5fbff;
+    background: linear-gradient(180deg, rgba(40, 90, 170, 0.55), rgba(9, 26, 58, 0.95)) !important;
+    border-color: rgba(111, 194, 255, 0.58) !important;
+    box-shadow: 0 0 22px rgba(74, 144, 255, 0.18);
+}
+
+.enigma-direction-token.hidden {
+    color: rgba(205, 225, 248, 0.94);
+    font-size: 1.1rem;
+}
+
 .enigma-tile-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1234,10 +1528,110 @@ h1:focus {
     transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
+.enigma-tile-button {
+    display: grid;
+    place-items: center;
+}
+
+.enigma-tile-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.enigma-tile-button:hover .enigma-tile-arrow {
+    background: rgba(87, 195, 255, 0.14);
+    box-shadow: 0 0 18px rgba(87, 195, 255, 0.14);
+}
+
 .enigma-tile-button:hover,
 .enigma-yarn-node:hover {
     transform: translateY(-2px);
     border-color: var(--epic-primary);
+}
+
+.enigma-arrow-button {
+    font-size: 1.3rem;
+    font-weight: 800;
+}
+
+.enigma-arrow-button:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
+}
+
+.enigma-flow-readout {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.enigma-valve-grid,
+.enigma-bit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.enigma-valve-button,
+.enigma-bit-button {
+    width: 100%;
+    min-height: 96px;
+    display: grid;
+    gap: 4px;
+    align-content: center;
+    justify-items: start;
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--epic-text);
+    background: linear-gradient(180deg, rgba(15, 22, 32, 0.96), rgba(9, 14, 22, 0.92));
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.enigma-valve-button span,
+.enigma-bit-button span {
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--epic-text-secondary);
+}
+
+.enigma-valve-button strong,
+.enigma-bit-button strong {
+    font-size: 1.45rem;
+    line-height: 1;
+}
+
+.enigma-valve-button small,
+.enigma-bit-button small {
+    color: var(--epic-text-secondary);
+}
+
+.enigma-valve-button:hover,
+.enigma-bit-button:hover {
+    transform: translateY(-2px);
+    border-color: rgba(87, 195, 255, 0.42);
+    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.22);
+}
+
+.enigma-valve-button.open {
+    background: linear-gradient(180deg, rgba(16, 60, 58, 0.96), rgba(10, 30, 31, 0.94));
+    border-color: rgba(92, 235, 188, 0.36);
+    box-shadow: 0 0 0 1px rgba(92, 235, 188, 0.1), 0 18px 32px rgba(4, 24, 22, 0.28);
+}
+
+.enigma-bit-button.active {
+    background: linear-gradient(180deg, rgba(28, 57, 102, 0.96), rgba(12, 23, 46, 0.94));
+    border-color: rgba(95, 162, 255, 0.42);
+    box-shadow: 0 0 0 1px rgba(95, 162, 255, 0.12), 0 18px 32px rgba(8, 14, 28, 0.28);
 }
 
 .enigma-yarn-grid {
@@ -1540,6 +1934,177 @@ h1:focus {
     animation: enigmaBinaryGlow 1.6s ease-in-out infinite;
 }
 
+.enigma-puzzle-copy,
+.enigma-helper,
+.enigma-statement,
+.enigma-sequence-display span,
+.enigma-mini-stat strong,
+.enigma-mini-stat,
+.enigma-puzzle-status {
+    color: var(--epic-text);
+}
+
+.enigma-helper {
+    line-height: 1.55;
+}
+
+.enigma-harmonic-node.active {
+    box-shadow: 0 0 40px rgba(203, 149, 255, 0.48);
+    border-color: rgba(232, 208, 255, 0.9);
+}
+
+.enigma-path-cell.visible {
+    background: linear-gradient(135deg, rgba(102, 255, 196, 0.72), rgba(20, 109, 88, 0.9));
+    border-color: rgba(170, 255, 227, 0.86);
+    box-shadow: 0 0 28px rgba(56, 235, 173, 0.32);
+}
+
+.enigma-knot-line.illusion {
+    background: repeating-linear-gradient(90deg, rgba(150, 198, 255, 0.28) 0 12px, rgba(150, 198, 255, 0.02) 12px 22px);
+    box-shadow: 0 0 14px rgba(150, 198, 255, 0.14);
+}
+
+.enigma-network-tile {
+    font-family: var(--epic-font-mono, "Cascadia Mono", "Consolas", monospace);
+}
+
+.enigma-network-tile.start {
+    border-color: rgba(92, 235, 188, 0.56);
+    box-shadow: inset 0 0 0 1px rgba(92, 235, 188, 0.2);
+}
+
+.enigma-network-tile.end {
+    border-color: rgba(255, 208, 95, 0.56);
+    box-shadow: inset 0 0 0 1px rgba(255, 208, 95, 0.2);
+}
+
+.enigma-network-tile.cipher-center {
+    background: linear-gradient(180deg, rgba(32, 65, 116, 0.96), rgba(13, 26, 51, 0.96));
+    border-color: rgba(116, 177, 255, 0.46);
+}
+
+.binary-display span {
+    font-size: 1.18rem;
+}
+
+.enigma-symbol-grid .btn {
+    min-height: 70px;
+    font-weight: 700;
+}
+
+.enigma-word-tile,
+.enigma-descriptor-tile {
+    position: absolute;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    padding: 12px;
+    text-align: center;
+    border-radius: 18px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: var(--epic-text);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.enigma-word-tile {
+    border: 1px solid rgba(108, 180, 255, 0.34);
+    background: linear-gradient(180deg, rgba(19, 36, 68, 0.96), rgba(8, 18, 36, 0.94));
+}
+
+.enigma-word-tile.active {
+    border-color: rgba(134, 212, 255, 0.72);
+    box-shadow: 0 0 28px rgba(80, 172, 255, 0.28);
+    transform: scale(1.03);
+}
+
+.enigma-word-tile.solved {
+    border-color: rgba(92, 235, 188, 0.52);
+    background: linear-gradient(180deg, rgba(17, 63, 59, 0.96), rgba(8, 28, 28, 0.94));
+}
+
+.enigma-descriptor-tile {
+    border: 1px solid rgba(255, 208, 110, 0.3);
+    background: linear-gradient(180deg, rgba(66, 43, 13, 0.96), rgba(33, 21, 7, 0.94));
+}
+
+.enigma-descriptor-tile.target {
+    border-color: rgba(255, 228, 141, 0.74);
+    box-shadow: 0 0 28px rgba(255, 216, 102, 0.26);
+    transform: scale(1.03);
+}
+
+.enigma-temporal-wheel {
+    position: relative;
+    width: min(100%, 320px);
+    aspect-ratio: 1;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle at center, rgba(8, 14, 24, 0.98) 0%, rgba(9, 17, 31, 0.96) 36%, rgba(18, 31, 56, 0.92) 100%);
+    border: 1px solid rgba(120, 181, 255, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 18px 40px rgba(0, 0, 0, 0.24);
+    overflow: hidden;
+}
+
+.enigma-temporal-ring,
+.enigma-temporal-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+}
+
+.enigma-temporal-ring {
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.enigma-temporal-ring.outer {
+    width: 270px;
+    height: 270px;
+    border: 1px solid rgba(99, 173, 255, 0.26);
+}
+
+.enigma-temporal-ring.middle {
+    width: 200px;
+    height: 200px;
+    border: 1px solid rgba(163, 126, 255, 0.26);
+}
+
+.enigma-temporal-ring.inner {
+    width: 130px;
+    height: 130px;
+    border: 1px solid rgba(255, 190, 94, 0.26);
+}
+
+.enigma-temporal-sigil {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    min-width: 62px;
+    padding: 6px 8px;
+    border-radius: 999px;
+    background: rgba(10, 18, 31, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.72rem;
+    text-align: center;
+    color: var(--epic-text);
+    white-space: nowrap;
+}
+
+.enigma-temporal-core {
+    transform: translate(-50%, -50%);
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: radial-gradient(circle, rgba(49, 115, 214, 0.88), rgba(16, 35, 72, 0.98));
+    border: 1px solid rgba(144, 198, 255, 0.36);
+    color: var(--epic-text);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
 @keyframes enigmaRelayPulse {
     0%, 100% { transform: scale(1); box-shadow: 0 0 24px rgba(84, 175, 255, 0.24); }
     50% { transform: scale(1.06); box-shadow: 0 0 40px rgba(84, 175, 255, 0.44); }
@@ -1810,7 +2375,7 @@ h1:focus {
 .leaderboard-banner p {
     max-width: 720px;
     margin: 0;
-    color: rgba(255, 255, 255, 0.78);
+    color: var(--epic-text);
     font-size: 1rem;
 }
 
@@ -1820,6 +2385,7 @@ h1:focus {
     border-radius: 22px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
 }
 
@@ -1899,6 +2465,7 @@ h1:focus {
 }
 
 .app-shell-account {
+    position: relative;
     justify-content: flex-end;
     flex-wrap: wrap;
 }
@@ -1933,6 +2500,56 @@ h1:focus {
     background: rgba(154, 212, 255, 0.08);
 }
 
+.app-shell-account-menu {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    min-width: 220px;
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(143, 183, 255, 0.14);
+    background:
+        linear-gradient(180deg, rgba(18, 25, 39, 0.98), rgba(10, 14, 24, 0.98));
+    box-shadow: 0 22px 44px rgba(0, 0, 0, 0.34);
+    z-index: 1010;
+}
+
+.app-shell-account-link {
+    width: 100%;
+    min-height: 46px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--epic-text);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.app-shell-account-link:hover {
+    transform: translateY(-1px);
+    background: rgba(154, 212, 255, 0.09);
+    border-color: rgba(154, 212, 255, 0.2);
+}
+
+.app-shell-account-link.danger {
+    color: #ffd0cb;
+    background: rgba(231, 76, 60, 0.12);
+    border-color: rgba(231, 76, 60, 0.16);
+}
+
+.app-shell-account-link.danger:hover {
+    background: rgba(231, 76, 60, 0.2);
+    border-color: rgba(231, 76, 60, 0.28);
+}
+
 .app-logout-button {
     min-width: 100px;
 }
@@ -1945,9 +2562,35 @@ h1:focus {
     padding-top: 18px;
 }
 
+.enigma-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(4, 8, 14, 0.76);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+
+.enigma-modal-card {
+    width: min(620px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    display: grid;
+    gap: 16px;
+    padding: 28px;
+    border-radius: 24px;
+    border: 1px solid rgba(143, 183, 255, 0.14);
+    background:
+        linear-gradient(180deg, rgba(16, 24, 38, 0.98), rgba(10, 14, 24, 0.98));
+    box-shadow: 0 28px 60px rgba(0, 0, 0, 0.36);
+}
+
 .hero-subcopy {
     margin: 10px 0 0;
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--epic-text);
     font-size: 0.98rem;
 }
 
@@ -2196,7 +2839,7 @@ h1:focus {
 .marketplace-banner p {
     max-width: 720px;
     margin: 0;
-    color: rgba(255, 255, 255, 0.78);
+    color: var(--epic-text);
     font-size: 1rem;
 }
 
@@ -2274,7 +2917,7 @@ h1:focus {
 .players-banner p {
     max-width: 720px;
     margin: 0;
-    color: rgba(255, 255, 255, 0.78);
+    color: var(--epic-text);
     font-size: 1rem;
 }
 
@@ -2296,7 +2939,7 @@ h1:focus {
 .players-banner-metrics span,
 .top-player-metrics span,
 .players-search-copy p {
-    color: rgba(255, 255, 255, 0.68);
+    color: var(--epic-text);
 }
 
 .players-banner-metrics strong {
@@ -2318,7 +2961,7 @@ h1:focus {
 
 .players-search-hint {
     margin: 0;
-    color: rgba(255, 255, 255, 0.66);
+    color: var(--epic-text);
     font-size: 0.9rem;
 }
 
@@ -2326,7 +2969,7 @@ h1:focus {
     display: inline-flex;
     align-items: center;
     gap: 12px;
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--epic-text);
 }
 
 .players-results-grid {
@@ -2399,7 +3042,7 @@ h1:focus {
 }
 
 .players-empty-state p {
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--epic-text);
 }
 
 .top-player-grid {
@@ -2536,6 +3179,12 @@ h1:focus {
     align-items: center;
 }
 
+.catalog-card-meta-pill.limited {
+    color: #ffe2a4;
+    background: rgba(243, 156, 18, 0.16);
+    border: 1px solid rgba(243, 156, 18, 0.22);
+}
+
 .catalog-card-meta .difficulty-badge {
     justify-self: start;
     align-self: center;
@@ -2566,7 +3215,7 @@ h1:focus {
 
 .catalog-card-subline {
     margin: 0;
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--epic-text);
     font-size: 0.9rem;
     min-height: 1.2em;
 }
@@ -2664,7 +3313,7 @@ h1:focus {
 .owned-map-header p,
 .leaderboard-map-cell strong + span {
     margin: 0;
-    color: rgba(255, 255, 255, 0.64);
+    color: var(--epic-text);
 }
 
 .owned-map-meta-row,
@@ -2773,6 +3422,10 @@ h1:focus {
 }
 
 .player-podium-card {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+    min-height: 420px;
     text-align: left;
 }
 
@@ -2826,7 +3479,7 @@ h1:focus {
 
 .podium-card p {
     margin: 0 0 18px;
-    color: rgba(255, 255, 255, 0.78);
+    color: var(--epic-text);
     line-height: 1.45;
 }
 
@@ -2837,13 +3490,16 @@ h1:focus {
 .podium-best-time-card {
     background: linear-gradient(180deg, rgba(12, 141, 255, 0.14), rgba(255, 255, 255, 0.03));
     box-shadow: inset 0 0 0 1px rgba(12, 141, 255, 0.18);
+    min-width: 0;
 }
 
 .podium-best-time-card strong {
     font-variant-numeric: tabular-nums;
-    font-size: 1.3rem;
-    line-height: 1.1;
-    white-space: nowrap;
+    font-size: clamp(1.08rem, 1.7vw, 1.3rem);
+    line-height: 1.18;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .podium-record-link {
@@ -2879,7 +3535,7 @@ h1:focus {
 
 .leaderboard-table th,
 .leaderboard-table td {
-    padding: 16px 14px;
+    padding: 20px 14px;
     text-align: left;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     vertical-align: middle;
@@ -2926,7 +3582,8 @@ h1:focus {
 }
 
 .leaderboard-player-cell {
-    gap: 14px;
+    gap: 16px;
+    min-width: 0;
 }
 
 .leaderboard-thumb {
@@ -2957,12 +3614,12 @@ h1:focus {
 }
 
 .leaderboard-theme-text {
-    color: rgba(255, 255, 255, 0.74);
+    color: var(--epic-text);
     font-size: 0.84rem;
 }
 
 .leaderboard-secondary-text {
-    color: rgba(255, 255, 255, 0.68);
+    color: var(--epic-text);
     font-size: 0.82rem;
 }
 
@@ -2974,11 +3631,35 @@ h1:focus {
 .leaderboard-time-cell strong {
     font-size: 1.08rem;
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .leaderboard-time-cell strong {
     color: #f4fbff;
+    line-height: 1.15;
+}
+
+.player-podium-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+}
+
+.player-podium-metrics div,
+.leaderboard-stat-cell,
+.leaderboard-time-cell {
+    min-height: 112px;
+    align-content: start;
+}
+
+.leaderboard-table .leaderboard-stat-cell,
+.leaderboard-table .leaderboard-time-cell {
+    min-height: 0;
+}
+
+.leaderboard-table .leaderboard-player-cell .leaderboard-map-copy {
+    gap: 6px;
 }
 
 @media (max-width: 1120px) {
@@ -3014,6 +3695,12 @@ h1:focus {
 
     .app-shell-account {
         width: 100%;
+    }
+
+    .app-shell-account-menu {
+        position: static;
+        width: 100%;
+        min-width: 0;
     }
 
     .app-shell-nav .nav-link {
@@ -3106,6 +3793,7 @@ h1:focus {
 .profile-banner-tags,
 .profile-release-actions-row,
 .profile-tabbar,
+.marketplace-tabbar,
 .profile-map-actions,
 .profile-social-chip,
 .profile-inventory-grid,
@@ -3154,6 +3842,10 @@ h1:focus {
 
 .profile-tabbar {
     grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
+}
+
+.marketplace-tabbar {
+    grid-template-columns: repeat(auto-fit, minmax(160px, max-content));
 }
 
 .profile-tab {
@@ -3257,17 +3949,60 @@ h1:focus {
     font-size: 1.2rem;
 }
 
+.marketplace-item-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
 .profile-item-card p,
 .marketplace-item-card p,
 .profile-settings-copy {
     margin: 0;
-    color: rgba(255, 255, 255, 0.74);
+    color: var(--epic-text);
 }
 
 .profile-item-top,
 .profile-item-meta {
     display: grid;
     gap: 10px;
+}
+
+.marketplace-item-requirements {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.marketplace-requirement-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: start;
+    font-size: 0.92rem;
+}
+
+.marketplace-requirement-row span:first-child {
+    min-width: 72px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #ffb2ad;
+}
+
+.marketplace-requirement-row.complete span:first-child {
+    color: #8df0bf;
+}
+
+.marketplace-item-note {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--epic-text);
 }
 
 .profile-item-meta,
@@ -3346,22 +4081,62 @@ h1:focus {
 }
 
 .tutorial-backdrop {
+    inset: auto 24px 24px auto;
+    justify-content: flex-end;
+    align-items: flex-end;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    pointer-events: none;
     z-index: 1200;
 }
 
+.tutorial-backdrop-game {
+    inset: 24px 24px auto auto;
+    align-items: flex-start;
+}
+
 .tutorial-modal-card {
-    width: min(560px, calc(100vw - 32px));
+    width: min(420px, calc(100vw - 24px));
+    padding: 22px;
     background: linear-gradient(180deg, rgba(16, 24, 38, 0.98), rgba(10, 14, 24, 0.98));
+    pointer-events: auto;
+    box-shadow: 0 26px 54px rgba(0, 0, 0, 0.38);
 }
 
 .tutorial-progress-row {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    color: rgba(255, 255, 255, 0.68);
+    color: var(--epic-text);
     font-size: 0.86rem;
+    gap: 12px;
+}
+
+.tutorial-helper-copy {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: var(--epic-text);
 }
 
 .tutorial-action-row {
     justify-content: flex-end;
+}
+
+.profile-retention-note {
+    display: grid;
+    gap: 6px;
+    padding: 14px 18px;
+    margin-top: -4px;
+    border-radius: 18px;
+    border: 1px solid rgba(243, 156, 18, 0.18);
+    background: linear-gradient(180deg, rgba(243, 156, 18, 0.12), rgba(255, 255, 255, 0.03));
+}
+
+.profile-retention-note p {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
 }
 
 @media (max-width: 840px) {
@@ -3371,8 +4146,254 @@ h1:focus {
         grid-template-columns: 1fr;
     }
 
+    .tutorial-backdrop,
+    .tutorial-backdrop-game {
+        inset: auto 12px 12px 12px;
+    }
+
+    .tutorial-modal-card {
+        width: min(100%, calc(100vw - 24px));
+    }
+
     .profile-avatar-preview {
         width: 180px;
         height: 180px;
+    }
+}
+
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    .app-header {
+        background:
+            linear-gradient(180deg, rgba(9, 13, 23, 0.99), rgba(9, 13, 23, 0.95)),
+            var(--epic-sidebar);
+    }
+
+    .enigma-room-hud,
+    .enigma-room-banner,
+    .profile-balance-card {
+        background: rgba(8, 12, 18, 0.9);
+    }
+
+    .enigma-modal-backdrop {
+        background: rgba(4, 8, 14, 0.92);
+    }
+}
+
+@supports not ((position: sticky) or (position: -webkit-sticky)) {
+    .app-header {
+        position: relative;
+    }
+}
+
+@supports not (aspect-ratio: 1 / 1) {
+    .game-card-image,
+    .menu-card-media {
+        height: 220px;
+    }
+
+    .enigma-room-stage {
+        height: 82vw;
+        max-height: 1080px;
+        min-height: 480px;
+    }
+
+    .enigma-temporal-wheel {
+        height: 320px;
+    }
+
+    .map-art-frame.poster {
+        height: 320px;
+    }
+
+    .map-art-frame.thumb {
+        height: 88px;
+    }
+
+    .map-art-frame.podium-art {
+        height: 280px;
+    }
+
+    .profile-avatar-crop-shell {
+        height: 240px;
+    }
+}
+
+.play-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.coop-shell {
+    display: grid;
+    gap: 24px;
+}
+
+.coop-banner,
+.coop-session-panel,
+.coop-create-panel,
+.coop-join-panel,
+.coop-puzzle-panel {
+    border-radius: 24px;
+    padding: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+        #171a22;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
+}
+
+.coop-banner,
+.coop-banner-metrics,
+.coop-form-stack,
+.coop-grid,
+.coop-session-meta,
+.coop-player-stack,
+.coop-player-card,
+.coop-player-meta,
+.coop-inline-form,
+.coop-catalog-stack,
+.coop-catalog-tier {
+    display: grid;
+    gap: 16px;
+}
+
+.coop-banner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+}
+
+.coop-banner-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-width: 360px;
+}
+
+.coop-banner-metrics div,
+.coop-session-meta div {
+    display: grid;
+    gap: 6px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.coop-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+}
+
+.coop-form-grid,
+.coop-inline-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.coop-divider {
+    position: relative;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.52);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.74rem;
+}
+
+.coop-divider::before {
+    content: "";
+    position: absolute;
+    inset: 50% 0 auto;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.coop-divider span {
+    position: relative;
+    padding: 0 12px;
+    background: #171a22;
+}
+
+.coop-session-meta {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.coop-player-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 18px 20px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.coop-player-card.you {
+    border-color: rgba(96, 182, 255, 0.28);
+    background: linear-gradient(135deg, rgba(19, 47, 88, 0.5), rgba(18, 25, 39, 0.8));
+}
+
+.coop-player-meta {
+    justify-items: end;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.86rem;
+}
+
+.coop-move-vote {
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: rgba(94, 181, 255, 0.1);
+    border: 1px solid rgba(94, 181, 255, 0.2);
+    color: #d8ecff;
+}
+
+.coop-action-row {
+    justify-content: flex-start;
+}
+
+.coop-catalog-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.coop-puzzle-card h3 {
+    margin: 0;
+}
+
+.enigma-coop-card .enigma-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.enigma-player.co-op-peer {
+    filter: hue-rotate(140deg) saturate(1.15);
+    opacity: 0.82;
+}
+
+.enigma-player-tag {
+    position: absolute;
+    z-index: 7;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(4, 8, 14, 0.9);
+    border: 1px solid rgba(109, 195, 255, 0.28);
+    color: #d7efff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    pointer-events: none;
+    transform: translateY(-100%);
+    white-space: nowrap;
+}
+
+@media (max-width: 1040px) {
+    .coop-banner,
+    .coop-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .coop-banner-metrics,
+    .coop-session-meta,
+    .coop-form-grid,
+    .coop-inline-form {
+        grid-template-columns: 1fr;
+        min-width: 0;
     }
 }

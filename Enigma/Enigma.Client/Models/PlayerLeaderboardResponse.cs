@@ -17,7 +17,7 @@ public class PlayerLeaderboardEntry
     public string Username { get; set; } = string.Empty;
 
     [JsonPropertyName("maze_nuggets")]
-    public int MazeNuggets { get; set; }
+    public long MazeNuggets { get; set; }
 
     [JsonPropertyName("owned_maps_count")]
     public int OwnedMapsCount { get; set; }

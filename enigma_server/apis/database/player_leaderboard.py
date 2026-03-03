@@ -51,7 +51,7 @@ def get_players_leaderboard(
 
         owned_ids = {str(map_id) for map_id in user.get("maps_owned", [])}
         discovered_ids = {str(map_id) for map_id in user.get("maps_discovered", [])}
-        effective_owned_count = len(owned_ids | discovered_ids)
+        effective_owned_count = len(owned_ids)
         discovered_count = len(discovered_ids)
         wins = normalize_int(user.get("maps_completed"))
         losses = normalize_int(user.get("maps_lost"))

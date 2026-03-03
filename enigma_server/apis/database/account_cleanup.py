@@ -6,6 +6,8 @@ from bson import ObjectId
 from fastapi import HTTPException
 
 from .db import maps_collection, marketplace_collection, run_results, users_collection
+from .economy_rules import credit_bank_dividend
+from .system_accounts import ensure_bank_account
 from .user_utils import SYSTEM_BANK_USERNAME, apply_user_defaults
 
 
@@ -18,6 +20,7 @@ def _owned_map_documents_for_user(username: str) -> list[dict[str, Any]]:
 
 
 def delete_user_account(username: str) -> dict[str, int]:
+    ensure_bank_account()
     user = users_collection.find_one({"username": username})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -29,6 +32,9 @@ def delete_user_account(username: str) -> dict[str, int]:
     owned_maps = _owned_map_documents_for_user(username)
     owned_map_ids = [map_doc.get("_id") for map_doc in owned_maps if isinstance(map_doc.get("_id"), ObjectId)]
     owned_map_names = [str(map_doc.get("map_name")) for map_doc in owned_maps if map_doc.get("map_name")]
+    marketplace_query = {"$or": [{"seller": username}, {"map_name": {"$in": owned_map_names}}]} if owned_map_names else {"seller": username}
+    deleted_marketplace_listings = marketplace_collection.count_documents(marketplace_query)
+    maze_nuggets_balance = max(0, int(normalized_user.get("maze_nuggets", 0) or 0))
 
     if owned_map_ids:
         users_collection.update_many(
@@ -42,13 +48,13 @@ def delete_user_account(username: str) -> dict[str, int]:
         )
 
     if owned_map_names:
-        marketplace_collection.delete_many({"$or": [{"seller": username}, {"map_name": {"$in": owned_map_names}}]})
+        marketplace_collection.delete_many(marketplace_query)
         users_collection.update_many(
             {"profile_image.map_name": {"$in": owned_map_names}},
             {"$set": {"profile_image": None}},
         )
     else:
-        marketplace_collection.delete_many({"seller": username})
+        marketplace_collection.delete_many(marketplace_query)
 
     users_collection.update_many(
         {},
@@ -63,10 +69,13 @@ def delete_user_account(username: str) -> dict[str, int]:
     if owned_map_ids:
         maps_collection.delete_many({"_id": {"$in": owned_map_ids}})
 
+    if maze_nuggets_balance > 0:
+        credit_bank_dividend(users_collection, maze_nuggets_balance)
+
     run_results.delete_many({"username": username})
     users_collection.delete_one({"username": username})
 
     return {
         "deleted_maps": len(owned_map_ids),
-        "deleted_marketplace_listings": len(owned_map_names),
+        "deleted_marketplace_listings": deleted_marketplace_listings,
     }

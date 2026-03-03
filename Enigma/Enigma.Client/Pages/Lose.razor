@@ -40,6 +40,13 @@ else
                     <span>Player</span>
                     <strong>@Summary.Username</strong>
                 </div>
+                @if (Summary.IsMultiplayer)
+                {
+                    <div>
+                        <span>Partner</span>
+                        <strong>@(string.IsNullOrWhiteSpace(Summary.PartnerUsername) ? "Unknown" : Summary.PartnerUsername)</strong>
+                    </div>
+                }
                 <div>
                     <span>Difficulty</span>
                     <strong>@Summary.Difficulty</strong>

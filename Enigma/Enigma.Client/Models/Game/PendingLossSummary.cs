@@ -15,4 +15,7 @@ public sealed class PendingLossSummary
     public List<string> UsedItems { get; set; } = [];
     public string Reason { get; set; } = "abandoned";
     public string AbandonedAtUtc { get; set; } = string.Empty;
+    public bool IsMultiplayer { get; set; }
+    public string? MultiplayerSessionId { get; set; }
+    public string? PartnerUsername { get; set; }
 }

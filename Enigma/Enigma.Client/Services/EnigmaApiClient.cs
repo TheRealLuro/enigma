@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Enigma.Client.Models;
 using Microsoft.AspNetCore.Components;
 
@@ -29,8 +30,12 @@ public sealed class EnigmaApiClient
             return null;
         }
 
-        response.EnsureSuccessStatusCode();
-        var payload = await response.Content.ReadFromJsonAsync<LoginResponse>(cancellationToken: cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var payload = await ReadJsonAsync<LoginResponse>(response, cancellationToken);
         return payload?.User;
     }
 
@@ -43,7 +48,7 @@ public sealed class EnigmaApiClient
         }
 
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<ApiStatusResponse>(cancellationToken: cancellationToken);
+        return await ReadJsonAsync<ApiStatusResponse>(response, cancellationToken);
     }
 
     public Task<HttpResponseMessage> PostJsonAsync<T>(string relativePath, T payload, CancellationToken cancellationToken = default)
@@ -71,8 +76,43 @@ public sealed class EnigmaApiClient
         return _http.GetAsync(BuildUrl(relativePath), cancellationToken);
     }
 
-    public Task<T?> GetFromJsonAsync<T>(string relativePath, CancellationToken cancellationToken = default)
+    public async Task<T?> GetFromJsonAsync<T>(string relativePath, CancellationToken cancellationToken = default)
     {
-        return _http.GetFromJsonAsync<T>(BuildUrl(relativePath), cancellationToken);
+        using var response = await _http.GetAsync(BuildUrl(relativePath), cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return default;
+        }
+
+        return await ReadJsonAsync<T>(response, cancellationToken);
+    }
+
+    public async Task<T?> ReadJsonAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken = default)
+    {
+        if (response.Content is null)
+        {
+            return default;
+        }
+
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return default;
+        }
+
+        var trimmed = raw.TrimStart();
+        if (trimmed.StartsWith('<'))
+        {
+            return default;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(raw, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        }
+        catch (JsonException)
+        {
+            return default;
+        }
     }
 }

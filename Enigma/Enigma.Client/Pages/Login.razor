@@ -115,7 +115,7 @@
                 throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorText) ? "Login failed." : errorText);
             }
 
-            var response = await httpResponse.Content.ReadFromJsonAsync<LoginResponse>();
+            var response = await Api.ReadJsonAsync<LoginResponse>(httpResponse);
             if (response is null || response.Status != "success" || string.IsNullOrWhiteSpace(response.User?.Username))
             {
                 throw new InvalidOperationException("Login failed.");

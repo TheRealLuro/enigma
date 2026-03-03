@@ -1,0 +1,825 @@
+@page "/play/coop"
+@using System.ComponentModel.DataAnnotations
+@using Enigma.Client.Models
+@using Enigma.Client.Models.Gameplay
+@using Microsoft.JSInterop
+@inject Enigma.Client.Services.EnigmaApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<PageTitle>Co-op Lobby</PageTitle>
+
+@if (IsLoading && !HasLoadedOnce)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading co-op lobby...</p>
+        </div>
+    </div>
+}
+else if (Session is null)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Co-op Lobby Unavailable</h1>
+            <p>Sign in before creating or joining a co-op session.</p>
+            <div class="enigma-end-actions">
+                <button class="btn btn-primary" @onclick="GoPlay">Play</button>
+                <button class="btn btn-secondary" @onclick="GoHome">Home</button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="content coop-shell">
+        <section class="coop-banner">
+            <div>
+                <span class="profile-kicker">Co-op Lobby</span>
+                <h1>Dual Explorer Sessions</h1>
+                <p>Create a shared maze session, invite one friend, ready up together, and enter the maze once both players lock in.</p>
+            </div>
+            <div class="coop-banner-metrics">
+                <div>
+                    <span>Signed In</span>
+                    <strong>@Session.Username</strong>
+                </div>
+                <div>
+                    <span>Friends</span>
+                    <strong>@Session.Friends.Count</strong>
+                </div>
+                <div>
+                    <span>Puzzle Sets</span>
+                    <strong>@PuzzleDefinitionCount</strong>
+                </div>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
+        }
+
+        @if (CurrentSession is null)
+        {
+            <div class="coop-grid">
+                <section class="panel coop-create-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Create</span>
+                            <h2>Start a Session</h2>
+                        </div>
+                    </div>
+
+                    <div class="coop-form-stack">
+                        <EditForm FormName="CoopGenerateForm" Model="CreateRequest" OnValidSubmit="CreateGeneratedSessionAsync">
+                            <DataAnnotationsValidator />
+                            <div class="coop-form-grid">
+                                <div>
+                                    <label class="form-label">Difficulty</label>
+                                    <InputSelect class="form-control" @bind-Value="CreateRequest.Difficulty">
+                                        @foreach (var difficulty in Enum.GetValues<Difficulty>())
+                                        {
+                                            <option value="@difficulty">@difficulty</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                                <div>
+                                    <label class="form-label">Size</label>
+                                    <InputNumber class="form-control" @bind-Value="CreateRequest.Size" />
+                                </div>
+                            </div>
+                            <ValidationMessage For="() => CreateRequest.Size" />
+                            <div class="coop-form-grid">
+                                <div>
+                                    <label class="form-label">Invite Friend</label>
+                                    <InputSelect class="form-control" @bind-Value="SelectedInviteFriend">
+                                        <option value="">Choose later</option>
+                                        @foreach (var friend in AvailableFriends)
+                                        {
+                                            <option value="@friend">@friend</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary w-100" type="submit" disabled="@IsActionBusy">
+                                @(IsActionBusy ? "Creating..." : "Generate Co-op Maze")
+                            </button>
+                        </EditForm>
+
+                        <div class="coop-divider"><span>or</span></div>
+
+                        <EditForm FormName="CoopLoadForm" Model="LoadRequest" OnValidSubmit="CreateLoadedSessionAsync">
+                            <DataAnnotationsValidator />
+                            <div>
+                                <label class="form-label">Saved Map Name</label>
+                                <InputText class="form-control" @bind-Value="LoadRequest.MapName" />
+                                <ValidationMessage For="() => LoadRequest.MapName" />
+                            </div>
+                            <div>
+                                <label class="form-label">Invite Friend</label>
+                                <InputSelect class="form-control" @bind-Value="SelectedInviteFriend">
+                                    <option value="">Choose later</option>
+                                    @foreach (var friend in AvailableFriends)
+                                    {
+                                        <option value="@friend">@friend</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <button class="btn btn-secondary w-100" type="submit" disabled="@IsActionBusy">
+                                @(IsActionBusy ? "Loading..." : "Load Map Into Co-op")
+                            </button>
+                        </EditForm>
+                    </div>
+                </section>
+
+                <section class="panel coop-join-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Join</span>
+                            <h2>Enter a Session</h2>
+                        </div>
+                    </div>
+                    <div class="coop-form-stack">
+                        <div>
+                            <label class="form-label">Session ID</label>
+                            <InputText class="form-control" @bind-Value="JoinSessionId" placeholder="mp-xxxxxxxxxx" />
+                        </div>
+                        <button class="btn btn-primary w-100" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(JoinSessionId)" @onclick="JoinSessionAsync">
+                            @(IsActionBusy ? "Joining..." : "Join Lobby")
+                        </button>
+                        <div class="empty-state-inline">You must already be invited by the owner before join will succeed.</div>
+                    </div>
+                </section>
+            </div>
+        }
+        else
+        {
+            <div class="coop-grid">
+                <section class="panel coop-session-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Session</span>
+                            <h2>@GetSessionHeading()</h2>
+                        </div>
+                        <span class="section-count">@CurrentSession.SessionId</span>
+                    </div>
+
+                    <div class="coop-session-meta">
+                        <div><span>Status</span><strong>@FormatSessionStatus(CurrentSession.Status)</strong></div>
+                        <div><span>Map</span><strong>@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Seed" : CurrentSession.MapName)</strong></div>
+                        <div><span>Difficulty</span><strong>@CurrentSession.Difficulty</strong></div>
+                        <div><span>Size</span><strong>@CurrentSession.Size x @CurrentSession.Size</strong></div>
+                    </div>
+
+                    <div class="coop-player-stack">
+                        @if (CurrentSession.You is not null)
+                        {
+                            <article class="coop-player-card you">
+                                <div>
+                                    <span class="profile-eyebrow">You</span>
+                                    <strong>@CurrentSession.You.Username</strong>
+                                </div>
+                                <div class="coop-player-meta">
+                                    <span>@CurrentSession.You.Role</span>
+                                    <span>@(CurrentSession.You.Ready ? "Ready" : "Not ready")</span>
+                                    <span>Team Gold @CurrentSession.TeamGold</span>
+                                </div>
+                            </article>
+                        }
+
+                        <article class="coop-player-card">
+                            <div>
+                                <span class="profile-eyebrow">Partner</span>
+                                <strong>@(CurrentSession.OtherPlayer?.Username ?? CurrentSession.GuestUsername ?? "Waiting for invited friend")</strong>
+                            </div>
+                            <div class="coop-player-meta">
+                                <span>@(CurrentSession.OtherPlayer?.Role ?? "guest")</span>
+                                <span>@(CurrentSession.OtherPlayer?.Ready == true ? "Ready" : "Not ready")</span>
+                                <span>@GetPartnerRoomLabel()</span>
+                            </div>
+                        </article>
+                    </div>
+
+                    @if (IsOwner && !HasGuest && InviteCandidates.Count > 0)
+                    {
+                        <div class="coop-inline-form">
+                            <InputSelect class="form-control" @bind-Value="InvitePendingFriend">
+                                <option value="">Invite a friend</option>
+                                @foreach (var friend in InviteCandidates)
+                                {
+                                    <option value="@friend">@friend</option>
+                                }
+                            </InputSelect>
+                            <button class="btn btn-secondary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(InvitePendingFriend)" @onclick="InviteFriendAsync">
+                                Invite
+                            </button>
+                        </div>
+                    }
+
+                    @if (CurrentSession.MoveVote is not null)
+                    {
+                        <div class="coop-move-vote">
+                            <strong>Room vote in progress:</strong>
+                            <span>@CurrentSession.MoveVote.Target.ToString()</span>
+                            <span>@string.Join(", ", CurrentSession.MoveVote.Votes)</span>
+                        </div>
+                    }
+
+                    <div class="enigma-end-actions coop-action-row">
+                        <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="ToggleReadyAsync">
+                            @(CurrentSession.You?.Ready == true ? "Unready" : "Ready Up")
+                        </button>
+                        <button class="btn btn-secondary" type="button" disabled="@(!CanEnterGame)" @onclick="EnterActiveSession">
+                            Enter Maze
+                        </button>
+                        <button class="btn btn-danger" type="button" disabled="@IsActionBusy" @onclick="LeaveSessionAsync">
+                            Leave Session
+                        </button>
+                    </div>
+
+                    <div class="empty-state-inline">The maze starts once both players are present and ready. Movement and room changes stay synchronized after entry.</div>
+                </section>
+
+                <section class="panel coop-puzzle-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Co-op Puzzles</span>
+                            <h2>Shared Puzzle Catalog</h2>
+                        </div>
+                    </div>
+
+                    @if (PuzzleCatalog.Count == 0)
+                    {
+                        <div class="empty-state-inline">Puzzle catalog unavailable.</div>
+                    }
+                    else
+                    {
+                        <div class="coop-catalog-stack">
+                            @foreach (var tier in PuzzleCatalog.OrderBy(static tier => tier.Key, StringComparer.OrdinalIgnoreCase))
+                            {
+                                <section class="coop-catalog-tier">
+                                    <div class="panel-heading compact">
+                                        <div>
+                                            <span class="profile-eyebrow">@tier.Key</span>
+                                            <h3>@FormatTierLabel(tier.Key)</h3>
+                                        </div>
+                                    </div>
+                                    <div class="catalog-card-grid coop-catalog-grid">
+                                        @foreach (var entry in tier.Value.OrderBy(static item => item.Key))
+                                        {
+                                            <article class="catalog-card coop-puzzle-card">
+                                                <div class="catalog-card-body">
+                                                    <span class="catalog-card-kicker">Key @entry.Key</span>
+                                                    <h3>@entry.Value.Name</h3>
+                                                    <p>@entry.Value.Description</p>
+                                                    <div class="catalog-card-meta">
+                                                        <span class="catalog-card-meta-pill">@entry.Value.CoreMechanic</span>
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        }
+                                    </div>
+                                </section>
+                            }
+                        </div>
+                    }
+                </section>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "sessionId")]
+    public string? RequestedSessionId { get; set; }
+
+    private sealed class GenerateSessionForm
+    {
+        [Required]
+        public Difficulty Difficulty { get; set; } = Difficulty.Easy;
+
+        [Range(2, int.MaxValue)]
+        public int Size { get; set; } = 4;
+    }
+
+    private sealed class LoadSessionForm
+    {
+        [Required]
+        public string MapName { get; set; } = string.Empty;
+    }
+
+    private sealed class SeedApiResponse
+    {
+        public string Seed { get; set; } = string.Empty;
+    }
+
+    private LoginUserSummary? Session { get; set; }
+    private bool IsLoading { get; set; } = true;
+    private bool HasLoadedOnce { get; set; }
+    private bool IsActionBusy { get; set; }
+    private bool HasError { get; set; }
+    private string? StatusMessage { get; set; }
+    private string? LoadedSessionId { get; set; }
+    private string JoinSessionId { get; set; } = string.Empty;
+    private string SelectedInviteFriend { get; set; } = string.Empty;
+    private string InvitePendingFriend { get; set; } = string.Empty;
+    private GenerateSessionForm CreateRequest { get; set; } = new();
+    private LoadSessionForm LoadRequest { get; set; } = new();
+    private MultiplayerSessionState? CurrentSession { get; set; }
+    private Dictionary<string, Dictionary<string, MultiplayerPuzzleDefinition>> PuzzleCatalog { get; set; } = [];
+    private CancellationTokenSource? PollCancellation { get; set; }
+    private Task? PollTask { get; set; }
+    private bool HasEnteredActiveSession { get; set; }
+    private bool CoopSocketOpen { get; set; }
+    private DotNetObjectReference<CoopLobby>? LobbySocketRef { get; set; }
+
+    private int PuzzleDefinitionCount => PuzzleCatalog.Values.Sum(static tier => tier.Count);
+    private IReadOnlyList<string> AvailableFriends => Session?.Friends.OrderBy(static friend => friend, StringComparer.OrdinalIgnoreCase).ToList() ?? [];
+    private bool IsOwner => CurrentSession is not null && string.Equals(CurrentSession.OwnerUsername, Session?.Username, StringComparison.OrdinalIgnoreCase);
+    private bool HasGuest => !string.IsNullOrWhiteSpace(CurrentSession?.GuestUsername);
+    private bool CanEnterGame => CurrentSession is not null && string.Equals(CurrentSession.Status, "active", StringComparison.OrdinalIgnoreCase);
+
+    private List<string> InviteCandidates =>
+        AvailableFriends
+            .Where(friend => !string.Equals(friend, Session?.Username, StringComparison.OrdinalIgnoreCase))
+            .Where(friend => CurrentSession?.InvitedFriends.Contains(friend, StringComparer.OrdinalIgnoreCase) != true)
+            .Where(friend => !string.Equals(friend, CurrentSession?.GuestUsername, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!HasLoadedOnce || string.Equals(LoadedSessionId, RequestedSessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await LoadSessionAsync(RequestedSessionId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Session = await Api.GetSessionAsync();
+            if (Session is null)
+            {
+                NavigationManager.NavigateTo("/", replace: true);
+                return;
+            }
+
+            LobbySocketRef = DotNetObjectReference.Create(this);
+            var catalog = await Api.GetFromJsonAsync<MultiplayerPuzzleCatalogResponse>("api/auth/multiplayer/puzzles");
+            PuzzleCatalog = catalog?.Catalog ?? [];
+            HasLoadedOnce = true;
+            IsLoading = false;
+
+            if (!string.IsNullOrWhiteSpace(RequestedSessionId))
+            {
+                JoinSessionId = RequestedSessionId;
+                await LoadSessionAsync(RequestedSessionId);
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+
+        if (CurrentSession is not null && !HasEnteredActiveSession)
+        {
+            await EnsureLobbySocketConnectedAsync();
+        }
+        else if (CurrentSession is null && LobbySocketRef is not null)
+        {
+            await JS.InvokeVoidAsync("enigmaGame.disposeCoopSocket");
+        }
+    }
+
+    private async Task CreateGeneratedSessionAsync()
+    {
+        await ExecuteActionAsync(async () =>
+        {
+            var seedResponse = await Api.GetFromJsonAsync<SeedApiResponse>(
+                $"api/auth/newMap?difficulty={Uri.EscapeDataString(CreateRequest.Difficulty.ToString().ToLowerInvariant())}&size={CreateRequest.Size}");
+
+            if (string.IsNullOrWhiteSpace(seedResponse?.Seed))
+            {
+                throw new InvalidOperationException("The backend returned an empty seed.");
+            }
+
+            await CreateSessionAsync(seedResponse.Seed, null, "new");
+        });
+    }
+
+    private async Task CreateLoadedSessionAsync()
+    {
+        await ExecuteActionAsync(async () =>
+        {
+            var seedResponse = await Api.GetFromJsonAsync<SeedApiResponse>(
+                $"api/auth/loadMap?name={Uri.EscapeDataString(LoadRequest.MapName)}");
+
+            if (string.IsNullOrWhiteSpace(seedResponse?.Seed))
+            {
+                throw new InvalidOperationException("The requested map did not return a seed.");
+            }
+
+            await CreateSessionAsync(seedResponse.Seed, LoadRequest.MapName, "load");
+        });
+    }
+
+    private async Task CreateSessionAsync(string seed, string? mapName, string source)
+    {
+        using var response = await Api.PostJsonAsync("api/auth/multiplayer/session/create", new
+        {
+            seed,
+            mapName,
+            source,
+            invitedFriends = string.IsNullOrWhiteSpace(SelectedInviteFriend) ? Array.Empty<string>() : new[] { SelectedInviteFriend },
+        });
+
+        var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
+        await EnsureSuccessAsync(response, payload, "Unable to create a co-op session.");
+        ApplySessionEnvelope(payload);
+        StatusMessage = "Session created. Share the session id or invite a friend to join.";
+        HasError = false;
+    }
+
+    private async Task JoinSessionAsync()
+    {
+        await ExecuteActionAsync(async () =>
+        {
+            using var response = await Api.PostJsonAsync("api/auth/multiplayer/session/join", new { sessionId = JoinSessionId.Trim() });
+            var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
+            await EnsureSuccessAsync(response, payload, "Unable to join the co-op session.");
+            ApplySessionEnvelope(payload);
+            StatusMessage = "Joined session. Ready up when both players are in the lobby.";
+            HasError = false;
+        });
+    }
+
+    private async Task ToggleReadyAsync()
+    {
+        if (CurrentSession is null || CurrentSession.You is null)
+        {
+            return;
+        }
+
+        await ExecuteActionAsync(async () =>
+        {
+            using var response = await Api.PostJsonAsync("api/auth/multiplayer/session/ready", new
+            {
+                sessionId = CurrentSession.SessionId,
+                ready = !CurrentSession.You.Ready,
+            });
+            var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
+            await EnsureSuccessAsync(response, payload, "Unable to update ready state.");
+            ApplySessionEnvelope(payload);
+        });
+    }
+
+    private async Task InviteFriendAsync()
+    {
+        if (CurrentSession is null || string.IsNullOrWhiteSpace(InvitePendingFriend))
+        {
+            return;
+        }
+
+        await ExecuteActionAsync(async () =>
+        {
+            using var response = await Api.PostJsonAsync("api/auth/multiplayer/session/invite", new
+            {
+                sessionId = CurrentSession.SessionId,
+                friendUsername = InvitePendingFriend,
+            });
+            var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
+            await EnsureSuccessAsync(response, payload, "Unable to invite that friend.");
+            InvitePendingFriend = string.Empty;
+            ApplySessionEnvelope(payload);
+            StatusMessage = "Friend invited. They can now join with the session id.";
+            HasError = false;
+        });
+    }
+
+    private async Task LeaveSessionAsync()
+    {
+        if (CurrentSession is null)
+        {
+            return;
+        }
+
+        await ExecuteActionAsync(async () =>
+        {
+            using var response = await Api.PostJsonAsync("api/auth/multiplayer/session/leave", new
+            {
+                sessionId = CurrentSession.SessionId,
+                reason = "left_lobby",
+            });
+            var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
+            await EnsureSuccessAsync(response, payload, "Unable to leave the co-op session.");
+            await StopPollingAsync();
+            CurrentSession = null;
+            LoadedSessionId = null;
+            HasEnteredActiveSession = false;
+            JoinSessionId = string.Empty;
+            NavigationManager.NavigateTo("/play/coop", replace: true);
+            StatusMessage = "Session closed.";
+            HasError = false;
+        });
+    }
+
+    private async Task LoadSessionAsync(string? sessionId)
+    {
+        var normalizedSessionId = (sessionId ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalizedSessionId))
+        {
+            await StopPollingAsync();
+            CurrentSession = null;
+            LoadedSessionId = null;
+            return;
+        }
+
+        IsLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await Api.GetAsync($"api/auth/multiplayer/session?sessionId={Uri.EscapeDataString(normalizedSessionId)}");
+            var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
+            await EnsureSuccessAsync(response, payload, "Unable to load the co-op session.");
+            ApplySessionEnvelope(payload);
+            HasError = false;
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ApplySessionEnvelope(MultiplayerSessionEnvelope? payload)
+    {
+        CurrentSession = payload?.Session;
+        LoadedSessionId = CurrentSession?.SessionId;
+        JoinSessionId = CurrentSession?.SessionId ?? JoinSessionId;
+        if (CurrentSession is null)
+        {
+            return;
+        }
+
+        NavigationManager.NavigateTo($"/play/coop?sessionId={Uri.EscapeDataString(CurrentSession.SessionId)}", replace: true);
+        if (!CoopSocketOpen)
+        {
+            StartPolling();
+        }
+
+        if (CanEnterGame && !HasEnteredActiveSession)
+        {
+            HasEnteredActiveSession = true;
+            EnterActiveSession();
+        }
+    }
+
+    private void EnterActiveSession()
+    {
+        if (CurrentSession is null)
+        {
+            return;
+        }
+
+        var url = $"/game?seed={Uri.EscapeDataString(CurrentSession.Seed)}&source={Uri.EscapeDataString(CurrentSession.Source)}&coop=true&coopSessionId={Uri.EscapeDataString(CurrentSession.SessionId)}";
+        if (!string.IsNullOrWhiteSpace(CurrentSession.MapName))
+        {
+            url += $"&mapName={Uri.EscapeDataString(CurrentSession.MapName)}";
+        }
+
+        NavigationManager.NavigateTo(url);
+    }
+
+    private void StartPolling()
+    {
+        if (CoopSocketOpen || CurrentSession is null || string.IsNullOrWhiteSpace(CurrentSession.SessionId))
+        {
+            return;
+        }
+
+        if (CurrentSession.Status is "completed" or "abandoned")
+        {
+            return;
+        }
+
+        PollCancellation?.Cancel();
+        PollCancellation = new CancellationTokenSource();
+        PollTask = PollSessionLoopAsync(CurrentSession.SessionId, PollCancellation.Token);
+    }
+
+    private async Task PollSessionLoopAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1000));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                using var response = await Api.GetAsync($"api/auth/multiplayer/session?sessionId={Uri.EscapeDataString(sessionId)}", cancellationToken);
+                var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response, cancellationToken);
+                if (!response.IsSuccessStatusCode || payload?.Session is null)
+                {
+                    continue;
+                }
+
+                await InvokeAsync(() =>
+                {
+                    CurrentSession = payload.Session;
+                    if (CanEnterGame && !HasEnteredActiveSession)
+                    {
+                        HasEnteredActiveSession = true;
+                        EnterActiveSession();
+                    }
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task ExecuteActionAsync(Func<Task> operation)
+    {
+        IsActionBusy = true;
+        HasError = false;
+        StatusMessage = null;
+
+        try
+        {
+            await operation();
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsActionBusy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, MultiplayerSessionEnvelope? payload, string prefix)
+    {
+        if (response.IsSuccessStatusCode && payload?.Session is not null)
+        {
+            return;
+        }
+
+        var raw = await response.Content.ReadAsStringAsync();
+        throw new InvalidOperationException(string.IsNullOrWhiteSpace(raw) ? prefix : $"{prefix} {raw}");
+    }
+
+    private string GetSessionHeading()
+    {
+        if (CurrentSession is null)
+        {
+            return "Session";
+        }
+
+        return string.IsNullOrWhiteSpace(CurrentSession.MapName)
+            ? "Generated Co-op Run"
+            : CurrentSession.MapName;
+    }
+
+    private string GetPartnerRoomLabel()
+    {
+        if (CurrentSession?.OtherPlayer?.Room is not null)
+        {
+            return $"Room {CurrentSession.OtherPlayer.Room}";
+        }
+
+        return "Room pending";
+    }
+
+    private static string FormatSessionStatus(string? value) => value switch
+    {
+        "waiting_for_guest" => "Waiting for guest",
+        "ready_check" => "Ready check",
+        "active" => "Active",
+        "completed" => "Completed",
+        "abandoned" => "Abandoned",
+        _ => string.IsNullOrWhiteSpace(value) ? "Unknown" : value.Replace('_', ' '),
+    };
+
+    private static string FormatTierLabel(string key) => key.ToLowerInvariant() switch
+    {
+        "easy" => "Easy Co-op",
+        "medium" => "Medium Co-op",
+        "hard" => "Hard Co-op",
+        _ => key,
+    };
+
+    private void GoPlay() => NavigationManager.NavigateTo("/play");
+    private void GoHome() => NavigationManager.NavigateTo("/home");
+
+    private async Task EnsureLobbySocketConnectedAsync()
+    {
+        if (CurrentSession is null || string.IsNullOrWhiteSpace(CurrentSession.SessionId) || LobbySocketRef is null)
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync("enigmaGame.connectCoopSocket", CurrentSession.SessionId, LobbySocketRef);
+    }
+
+    [JSInvokable]
+    public Task HandleCoopSocketStatusChanged(bool isOpen)
+    {
+        CoopSocketOpen = isOpen;
+        if (isOpen)
+        {
+            _ = StopPollingAsync();
+        }
+        else if (CurrentSession is not null && !HasEnteredActiveSession)
+        {
+            StartPolling();
+        }
+
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task HandleCoopSocketMessage(string rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson))
+        {
+            return Task.CompletedTask;
+        }
+
+        MultiplayerSocketEnvelope? payload;
+        try
+        {
+            payload = System.Text.Json.JsonSerializer.Deserialize<MultiplayerSocketEnvelope>(rawJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (payload?.Session is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(() =>
+        {
+            ApplySessionEnvelope(new MultiplayerSessionEnvelope
+            {
+                Status = payload.Status,
+                RoomMoved = payload.RoomMoved,
+                Session = payload.Session,
+                Completion = payload.Completion,
+            });
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopPollingAsync();
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.disposeCoopSocket");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        LobbySocketRef?.Dispose();
+    }
+
+    private async Task StopPollingAsync()
+    {
+        if (PollCancellation is not null)
+        {
+            PollCancellation.Cancel();
+            PollCancellation.Dispose();
+            PollCancellation = null;
+        }
+
+        if (PollTask is not null)
+        {
+            try
+            {
+                await PollTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            PollTask = null;
+        }
+    }
+}

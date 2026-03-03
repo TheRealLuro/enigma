@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 import bcrypt
+from bson.decimal128 import Decimal128
 
 from .db import users_collection
 from .user_utils import SYSTEM_BANK_USERNAME, default_user_fields
@@ -19,10 +20,22 @@ def ensure_bank_account() -> None:
     }
 
     if existing:
-        users_collection.update_one({"_id": existing["_id"]}, {"$set": update})
+        bank_balance = existing.get("maze_nuggets", 0)
+        try:
+            if isinstance(bank_balance, Decimal128):
+                normalized_balance = bank_balance
+            else:
+                normalized_balance = Decimal128(str(int(bank_balance)))
+        except (TypeError, ValueError, ArithmeticError):
+            normalized_balance = Decimal128("0")
+
+        users_collection.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {**update, "maze_nuggets": normalized_balance}},
+        )
         return
 
-    password = os.getenv("ENIGMA_BANK_PASSWORD") or "EnigmaBank!2026#Vault"
+    password = os.getenv("ENIGMA_BANK_PASSWORD")
     hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
     users_collection.insert_one(
@@ -31,7 +44,7 @@ def ensure_bank_account() -> None:
             "email": "bank@enigma.local",
             "email_normalized": "bank@enigma.local",
             "password": hashed_password,
-            "maze_nuggets": 0,
+            "maze_nuggets": Decimal128("0"),
             "friends": [],
             "friend_requests": [],
             "maps_discovered": [],

@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request
 from pymongo.errors import PyMongoError
-from .db import  client, item_inventory, merchant, users_collection
+from .db import client, item_inventory, maps_collection, merchant, users_collection
+from .economy_rules import credit_bank_dividend
+from .founders_mark import FOUNDERS_MARK_ITEM_ID, evaluate_founders_mark_requirements
+from .system_accounts import ensure_bank_account
 from main import limiter
 
 
@@ -10,15 +13,26 @@ router = APIRouter(prefix="/database/merchant")
 @router.post("/buy_item")
 @limiter.limit("10/minute")
 def buy_item(request: Request, username: str, item_id: str, quantity: int = 1):
-    
-
     if quantity < 1:
         raise HTTPException(status_code=400, detail="Quantity must be at least 1")
+
+    ensure_bank_account()
 
     try:
         with client.start_session() as session:
             with session.start_transaction():
                 item = merchant.find_one({"item_id": item_id}, session=session)
+                from_daily_shop = item is not None
+                if not item:
+                    item = item_inventory.find_one(
+                        {
+                            "item_id": item_id,
+                            "always_available": True,
+                            "stock": {"$gt": 0},
+                            "retired": {"$ne": True},
+                        },
+                        session=session,
+                    )
                 if not item:
                     raise HTTPException(status_code=404, detail="Item not found in shop")
 
@@ -39,16 +53,33 @@ def buy_item(request: Request, username: str, item_id: str, quantity: int = 1):
                 if not user:
                     raise HTTPException(status_code=404, detail="User not found")
 
-                shop_result = merchant.update_one(
-                    {"item_id": item_id, "stock": {"$gte": quantity}},
-                    {"$inc": {"stock": -quantity}},
-                    session=session,
-                )
-                if shop_result.modified_count != 1:
-                    raise HTTPException(status_code=409, detail="Item is out of stock")
+                purchase_limit = int(item.get("purchase_limit", 0) or 0)
+                already_owned_count = int((user.get("item_counts", {}) or {}).get(item_id, 0) or 0)
+                if purchase_limit > 0 and already_owned_count >= purchase_limit:
+                    raise HTTPException(status_code=409, detail="You already claimed this item")
+
+                if item_id == FOUNDERS_MARK_ITEM_ID:
+                    if quantity != 1:
+                        raise HTTPException(status_code=400, detail="Founders Mark can only be claimed once")
+
+                    eligibility = evaluate_founders_mark_requirements(user, maps_collection)
+                    if not eligibility["eligible"]:
+                        raise HTTPException(
+                            status_code=403,
+                            detail=eligibility["reason"] or "You have not completed the Founders Mark checklist",
+                        )
+
+                if from_daily_shop:
+                    shop_result = merchant.update_one(
+                        {"item_id": item_id, "stock": {"$gte": quantity}},
+                        {"$inc": {"stock": -quantity}},
+                        session=session,
+                    )
+                    if shop_result.modified_count != 1:
+                        raise HTTPException(status_code=409, detail="Item is out of stock")
 
                 inv_result = item_inventory.update_one(
-                    {"item_id": item_id, "stock": {"$gte": quantity}},
+                    {"item_id": item_id, "stock": {"$gte": quantity}, "retired": {"$ne": True}},
                     {"$inc": {"stock": -quantity}},
                     session=session,
                 )
@@ -88,7 +119,12 @@ def buy_item(request: Request, username: str, item_id: str, quantity: int = 1):
                         session=session,
                     )
                     if buyer_result.modified_count != 1:
+                        if total_cost == 0:
+                            raise HTTPException(status_code=409, detail="Unable to claim this item")
                         raise HTTPException(status_code=400, detail="Not enough maze nuggets")
+
+                if total_cost > 0:
+                    credit_bank_dividend(users_collection, total_cost, session)
     except HTTPException:
         raise
     except PyMongoError:

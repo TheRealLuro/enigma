@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
+
 from .db import users_collection, maps_collection, item_inventory
+from .economy_rules import compute_loss_fee, compute_single_player_reward, credit_bank_dividend
 from main import limiter
 
 router = APIRouter(prefix="/database/users")
@@ -61,10 +63,13 @@ def update_user_progress(
             if effect_value > 0:
                 reward_multiplier *= effect_value
 
-    rewarded_mn = int(earned_mn * reward_multiplier)
+    gross_reward = int(earned_mn * reward_multiplier)
+    economy = compute_single_player_reward(gross_reward, user)
+    rewarded_mn = economy["rewarded_mn"]
+    loss_fee = compute_loss_fee(user) if map_lost else {"applied_fee": 0}
 
     update_query = {"$inc": {"number_of_maps_played": 1}}
-    update_query["$inc"]["maze_nuggets"] = rewarded_mn
+    update_query["$inc"]["maze_nuggets"] = rewarded_mn - int(loss_fee["applied_fee"])
 
     if map_lost:
         update_query["$inc"]["maps_lost"] = 1
@@ -78,10 +83,15 @@ def update_user_progress(
         update_query["$addToSet"] = {"maps_discovered": map_id, "maps_owned": map_id}
 
     result = users_collection.update_one({"username": username}, update_query)
+    credit_bank_dividend(users_collection, economy["bank_dividend"] + int(loss_fee["applied_fee"]))
 
     return {
         "status": "success",
         "modified_count": result.modified_count,
         "rewarded_mn": rewarded_mn,
         "reward_multiplier": reward_multiplier,
+        "gross_reward": gross_reward,
+        "bank_dividend": economy["bank_dividend"],
+        "loss_fee_applied": int(loss_fee["applied_fee"]),
+        "founders_multiplier": economy["reward_multiplier"],
     }

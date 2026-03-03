@@ -119,7 +119,7 @@
                 return;
             }
 
-            var response = await httpResponse.Content.ReadFromJsonAsync<LoginResponse>();
+            var response = await Api.ReadJsonAsync<LoginResponse>(httpResponse);
             if (response is null || response.Status != "success" || string.IsNullOrWhiteSpace(response.User?.Username))
             {
                 errorMessage = "Sign up failed.";

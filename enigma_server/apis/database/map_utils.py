@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Iterable
 
 from bson import ObjectId
+from bson.decimal128 import Decimal128
 
 THEME_LABEL_RULES = [
     ("Neural Membrane", ("neural", "membrane", "biomech")),
@@ -29,6 +31,18 @@ def normalize_object_id(value: Any) -> ObjectId | None:
 
 
 def normalize_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, Decimal128):
+        try:
+            return int(value.to_decimal())
+        except (ArithmeticError, ValueError):
+            return default
+
+    if isinstance(value, Decimal):
+        try:
+            return int(value)
+        except (ArithmeticError, ValueError):
+            return default
+
     try:
         return int(value)
     except (TypeError, ValueError):

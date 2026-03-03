@@ -23,7 +23,7 @@ public class LoginUserSummary
     public string Username { get; set; } = string.Empty;
 
     [JsonPropertyName("maze_nuggets")]
-    public int MazeNuggets { get; set; }
+    public long MazeNuggets { get; set; }
 
     [JsonPropertyName("friends")]
     public List<string> Friends { get; set; } = [];

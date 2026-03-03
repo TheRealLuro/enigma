@@ -3,6 +3,6 @@
     public class User
     {
         public string Username { get; set; } = string.Empty;
-        public int MazeNuggets { get; set; }
+        public long MazeNuggets { get; set; }
     }
 }

@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from main import limiter
 
 from .db import maps_collection, marketplace_collection, users_collection
+from .economy_rules import credit_bank_dividend
 from .system_accounts import ensure_bank_account
 from .user_utils import SYSTEM_BANK_USERNAME
 
@@ -43,10 +44,10 @@ def recycle_map(request: Request, username: str, map_name: str):
             "$addToSet": {"maps_discovered": map_id},
         },
     )
+    credit_bank_dividend(users_collection, payout_to_bank)
     users_collection.update_one(
         {"username": SYSTEM_BANK_USERNAME},
         {
-            "$inc": {"maze_nuggets": payout_to_bank},
             "$addToSet": {"maps_owned": map_id, "maps_discovered": map_id},
         },
     )

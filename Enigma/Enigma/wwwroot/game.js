@@ -15,6 +15,131 @@
     let beforeUnloadHandler = null;
     let livePlayerState = null;
     let currentAbandonUrl = null;
+    let tutorialDotNetRef = null;
+    let tutorialRequestHandler = null;
+    let audioContext = null;
+    let pageHideHandler = null;
+    let coopSocket = null;
+    let coopSocketSessionId = null;
+    let coopSocketDotNetRef = null;
+    let coopSocketReconnectHandle = null;
+    const storageFallback = {
+        session: Object.create(null),
+        local: Object.create(null)
+    };
+
+    function getStorageArea(storageName) {
+        try {
+            return storageName === "local" ? window.localStorage : window.sessionStorage;
+        } catch {
+            return null;
+        }
+    }
+
+    function getStorageItem(storageName, key) {
+        const storage = getStorageArea(storageName);
+        if (storage) {
+            try {
+                return storage.getItem(key);
+            } catch {
+            }
+        }
+
+        return Object.prototype.hasOwnProperty.call(storageFallback[storageName], key)
+            ? storageFallback[storageName][key]
+            : null;
+    }
+
+    function setStorageItem(storageName, key, value) {
+        const storage = getStorageArea(storageName);
+        if (storage) {
+            try {
+                storage.setItem(key, value);
+                delete storageFallback[storageName][key];
+                return;
+            } catch {
+            }
+        }
+
+        storageFallback[storageName][key] = value;
+    }
+
+    function removeStorageItem(storageName, key) {
+        const storage = getStorageArea(storageName);
+        if (storage) {
+            try {
+                storage.removeItem(key);
+            } catch {
+            }
+        }
+
+        delete storageFallback[storageName][key];
+    }
+
+    function hasStorageItem(storageName, key) {
+        const storage = getStorageArea(storageName);
+        if (storage) {
+            try {
+                return storage.getItem(key) !== null;
+            } catch {
+            }
+        }
+
+        return Object.prototype.hasOwnProperty.call(storageFallback[storageName], key);
+    }
+
+    function parseJsonValue(raw, storageName, key) {
+        if (!raw) {
+            return null;
+        }
+
+        try {
+            return JSON.parse(raw);
+        } catch {
+            if (storageName && key) {
+                removeStorageItem(storageName, key);
+            }
+
+            return null;
+        }
+    }
+
+    function dispatchCustomEvent(name, detail) {
+        try {
+            if (typeof window.CustomEvent === "function") {
+                window.dispatchEvent(new CustomEvent(name, { detail: detail || null }));
+                return;
+            }
+
+            const event = document.createEvent("CustomEvent");
+            event.initCustomEvent(name, false, false, detail || null);
+            window.dispatchEvent(event);
+        } catch {
+        }
+    }
+
+    function getNormalizedCode(event) {
+        if (event.code) {
+            return event.code;
+        }
+
+        switch (String(event.key || "").toLowerCase()) {
+            case "arrowup":
+            case "w":
+                return event.key.length === 1 ? "KeyW" : "ArrowUp";
+            case "arrowright":
+            case "d":
+                return event.key.length === 1 ? "KeyD" : "ArrowRight";
+            case "arrowdown":
+            case "s":
+                return event.key.length === 1 ? "KeyS" : "ArrowDown";
+            case "arrowleft":
+            case "a":
+                return event.key.length === 1 ? "KeyA" : "ArrowLeft";
+            default:
+                return "";
+        }
+    }
 
     function shouldHandleKey(code) {
         return ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft", "KeyW", "KeyA", "KeyS", "KeyD"].includes(code);
@@ -32,50 +157,61 @@
         }
     }
 
-    function setStoredJson(storage, key, value) {
-        storage.setItem(key, JSON.stringify(value || {}));
+    function addWindowListener(name, handler, options) {
+        try {
+            window.addEventListener(name, handler, options);
+        } catch {
+            window.addEventListener(name, handler);
+        }
+    }
+
+    function setStoredJson(storageName, key, value) {
+        setStorageItem(storageName, key, JSON.stringify(value ?? {}));
     }
 
     function readStoredJson(key) {
-        const raw = window.sessionStorage.getItem(key) || window.localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : null;
+        const sessionValue = parseJsonValue(getStorageItem("session", key), "session", key);
+        if (sessionValue !== null) {
+            return sessionValue;
+        }
+
+        return parseJsonValue(getStorageItem("local", key), "local", key);
     }
 
     function refreshStoredJson(key, value) {
-        if (window.localStorage.getItem(key)) {
-            setStoredJson(window.localStorage, key, value);
+        if (hasStorageItem("local", key)) {
+            setStoredJson("local", key, value);
             return;
         }
 
-        if (window.sessionStorage.getItem(key)) {
-            setStoredJson(window.sessionStorage, key, value);
+        if (hasStorageItem("session", key)) {
+            setStoredJson("session", key, value);
             return;
         }
 
-        setStoredJson(window.sessionStorage, key, value);
+        setStoredJson("session", key, value);
     }
 
     function clearStoredJson(key) {
-        window.sessionStorage.removeItem(key);
-        window.localStorage.removeItem(key);
+        removeStorageItem("session", key);
+        removeStorageItem("local", key);
     }
 
     function emitPlayerStateChange(state) {
-        window.dispatchEvent(new CustomEvent("enigma:player-state", { detail: state || null }));
+        dispatchCustomEvent("enigma:player-state", state);
     }
 
     function getDraftLossSummary() {
-        const raw = window.sessionStorage.getItem(pendingLossDraftKey);
-        return raw ? JSON.parse(raw) : null;
+        return parseJsonValue(getStorageItem("session", pendingLossDraftKey), "session", pendingLossDraftKey);
     }
 
     function setDraftLossSummary(summary) {
         if (!summary) {
-            window.sessionStorage.removeItem(pendingLossDraftKey);
+            removeStorageItem("session", pendingLossDraftKey);
             return;
         }
 
-        window.sessionStorage.setItem(pendingLossDraftKey, JSON.stringify(summary));
+        setStorageItem("session", pendingLossDraftKey, JSON.stringify(summary));
     }
 
     function promoteDraftLossSummary() {
@@ -84,7 +220,7 @@
             return null;
         }
 
-        window.sessionStorage.setItem(pendingLossSummaryKey, JSON.stringify(summary));
+        setStorageItem("session", pendingLossSummaryKey, JSON.stringify(summary));
         return summary;
     }
 
@@ -93,16 +229,110 @@
             window.removeEventListener("beforeunload", beforeUnloadHandler);
             beforeUnloadHandler = null;
         }
+
+        if (pageHideHandler) {
+            window.removeEventListener("pagehide", pageHideHandler);
+            pageHideHandler = null;
+        }
+    }
+
+    function removeTutorialListener() {
+        if (tutorialRequestHandler) {
+            window.removeEventListener("enigma:tutorial-requested", tutorialRequestHandler);
+            tutorialRequestHandler = null;
+        }
+
+        tutorialDotNetRef = null;
+    }
+
+    function clearCoopReconnect() {
+        if (coopSocketReconnectHandle) {
+            window.clearTimeout(coopSocketReconnectHandle);
+            coopSocketReconnectHandle = null;
+        }
+    }
+
+    function disposeCoopSocketInternal() {
+        clearCoopReconnect();
+        if (coopSocket) {
+            try {
+                coopSocket.onopen = null;
+                coopSocket.onmessage = null;
+                coopSocket.onclose = null;
+                coopSocket.onerror = null;
+                if (coopSocket.readyState === WebSocket.OPEN || coopSocket.readyState === WebSocket.CONNECTING) {
+                    coopSocket.close(1000, "dispose");
+                }
+            } catch {
+            }
+        }
+
+        coopSocket = null;
+        coopSocketSessionId = null;
+        coopSocketDotNetRef = null;
+    }
+
+    function notifyCoopSocketStatus(isOpen) {
+        if (!coopSocketDotNetRef) {
+            return;
+        }
+
+        coopSocketDotNetRef.invokeMethodAsync("HandleCoopSocketStatusChanged", !!isOpen).catch(() => {});
+    }
+
+    function scheduleCoopReconnect() {
+        clearCoopReconnect();
+        if (!coopSocketSessionId || !coopSocketDotNetRef) {
+            return;
+        }
+
+        coopSocketReconnectHandle = window.setTimeout(function () {
+            window.enigmaGame.connectCoopSocket(coopSocketSessionId, coopSocketDotNetRef);
+        }, 1500);
+    }
+
+    function ensureAudioContext() {
+        if (audioContext) {
+            return audioContext;
+        }
+
+        const AudioCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtor) {
+            return null;
+        }
+
+        try {
+            audioContext = new AudioCtor();
+        } catch {
+            audioContext = null;
+        }
+
+        return audioContext;
     }
 
     function sendAbandonBeacon(summary) {
-        if (!summary || !currentAbandonUrl || !navigator.sendBeacon) {
+        if (!summary || !currentAbandonUrl) {
             return;
         }
 
         try {
-            const payload = new Blob([JSON.stringify(summary)], { type: "application/json" });
-            navigator.sendBeacon(currentAbandonUrl, payload);
+            const body = JSON.stringify(summary);
+
+            if (navigator.sendBeacon) {
+                const payload = new Blob([body], { type: "application/json" });
+                navigator.sendBeacon(currentAbandonUrl, payload);
+                return;
+            }
+
+            if (window.fetch) {
+                window.fetch(currentAbandonUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: body,
+                    credentials: "include",
+                    keepalive: true
+                }).catch(() => {});
+            }
         } catch {
         }
     }
@@ -113,25 +343,27 @@
             dotNetRef = helper;
 
             keyDownHandler = function (event) {
-                if (!shouldHandleKey(event.code) || !dotNetRef) {
+                const code = getNormalizedCode(event);
+                if (!shouldHandleKey(code) || !dotNetRef) {
                     return;
                 }
 
                 event.preventDefault();
-                dotNetRef.invokeMethodAsync("HandleKeyChange", event.code, true);
+                dotNetRef.invokeMethodAsync("HandleKeyChange", code, true);
             };
 
             keyUpHandler = function (event) {
-                if (!shouldHandleKey(event.code) || !dotNetRef) {
+                const code = getNormalizedCode(event);
+                if (!shouldHandleKey(code) || !dotNetRef) {
                     return;
                 }
 
                 event.preventDefault();
-                dotNetRef.invokeMethodAsync("HandleKeyChange", event.code, false);
+                dotNetRef.invokeMethodAsync("HandleKeyChange", code, false);
             };
 
-            window.addEventListener("keydown", keyDownHandler, { passive: false });
-            window.addEventListener("keyup", keyUpHandler, { passive: false });
+            addWindowListener("keydown", keyDownHandler, { passive: false });
+            addWindowListener("keyup", keyUpHandler, { passive: false });
         },
 
         disposeInput: function () {
@@ -147,27 +379,26 @@
         },
 
         sessionSetJson: function (key, value) {
-            window.sessionStorage.setItem(key, JSON.stringify(value));
+            setStorageItem("session", key, JSON.stringify(value));
         },
 
         sessionGetJson: function (key) {
-            const raw = window.sessionStorage.getItem(key);
-            return raw ? JSON.parse(raw) : null;
+            return parseJsonValue(getStorageItem("session", key), "session", key);
         },
 
         sessionRemove: function (key) {
-            window.sessionStorage.removeItem(key);
+            removeStorageItem("session", key);
         },
 
         setPlayerIdentity: function (identity, rememberMe) {
             if (rememberMe) {
-                setStoredJson(window.localStorage, playerStorageKey, identity);
-                window.sessionStorage.removeItem(playerStorageKey);
+                setStoredJson("local", playerStorageKey, identity);
+                removeStorageItem("session", playerStorageKey);
                 return;
             }
 
-            setStoredJson(window.sessionStorage, playerStorageKey, identity);
-            window.localStorage.removeItem(playerStorageKey);
+            setStoredJson("session", playerStorageKey, identity);
+            removeStorageItem("local", playerStorageKey);
         },
 
         getPlayerIdentity: function () {
@@ -180,13 +411,13 @@
 
         setUserSession: function (session, rememberMe) {
             if (rememberMe) {
-                setStoredJson(window.localStorage, userStorageKey, session);
-                window.sessionStorage.removeItem(userStorageKey);
+                setStoredJson("local", userStorageKey, session);
+                removeStorageItem("session", userStorageKey);
                 return;
             }
 
-            setStoredJson(window.sessionStorage, userStorageKey, session);
-            window.localStorage.removeItem(userStorageKey);
+            setStoredJson("session", userStorageKey, session);
+            removeStorageItem("local", userStorageKey);
         },
 
         getUserSession: function () {
@@ -203,31 +434,30 @@
 
         setActiveGameSession: function (session) {
             if (!session || !session.seed) {
-                window.sessionStorage.removeItem(activeGameSessionKey);
+                removeStorageItem("session", activeGameSessionKey);
                 return;
             }
 
-            window.sessionStorage.setItem(activeGameSessionKey, JSON.stringify(session));
+            setStorageItem("session", activeGameSessionKey, JSON.stringify(session));
         },
 
         getActiveGameSession: function () {
-            const raw = window.sessionStorage.getItem(activeGameSessionKey);
-            return raw ? JSON.parse(raw) : null;
+            return parseJsonValue(getStorageItem("session", activeGameSessionKey), "session", activeGameSessionKey);
         },
 
         clearActiveGameSession: function () {
-            window.sessionStorage.removeItem(activeGameSessionKey);
+            removeStorageItem("session", activeGameSessionKey);
         },
 
         setLivePlayerState: function (state) {
             livePlayerState = state || null;
             if (!livePlayerState) {
-                window.sessionStorage.removeItem(livePlayerStateKey);
+                removeStorageItem("session", livePlayerStateKey);
                 emitPlayerStateChange(null);
                 return;
             }
 
-            window.sessionStorage.setItem(livePlayerStateKey, JSON.stringify(livePlayerState));
+            setStorageItem("session", livePlayerStateKey, JSON.stringify(livePlayerState));
             emitPlayerStateChange(livePlayerState);
         },
 
@@ -236,14 +466,13 @@
                 return livePlayerState;
             }
 
-            const raw = window.sessionStorage.getItem(livePlayerStateKey);
-            livePlayerState = raw ? JSON.parse(raw) : null;
+            livePlayerState = parseJsonValue(getStorageItem("session", livePlayerStateKey), "session", livePlayerStateKey);
             return livePlayerState;
         },
 
         clearLivePlayerState: function () {
             livePlayerState = null;
-            window.sessionStorage.removeItem(livePlayerStateKey);
+            removeStorageItem("session", livePlayerStateKey);
             emitPlayerStateChange(null);
         },
 
@@ -256,32 +485,31 @@
         },
 
         clearPendingLossDraft: function () {
-            window.sessionStorage.removeItem(pendingLossDraftKey);
+            removeStorageItem("session", pendingLossDraftKey);
         },
 
         setPendingLossSummary: function (summary) {
             if (!summary) {
-                window.sessionStorage.removeItem(pendingLossSummaryKey);
+                removeStorageItem("session", pendingLossSummaryKey);
                 return;
             }
 
-            window.sessionStorage.setItem(pendingLossSummaryKey, JSON.stringify(summary));
+            setStorageItem("session", pendingLossSummaryKey, JSON.stringify(summary));
         },
 
         getPendingLossSummary: function () {
-            const raw = window.sessionStorage.getItem(pendingLossSummaryKey);
-            return raw ? JSON.parse(raw) : null;
+            return parseJsonValue(getStorageItem("session", pendingLossSummaryKey), "session", pendingLossSummaryKey);
         },
 
         consumePendingLossSummary: function () {
-            const raw = window.sessionStorage.getItem(pendingLossSummaryKey);
-            window.sessionStorage.removeItem(pendingLossSummaryKey);
-            return raw ? JSON.parse(raw) : null;
+            const raw = getStorageItem("session", pendingLossSummaryKey);
+            removeStorageItem("session", pendingLossSummaryKey);
+            return parseJsonValue(raw);
         },
 
         clearPendingLossSummary: function () {
-            window.sessionStorage.removeItem(pendingLossSummaryKey);
-            window.sessionStorage.removeItem(pendingLossDraftKey);
+            removeStorageItem("session", pendingLossSummaryKey);
+            removeStorageItem("session", pendingLossDraftKey);
         },
 
         registerLossUnload: function (abandonUrl) {
@@ -295,61 +523,123 @@
                     event.returnValue = "";
                 }
             };
-            window.addEventListener("beforeunload", beforeUnloadHandler);
+            addWindowListener("beforeunload", beforeUnloadHandler);
+            pageHideHandler = function () {
+                const summary = promoteDraftLossSummary();
+                sendAbandonBeacon(summary);
+            };
+            addWindowListener("pagehide", pageHideHandler);
         },
 
         clearLossUnload: function () {
             currentAbandonUrl = null;
             removeBeforeUnload();
-            window.sessionStorage.removeItem(pendingLossDraftKey);
+            removeStorageItem("session", pendingLossDraftKey);
         },
 
         setRunLoadout: function (loadout) {
             if (!loadout) {
-                window.sessionStorage.removeItem(runLoadoutKey);
+                removeStorageItem("session", runLoadoutKey);
                 return;
             }
 
-            window.sessionStorage.setItem(runLoadoutKey, JSON.stringify(loadout));
+            setStorageItem("session", runLoadoutKey, JSON.stringify(loadout));
         },
 
         getRunLoadout: function () {
-            const raw = window.sessionStorage.getItem(runLoadoutKey);
-            return raw ? JSON.parse(raw) : [];
+            return parseJsonValue(getStorageItem("session", runLoadoutKey), "session", runLoadoutKey) || [];
         },
 
         clearRunLoadout: function () {
-            window.sessionStorage.removeItem(runLoadoutKey);
+            removeStorageItem("session", runLoadoutKey);
         },
 
         setFullscreenOptOut: function (value) {
-            window.localStorage.setItem(fullscreenOptOutKey, value ? "true" : "false");
+            setStorageItem("local", fullscreenOptOutKey, value ? "true" : "false");
         },
 
         getFullscreenOptOut: function () {
-            return window.localStorage.getItem(fullscreenOptOutKey) === "true";
+            return getStorageItem("local", fullscreenOptOutKey) === "true";
         },
 
         startTutorial: function () {
-            window.sessionStorage.setItem(tutorialRequestKey, "true");
-            window.dispatchEvent(new CustomEvent("enigma:tutorial-requested"));
+            setStorageItem("session", tutorialRequestKey, "true");
+            dispatchCustomEvent("enigma:tutorial-requested");
+        },
+
+        registerTutorialListener: function (helper) {
+            removeTutorialListener();
+            tutorialDotNetRef = helper;
+            tutorialRequestHandler = function () {
+                if (tutorialDotNetRef) {
+                    tutorialDotNetRef.invokeMethodAsync("HandleTutorialRequestedAsync");
+                }
+            };
+
+            addWindowListener("enigma:tutorial-requested", tutorialRequestHandler);
+        },
+
+        disposeTutorialListener: function () {
+            removeTutorialListener();
         },
 
         consumeTutorialRequest: function () {
-            const requested = window.sessionStorage.getItem(tutorialRequestKey) === "true";
-            window.sessionStorage.removeItem(tutorialRequestKey);
+            const requested = getStorageItem("session", tutorialRequestKey) === "true";
+            removeStorageItem("session", tutorialRequestKey);
             return requested;
         },
 
         requestFullscreen: async function (elementId) {
             const element = document.getElementById(elementId) || document.documentElement;
-            if (element.requestFullscreen) {
-                await element.requestFullscreen();
+            const requestFullscreen =
+                element.requestFullscreen ||
+                element.webkitRequestFullscreen ||
+                element.msRequestFullscreen;
+
+            if (!requestFullscreen) {
+                return false;
+            }
+
+            try {
+                await Promise.resolve(requestFullscreen.call(element));
+                return true;
+            } catch {
+                return false;
             }
         },
 
         isFullscreen: function () {
-            return !!document.fullscreenElement;
+            return !!(
+                document.fullscreenElement ||
+                document.webkitFullscreenElement ||
+                document.msFullscreenElement
+            );
+        },
+
+        playTone: function (scaleValue) {
+            const context = ensureAudioContext();
+            if (!context) {
+                return;
+            }
+
+            try {
+                if (context.state === "suspended") {
+                    context.resume().catch(() => {});
+                }
+
+                const oscillator = context.createOscillator();
+                const gainNode = context.createGain();
+                oscillator.type = "sine";
+                oscillator.frequency.value = 220 + (Number(scaleValue) * 48);
+                gainNode.gain.setValueAtTime(0.0001, context.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.05, context.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+                oscillator.connect(gainNode);
+                gainNode.connect(context.destination);
+                oscillator.start();
+                oscillator.stop(context.currentTime + 0.24);
+            } catch {
+            }
         },
 
         goBack: function (fallbackUrl) {
@@ -359,6 +649,79 @@
             }
 
             window.location.href = fallbackUrl || "/home";
+        },
+
+        connectCoopSocket: function (sessionId, helper) {
+            if (!sessionId || typeof WebSocket !== "function") {
+                return false;
+            }
+
+            if (coopSocket &&
+                coopSocketSessionId === sessionId &&
+                coopSocket.readyState !== WebSocket.CLOSING &&
+                coopSocket.readyState !== WebSocket.CLOSED) {
+                coopSocketDotNetRef = helper;
+                return true;
+            }
+
+            disposeCoopSocketInternal();
+            coopSocketSessionId = sessionId;
+            coopSocketDotNetRef = helper;
+
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const url = `${protocol}//${window.location.host}/api/auth/multiplayer/session/ws/${encodeURIComponent(sessionId)}`;
+
+            try {
+                coopSocket = new WebSocket(url);
+            } catch {
+                notifyCoopSocketStatus(false);
+                scheduleCoopReconnect();
+                return false;
+            }
+
+            coopSocket.onopen = function () {
+                clearCoopReconnect();
+                notifyCoopSocketStatus(true);
+            };
+
+            coopSocket.onmessage = function (event) {
+                if (!coopSocketDotNetRef) {
+                    return;
+                }
+
+                coopSocketDotNetRef.invokeMethodAsync("HandleCoopSocketMessage", String(event.data || "")).catch(() => {});
+            };
+
+            coopSocket.onerror = function () {
+                notifyCoopSocketStatus(false);
+            };
+
+            coopSocket.onclose = function () {
+                notifyCoopSocketStatus(false);
+                if (coopSocketSessionId) {
+                    scheduleCoopReconnect();
+                }
+            };
+
+            return true;
+        },
+
+        sendCoopSocketMessage: function (payload) {
+            if (!coopSocket || coopSocket.readyState !== WebSocket.OPEN) {
+                return false;
+            }
+
+            try {
+                coopSocket.send(JSON.stringify(payload || {}));
+                return true;
+            } catch {
+                return false;
+            }
+        },
+
+        disposeCoopSocket: function () {
+            disposeCoopSocketInternal();
+            notifyCoopSocketStatus(false);
         }
     };
 })();

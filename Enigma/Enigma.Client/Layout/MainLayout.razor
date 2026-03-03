@@ -2,9 +2,10 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @inject Enigma.Client.Services.EnigmaApiClient Api
-@implements IDisposable
+@implements IAsyncDisposable
 @using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
+@using Microsoft.JSInterop
 
 <div class="page">
     @if (ShouldShowHeader)
@@ -65,11 +66,21 @@
 
 @if (TutorialVisible && CurrentTutorialStep is not null)
 {
-    <div class="enigma-modal-backdrop tutorial-backdrop">
+    <div class="enigma-modal-backdrop tutorial-backdrop @(IsGamePath() ? "tutorial-backdrop-game" : string.Empty)">
         <div class="enigma-modal-card tutorial-modal-card">
             <span class="profile-kicker">@CurrentTutorialStep.Eyebrow</span>
             <h2>@CurrentTutorialStep.Title</h2>
             <p>@CurrentTutorialStep.Description</p>
+            <p class="tutorial-helper-copy">
+                @if (_tutorialIndex == _tutorialSteps.Count - 1)
+                {
+                    <span>Inactive for 60 consecutive days means permanent deletion of this account and all owned maps.</span>
+                }
+                else
+                {
+                    <span>Keep exploring the live page underneath. Use Next when you are ready to move on.</span>
+                }
+            </p>
             <div class="tutorial-progress-row">
                 <span>Step @(_tutorialIndex + 1) of @_tutorialSteps.Count</span>
                 <span>@GetTutorialRouteLabel()</span>
@@ -95,6 +106,7 @@
         "",
         "register",
     };
+    private const string TutorialDemoSeed = "easy-0,0BpS-1,0JqR-2,0HrF";
 
     private LoginUserSummary? Session { get; set; }
     private bool AuthCheckComplete { get; set; }
@@ -103,18 +115,20 @@
     private bool TutorialVisible { get; set; }
     private bool _tutorialSeenRecorded;
     private int _tutorialIndex;
+    private bool _tutorialListenerRegistered;
+    private DotNetObjectReference<MainLayout>? _tutorialListenerRef;
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
         new() { Eyebrow = "Home", Title = "Main Menu", Description = "This is the central hub. Use it to jump into runs, rankings, players, your profile, and the marketplace.", Path = "/home" },
         new() { Eyebrow = "Play", Title = "Run Setup", Description = "Generate or load a maze here, select your item loadout, and confirm fullscreen before entering.", Path = "/play" },
-        new() { Eyebrow = "Game Demo", Title = "Live Maze", Description = "This tutorial run is a safe demo. It shows the HUD, puzzles, movement, and room flow without risking a real run.", Path = "/game?tutorial=1" },
+        new() { Eyebrow = "Game Demo", Title = "Live Maze", Description = "This is a safe demo run. Walk between rooms, inspect the HUD, and open a puzzle without risking a real maze.", Path = "/game?tutorial=true" },
         new() { Eyebrow = "Leaderboard", Title = "Rankings", Description = "Switch between top maps and top players. Founder names and record holders link directly to profiles.", Path = "/leaderboard" },
         new() { Eyebrow = "Marketplace", Title = "Trading Floor", Description = "Buy maps, list your owned maps, and purchase support items from the item shop.", Path = "/marketplace" },
         new() { Eyebrow = "Players", Title = "Explorer Search", Description = "Find other explorers, inspect their public stats, and jump straight to their profiles.", Path = "/players" },
         new() { Eyebrow = "Profile", Title = "Your Profile", Description = "Review your collection, private social graph, inventory, and public-facing explorer stats.", Path = "/profile" },
         new() { Eyebrow = "Settings", Title = "Account Controls", Description = "Update email, password, avatar, tutorial state, and account-level settings from here.", Path = "/profile?tab=settings" },
-        new() { Eyebrow = "Policy", Title = "Inactivity Warning", Description = "If you are inactive for 2 consecutive months, your account and owned maps are permanently deleted and cannot be recovered.", Path = "/home" },
+        new() { Eyebrow = "Retention Rule", Title = "60-Day Inactivity Deletion", Description = "Two consecutive inactive months permanently delete your account and all owned maps. This is shown again in your profile settings so it stays visible.", Path = "/profile?tab=settings&tutorialstep=policy" },
     ];
 
     private TutorialStepDefinition? CurrentTutorialStep =>
@@ -134,6 +148,13 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && !_tutorialListenerRegistered)
+        {
+            _tutorialListenerRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("enigmaGame.registerTutorialListener", _tutorialListenerRef);
+            _tutorialListenerRegistered = true;
+        }
+
         if (IsPublicPath())
         {
             return;
@@ -262,6 +283,12 @@
             return;
         }
 
+        if (Session is not null && IsAuthenticated)
+        {
+            AuthCheckComplete = true;
+            return;
+        }
+
         AuthCheckComplete = false;
         IsAuthenticated = false;
     }
@@ -312,7 +339,7 @@
                 using var response = await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "seen" });
                 if (response.IsSuccessStatusCode)
                 {
-                    var payload = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                    var payload = await Api.ReadJsonAsync<LoginResponse>(response);
                     if (payload?.User is not null)
                     {
                         Session = payload.User;
@@ -327,6 +354,27 @@
 
         TutorialVisible = true;
         UpdateTutorialIndexFromUri(NavigationManager.Uri);
+    }
+
+    [JSInvokable]
+    public async Task HandleTutorialRequestedAsync()
+    {
+        if (IsPublicPath() || !IsAuthenticated)
+        {
+            return;
+        }
+
+        await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
+        TutorialVisible = true;
+        _tutorialIndex = 0;
+
+        if (!string.Equals(GetCleanPath(NavigationManager.Uri), "home", StringComparison.OrdinalIgnoreCase))
+        {
+            NavigationManager.NavigateTo(_tutorialSteps[0].Path, replace: true);
+            return;
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     private void UpdateTutorialIndexFromUri(string uri)
@@ -350,7 +398,7 @@
             return 1;
         }
 
-        if (path == "game" && query.Contains("tutorial=1", StringComparison.Ordinal))
+        if (path == "game" && (query.Contains("tutorial=1", StringComparison.Ordinal) || query.Contains("tutorial=true", StringComparison.Ordinal)))
         {
             return 2;
         }
@@ -368,6 +416,11 @@
         if (path == "players")
         {
             return 5;
+        }
+
+        if (path == "profile" && query.Contains("tutorialstep=policy", StringComparison.Ordinal))
+        {
+            return 8;
         }
 
         if (path == "profile" && query.Contains("tab=settings", StringComparison.Ordinal))
@@ -391,7 +444,7 @@
             return string.Empty;
         }
 
-        return step.Path.StartsWith("/game", StringComparison.OrdinalIgnoreCase) ? "Game demo" : step.Path.TrimStart('/');
+        return step.Eyebrow;
     }
 
     private async Task GoToPreviousTutorialStepAsync()
@@ -417,38 +470,27 @@
         await NavigateToTutorialStepAsync(_tutorialIndex);
     }
 
-    private async Task NavigateToTutorialStepAsync(int index)
+    private Task NavigateToTutorialStepAsync(int index)
     {
         if (index < 0 || index >= _tutorialSteps.Count)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         if (index == 2)
         {
-            try
-            {
-                var seed = await Api.GetFromJsonAsync<SeedEnvelope>("api/auth/newMap?difficulty=easy&size=3");
-                if (!string.IsNullOrWhiteSpace(seed?.Seed))
-                {
-                    NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(seed.Seed)}&source=new&tutorial=1", replace: true);
-                    return;
-                }
-            }
-            catch
-            {
-            }
-
-            NavigationManager.NavigateTo("/play", replace: true);
-            return;
+            NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(TutorialDemoSeed)}&source=new&tutorial=true", replace: true);
+            return Task.CompletedTask;
         }
 
         NavigationManager.NavigateTo(_tutorialSteps[index].Path, replace: true);
+        return Task.CompletedTask;
     }
 
     private async Task SkipTutorialAsync()
     {
         TutorialVisible = false;
+        await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
         try
         {
             await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "skipped" });
@@ -461,6 +503,7 @@
     private async Task CompleteTutorialAsync()
     {
         TutorialVisible = false;
+        await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
         try
         {
             await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "completed" });
@@ -471,14 +514,21 @@
 
         NavigationManager.NavigateTo("/home", replace: true);
     }
-
-    private sealed class SeedEnvelope
-    {
-        public string Seed { get; set; } = string.Empty;
-    }
-
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         NavigationManager.LocationChanged -= HandleLocationChanged;
+
+        if (_tutorialListenerRegistered)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("enigmaGame.disposeTutorialListener");
+            }
+            catch
+            {
+            }
+        }
+
+        _tutorialListenerRef?.Dispose();
     }
 }

@@ -29,7 +29,9 @@
 
 <div class="grid grid-auto home-tab-grid">
     <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayClick">
-        <img class="menu-card-image" src="/images/mainmenu-tabs/PlayTab.png" alt="Play" />
+        <div class="menu-card-media">
+            <img class="menu-card-image" src="/images/mainmenu-tabs/PlayTab.png" alt="Play" />
+        </div>
         <div class="game-card-content">
             <div class="game-card-title">Play</div>
             <div class="game-card-meta">Generate or load a maze</div>
@@ -37,7 +39,9 @@
     </button>
 
     <button class="game-card clickable menu-image-card" type="button" @onclick="OnLeaderboardsClick">
-        <img class="menu-card-image" src="/images/mainmenu-tabs/LeaderboardTab.png" alt="Leaderboard" />
+        <div class="menu-card-media">
+            <img class="menu-card-image" src="/images/mainmenu-tabs/LeaderboardTab.png" alt="Leaderboard" />
+        </div>
         <div class="game-card-content">
             <div class="game-card-title">Leaderboard</div>
             <div class="game-card-meta">See top players and maps</div>
@@ -45,7 +49,9 @@
     </button>
 
     <button class="game-card clickable menu-image-card" type="button" @onclick="OnProfileClick">
-        <img class="menu-card-image" src="/images/mainmenu-tabs/ProfileTab.png" alt="Profile" />
+        <div class="menu-card-media">
+            <img class="menu-card-image" src="/images/mainmenu-tabs/ProfileTab.png" alt="Profile" />
+        </div>
         <div class="game-card-content">
             <div class="game-card-title">Profile</div>
             <div class="game-card-meta">Inventory, settings, maps, and stats</div>
@@ -53,15 +59,19 @@
     </button>
 
     <button class="game-card clickable menu-image-card" type="button" @onclick="OnMarketplaceClick">
-        <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Marketplace" />
+        <div class="menu-card-media">
+            <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Marketplace" />
+        </div>
         <div class="game-card-content">
             <div class="game-card-title">Marketplace</div>
             <div class="game-card-meta">Trade maps and buy items</div>
         </div>
     </button>
 
-    <button class="game-card clickable menu-text-card" type="button" @onclick="OnPlayersClick">
-        <div class="menu-card-glyph">P</div>
+    <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayersClick">
+        <div class="menu-card-media">
+            <img class="menu-card-image" src="/images/mainmenu-tabs/PlayersTab.png" alt="Players" />
+        </div>
         <div class="game-card-content">
             <div class="game-card-title">Players</div>
             <div class="game-card-meta">Find explorers and view profiles</div>

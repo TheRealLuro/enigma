@@ -244,7 +244,7 @@ else
                 return;
             }
 
-            var payload = await response.Content.ReadFromJsonAsync<PlayerLeaderboardResponse>();
+            var payload = await Api.ReadJsonAsync<PlayerLeaderboardResponse>(response);
             TopPlayers = payload?.Players
                 .Where(player => !string.IsNullOrWhiteSpace(player.Username))
                 .Take(8)
@@ -358,7 +358,7 @@ else
                 return null;
             }
 
-            var payload = await response.Content.ReadFromJsonAsync<ProfileResponse>();
+            var payload = await Api.ReadJsonAsync<ProfileResponse>(response);
             if (payload?.User is null || string.IsNullOrWhiteSpace(payload.User.Username))
             {
                 return null;

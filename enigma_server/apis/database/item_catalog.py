@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from .founders_mark import FOUNDERS_MARK_ITEM_ID
+
 
 DEFAULT_ITEM_CATALOG = [
     {
@@ -116,6 +118,25 @@ DEFAULT_ITEM_CATALOG = [
         "effect_config": {"type": "skip_puzzle", "charges": 1},
         "icon": "skip",
     },
+    {
+        "item_id": FOUNDERS_MARK_ITEM_ID,
+        "name": "Founders Mark",
+        "description": "Beta tester legacy item. Permanently boosts Maze Nuggets earned by 50 percent and halves gameplay dividend fees.",
+        "kind": "economy",
+        "category": "perk",
+        "slot_kind": "perk",
+        "rarity": "founder",
+        "price": 0,
+        "stock": 10,
+        "stackable": False,
+        "max_per_run": 0,
+        "effect_config": {"type": "permanent_founder_bonus", "reward_multiplier": 1.5, "fee_multiplier": 0.5},
+        "icon": "founder",
+        "always_available": True,
+        "never_restock": True,
+        "purchase_limit": 1,
+        "requires_tasks": True,
+    },
 ]
 
 
@@ -139,6 +160,10 @@ def normalize_item_doc(item: dict) -> dict:
     normalized["price"] = int(normalized.get("price", 0) or 0)
     normalized["stock"] = int(normalized.get("stock", 0) or 0)
     normalized["rarity"] = str(normalized.get("rarity") or "common")
+    normalized["always_available"] = bool(normalized.get("always_available", False))
+    normalized["never_restock"] = bool(normalized.get("never_restock", False))
+    normalized["purchase_limit"] = int(normalized.get("purchase_limit", 0) or 0)
+    normalized["requires_tasks"] = bool(normalized.get("requires_tasks", False))
     return normalized
 
 
@@ -158,12 +183,18 @@ def serialize_shop_item(item: dict) -> dict:
         "max_per_run": int(normalized.get("max_per_run", 1) or 1),
         "effect_config": normalized.get("effect_config") or {},
         "icon": normalized.get("icon"),
+        "always_available": bool(normalized.get("always_available", False)),
+        "never_restock": bool(normalized.get("never_restock", False)),
+        "purchase_limit": int(normalized.get("purchase_limit", 0) or 0),
+        "requires_tasks": bool(normalized.get("requires_tasks", False)),
     }
 
 
 def infer_slot_kind(kind: str, item_id: str | None = None) -> str:
     key = str(item_id or "").lower()
     category = str(kind or "").lower()
+    if key == FOUNDERS_MARK_ITEM_ID:
+        return "perk"
     if key in {"trap_shield", "reward_magnet"}:
         return "passive"
     if key in {"time_freeze", "puzzle_skip"}:

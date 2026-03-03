@@ -22,7 +22,12 @@ def main() -> int:
     retired = 0
 
     for item_id, item in desired.items():
-        item_inventory.update_one({"item_id": item_id}, {"$set": {**item, "retired": False}}, upsert=True)
+        existing = item_inventory.find_one({"item_id": item_id}, {"stock": 1, "never_restock": 1})
+        update_doc = {**item, "retired": False}
+        if existing and bool(existing.get("never_restock")) and item.get("never_restock"):
+            update_doc["stock"] = int(existing.get("stock", item.get("stock", 0)) or 0)
+
+        item_inventory.update_one({"item_id": item_id}, {"$set": update_doc}, upsert=True)
         upserts += 1
 
     for existing in item_inventory.find({"item_id": {"$nin": list(active_ids)}}):

@@ -41,7 +41,7 @@ else
                     <strong>@Summary.Username</strong>
                 </div>
                 <div>
-                    <span>Total Gold</span>
+                    <span>@(Summary.IsMultiplayer ? "Total Team Gold" : "Total Gold")</span>
                     <strong>@Summary.GoldCollected</strong>
                 </div>
                 <div>
@@ -57,7 +57,7 @@ else
             <div class="enigma-end-grid compact">
                 <div>
                     <span>Map Source</span>
-                    <strong>@(Summary.Source == "load" ? "Existing map" : "Generated seed")</strong>
+                    <strong>@(Summary.SeedExisted || Summary.Source == "load" ? "Existing map" : "Generated seed")</strong>
                 </div>
                 <div>
                     <span>Maze Size</span>
@@ -69,9 +69,31 @@ else
                 </div>
             </div>
 
+            @if (Summary.IsMultiplayer)
+            {
+                <div class="enigma-end-grid compact">
+                    <div>
+                        <span>Your Reward</span>
+                        <strong>@Summary.RewardAwarded.ToString("N0") MN</strong>
+                    </div>
+                    <div>
+                        <span>Bank Dividend</span>
+                        <strong>@Summary.BankDividend.ToString("N0") MN</strong>
+                    </div>
+                    <div>
+                        <span>Partner</span>
+                        <strong>@(string.IsNullOrWhiteSpace(Summary.PartnerUsername) ? "Unknown" : Summary.PartnerUsername)</strong>
+                    </div>
+                    <div>
+                        <span>Role</span>
+                        <strong>@(Summary.IsSessionOwner ? "Owner" : "Discoverer")</strong>
+                    </div>
+                </div>
+            }
+
             <div class="enigma-form-block">
                 <label class="form-label">Map Name</label>
-                @if (Summary.Source == "load")
+                @if (Summary.SeedExisted || Summary.Source == "load")
                 {
                     <input class="form-control" value="@MapName" readonly />
                 }
@@ -93,9 +115,12 @@ else
             }
 
             <div class="enigma-end-actions">
-                <button class="btn btn-success" disabled="@IsSubmitting" @onclick="SubmitResultAsync">
-                    @(IsSubmitting ? "Submitting..." : Summary.HasBeenSubmitted ? "Submitted" : "Submit Result")
-                </button>
+                @if (!Summary.IsMultiplayer || Summary.CanSubmitMapRecord)
+                {
+                    <button class="btn btn-success" disabled="@IsSubmitting" @onclick="SubmitResultAsync">
+                        @(IsSubmitting ? "Submitting..." : Summary.HasBeenSubmitted ? "Submitted" : "Submit Result")
+                    </button>
+                }
                 <button class="btn btn-primary" @onclick="RetryMaze">Play Again</button>
                 <button class="btn btn-secondary" @onclick="GoHome">Main Menu</button>
             </div>
@@ -135,7 +160,7 @@ else
             return;
         }
 
-        MapName = Summary.Source == "load"
+        MapName = Summary.Source == "load" || Summary.SeedExisted
             ? Summary.LoadedMapName ?? string.Empty
             : MapName;
 
@@ -164,7 +189,7 @@ else
             return;
         }
 
-        if (Summary.Source == "new" && string.IsNullOrWhiteSpace(MapName))
+        if (!Summary.SeedExisted && Summary.Source == "new" && string.IsNullOrWhiteSpace(MapName))
         {
             SubmissionSucceeded = false;
             StatusMessage = "Map name is required for a newly generated maze.";
@@ -177,7 +202,23 @@ else
         try
         {
             var completionTime = ParseCompletionTime(Summary.CompletionTime);
-            if (Summary.Source == "load")
+            if (Summary.IsMultiplayer)
+            {
+                if (Summary.SeedExisted || Summary.Source == "load")
+                {
+                    await UpdateExistingMapAsync(completionTime);
+                }
+                else
+                {
+                    await AddNewMapAsync(completionTime);
+                    if (Summary.RequiresOwnerSave && !Summary.DiscoverersSynced)
+                    {
+                        await SyncSavedMultiplayerMapAsync();
+                        Summary.DiscoverersSynced = true;
+                    }
+                }
+            }
+            else if (Summary.Source == "load")
             {
                 await UpdateExistingMapAsync(completionTime);
                 await UpdateUserProgressAsync(seedExisted: true);
@@ -259,6 +300,21 @@ else
         await EnsureSuccessAsync(response, "Unable to update the player progress.");
     }
 
+    private async Task SyncSavedMultiplayerMapAsync()
+    {
+        if (Summary is null || string.IsNullOrWhiteSpace(Summary.MultiplayerSessionId))
+        {
+            return;
+        }
+
+        using var response = await Api.PostJsonAsync("api/auth/multiplayer/session/sync-saved-map", new
+        {
+            sessionId = Summary.MultiplayerSessionId,
+            mapName = MapName,
+        });
+        await EnsureSuccessAsync(response, "Unable to sync co-op discoverers after saving the map.");
+    }
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, string prefix)
     {
         if (response.IsSuccessStatusCode)
@@ -275,6 +331,12 @@ else
         if (Summary is null)
         {
             NavigationManager.NavigateTo("/play");
+            return;
+        }
+
+        if (Summary.IsMultiplayer)
+        {
+            NavigationManager.NavigateTo("/play/coop");
             return;
         }
 
