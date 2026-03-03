@@ -582,8 +582,13 @@ public static class PuzzleFactory
     private static readonly string[] SequenceRunes = ["A", "B", "C", "D"];
     private static readonly PlayerDirection[] Directions = [PlayerDirection.Up, PlayerDirection.Right, PlayerDirection.Down, PlayerDirection.Left];
 
-    public static RoomPuzzle Create(string seed, MazeRoomDefinition room, MazeDifficulty difficulty)
+    public static RoomPuzzle Create(string seed, MazeRoomDefinition room, MazeDifficulty difficulty, string? runNonce = null)
     {
+        if (difficulty != MazeDifficulty.Easy)
+        {
+            return AdvancedPuzzleFactory.Create(seed, runNonce ?? Guid.NewGuid().ToString("N"), room, difficulty);
+        }
+
         var profile = GetProfile(difficulty);
         var hash = StableHash($"{seed}|{room.Coordinates.X}|{room.Coordinates.Y}|{room.PuzzleKey}");
         return room.PuzzleKey switch

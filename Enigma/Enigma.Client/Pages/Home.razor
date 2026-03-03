@@ -1,14 +1,11 @@
 @page "/home"
-@using Enigma.Client.Models.Gameplay
-@inject IJSRuntime JS
+@inject Enigma.Client.Services.EnigmaApiClient Api
 
-<div class="hero hero-panel">
+<div class="hero hero-panel home-hero-panel">
     <div>
-        <h1>@String.Format("Welcome to Enigma {0}", Username)</h1>
-        @if (ActiveRun is not null)
-        {
-            <p class="hero-subcopy">Current run: @GetActiveRunLabel()</p>
-        }
+        <span class="profile-kicker">Main Menu</span>
+        <h1>@($"Welcome to Enigma, {Username}")</h1>
+        <p class="hero-subcopy">Pick a destination. Every maze run is now one-way: once you leave, it is lost.</p>
     </div>
 
     @if (Session is not null)
@@ -24,63 +21,52 @@
             </div>
             <div>
                 <span>Owned Maps</span>
-                <strong>@Session.MapsOwned.Count</strong>
+                <strong>@Session.OwnedMapsCount</strong>
             </div>
         </div>
     }
 </div>
 
-<div class="grid grid-auto">
-    @if (ActiveRun is not null)
-    {
-        <div class="game-card clickable accent-card" @onclick="ResumeActiveRun">
-            <div class="game-card-image"></div>
-            <div class="game-card-content">
-                <div class="game-card-title">Resume Run</div>
-                <div class="game-card-meta">@GetActiveRunMeta()</div>
-            </div>
-        </div>
-    }
-
-    <div class="game-card clickable" @onclick="OnPlayClick">
-        <div class="game-card-image"></div>
+<div class="grid grid-auto home-tab-grid">
+    <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayClick">
+        <img class="menu-card-image" src="/images/mainmenu-tabs/PlayTab.png" alt="Play" />
         <div class="game-card-content">
             <div class="game-card-title">Play</div>
             <div class="game-card-meta">Generate or load a maze</div>
         </div>
-    </div>
+    </button>
 
-    <div class="game-card clickable" @onclick="OnLeaderboardsClick">
-        <div class="game-card-image"></div>
+    <button class="game-card clickable menu-image-card" type="button" @onclick="OnLeaderboardsClick">
+        <img class="menu-card-image" src="/images/mainmenu-tabs/LeaderboardTab.png" alt="Leaderboard" />
         <div class="game-card-content">
             <div class="game-card-title">Leaderboard</div>
-            <div class="game-card-meta">See top mazes</div>
+            <div class="game-card-meta">See top players and maps</div>
         </div>
-    </div>
+    </button>
 
-    <div class="game-card clickable" @onclick="OnProfileClick">
-        <div class="game-card-image"></div>
+    <button class="game-card clickable menu-image-card" type="button" @onclick="OnProfileClick">
+        <img class="menu-card-image" src="/images/mainmenu-tabs/ProfileTab.png" alt="Profile" />
         <div class="game-card-content">
             <div class="game-card-title">Profile</div>
-            <div class="game-card-meta">View your friends, maps, and stats</div>
+            <div class="game-card-meta">Inventory, settings, maps, and stats</div>
         </div>
-    </div>
+    </button>
 
-    <div class="game-card clickable" @onclick="OnMarketplaceClick">
-        <div class="game-card-image"></div>
+    <button class="game-card clickable menu-image-card" type="button" @onclick="OnMarketplaceClick">
+        <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Marketplace" />
         <div class="game-card-content">
             <div class="game-card-title">Marketplace</div>
-            <div class="game-card-meta">Browse, buy, and list player-made maps</div>
+            <div class="game-card-meta">Trade maps and buy items</div>
         </div>
-    </div>
+    </button>
 
-    <div class="game-card clickable" @onclick="OnLogoutClick">
-        <div class="game-card-image"></div>
+    <button class="game-card clickable menu-text-card" type="button" @onclick="OnPlayersClick">
+        <div class="menu-card-glyph">P</div>
         <div class="game-card-content">
-            <div class="game-card-title">Logout</div>
-            <div class="game-card-meta">Return to login screen</div>
+            <div class="game-card-title">Players</div>
+            <div class="game-card-meta">Find explorers and view profiles</div>
         </div>
-    </div>
+    </button>
 </div>
 
 @code {
@@ -88,7 +74,6 @@
 
     private string Username { get; set; } = string.Empty;
     private LoginUserSummary? Session { get; set; }
-    private ActiveGameSession? ActiveRun { get; set; }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -97,86 +82,24 @@
             return;
         }
 
-        Session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
-        if (Session is not null)
+        Session = await Api.GetSessionAsync();
+        if (Session is null)
         {
-            Username = Session.Username;
-        }
-        else
-        {
-            var identity = await JS.InvokeAsync<PlayerIdentity?>("enigmaGame.getPlayerIdentity");
-            Username = identity?.Username ?? string.Empty;
-        }
-
-        ActiveRun = await JS.InvokeAsync<ActiveGameSession?>("enigmaGame.getActiveGameSession");
-
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private void OnPlayClick()
-    {
-        NavigationManager.NavigateTo("/play");
-    }
-
-    private void OnLeaderboardsClick()
-    {
-        NavigationManager.NavigateTo("/leaderboard");
-    }
-
-    private void OnProfileClick()
-    {
-        NavigationManager.NavigateTo("/profile");
-    }
-
-    private void OnMarketplaceClick()
-    {
-        NavigationManager.NavigateTo("/marketplace");
-    }
-
-    private async Task OnLogoutClick()
-    {
-        await JS.InvokeVoidAsync("enigmaGame.clearPlayerIdentity");
-        await JS.InvokeVoidAsync("enigmaGame.clearUserSession");
-        await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
-        NavigationManager.NavigateTo("/");
-    }
-
-    private void ResumeActiveRun()
-    {
-        if (string.IsNullOrWhiteSpace(ActiveRun?.Seed))
-        {
-            NavigationManager.NavigateTo("/play");
+            NavigationManager.NavigateTo("/", replace: true);
             return;
         }
 
-        var url = $"/game?seed={Uri.EscapeDataString(ActiveRun.Seed)}&source={Uri.EscapeDataString(ActiveRun.Source)}";
-        if (!string.IsNullOrWhiteSpace(ActiveRun.MapName))
-        {
-            url += $"&mapName={Uri.EscapeDataString(ActiveRun.MapName)}";
-        }
-
-        NavigationManager.NavigateTo(url);
+        Username = Session.Username;
+        await InvokeAsync(StateHasChanged);
     }
 
-    private string GetActiveRunLabel()
-    {
-        return string.IsNullOrWhiteSpace(ActiveRun?.MapName)
-            ? "Generated maze ready to resume."
-            : $"{ActiveRun.MapName} is ready to resume.";
-    }
+    private void OnPlayClick() => NavigationManager.NavigateTo("/play");
 
-    private string GetActiveRunMeta()
-    {
-        if (ActiveRun is null)
-        {
-            return "Return to your last maze.";
-        }
+    private void OnLeaderboardsClick() => NavigationManager.NavigateTo("/leaderboard");
 
-        var sourceLabel = string.Equals(ActiveRun.Source, "load", StringComparison.OrdinalIgnoreCase)
-            ? "loaded map"
-            : "generated seed";
+    private void OnProfileClick() => NavigationManager.NavigateTo("/profile");
 
-        var roomLabel = string.IsNullOrWhiteSpace(ActiveRun.CurrentRoomLabel) ? "room unknown" : $"room {ActiveRun.CurrentRoomLabel}";
-        return $"{sourceLabel} | {ActiveRun.Difficulty} | {roomLabel}";
-    }
+    private void OnMarketplaceClick() => NavigationManager.NavigateTo("/marketplace");
+
+    private void OnPlayersClick() => NavigationManager.NavigateTo("/players");
 }

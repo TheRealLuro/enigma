@@ -10,6 +10,7 @@ import diffusionengine
 from fastapi.middleware.cors import CORSMiddleware
 
 from apis.database.item_shop_stocker import ensure_shop_seeded, shop_restock_scheduler
+from apis.database.system_accounts import ensure_bank_account
 
 def get_client_ip(request: Request):
     x_forwarded_for = request.headers.get("X-Forwarded-For")
@@ -76,6 +77,7 @@ load_routers(apis)
 @app.on_event("startup")
 async def startup_jobs():
     diffusionengine.preload_pipe()
+    ensure_bank_account()
     ensure_shop_seeded()
     app.state.shop_restock_task = asyncio.create_task(shop_restock_scheduler())
 

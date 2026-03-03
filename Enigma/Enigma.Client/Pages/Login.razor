@@ -1,9 +1,10 @@
 @page "/"
 @rendermode InteractiveWebAssembly
 @using Enigma.Client.Models.Gameplay
+@inject Enigma.Client.Services.EnigmaApiClient Api
 
-<div class="content" style="max-width: 480px; margin-top: 60px;">
-    <div class="card p-4 shadow-sm">
+<div class="content auth-shell" style="max-width: 480px; margin-top: 60px;">
+    <div class="card p-4 shadow-sm auth-card">
 
         <h3 class="mb-4 text-center">Sign In</h3>
 
@@ -19,10 +20,15 @@
 
             <div class="mb-3">
                 <label class="form-label">Password</label>
-                <InputText type="password"
-                           class="form-control"
-                           @bind-Value="password"
-                           placeholder="��������" />
+                <div class="password-field-wrap">
+                    <InputText type="@(ShowPassword ? "text" : "password")"
+                               class="form-control"
+                               @bind-Value="password"
+                               placeholder="Enter your password" />
+                    <button type="button" class="password-toggle-button" @onclick="TogglePasswordVisibility">
+                        @(ShowPassword ? "Hide" : "Show")
+                    </button>
+                </div>
             </div>
 
             <div class="mb-3 d-flex justify-content-between align-items-center">
@@ -34,12 +40,6 @@
                         Remember me
                     </label>
                 </div>
-
-                <button type="button"
-                        class="btn btn-link p-0"
-                        @onclick="OnForgotPasswordClick">
-                    Forgot password?
-                </button>
             </div>
 
             <button type="submit" class="btn btn-primary w-100" disabled="@IsSubmitting">
@@ -68,9 +68,6 @@
     NavigationManager NavigationManager { get; set; } = default!;
 
     [Inject]
-    HttpClient Http { get; set; } = default!;
-
-    [Inject]
     IJSRuntime JS { get; set; } = default!;
 
     private User user = new() { Username = string.Empty };
@@ -78,7 +75,24 @@
     private bool rememberMe;
     private bool IsSubmitting;
     private bool HasError;
+    private bool ShowPassword;
     private string StatusMessage = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var session = await Api.GetSessionAsync();
+        if (session is not null && !string.IsNullOrWhiteSpace(session.Username))
+        {
+            await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
+            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = session.Username }, false);
+            NavigationManager.NavigateTo("/home", replace: true);
+        }
+    }
 
     private async Task OnLoginClick()
     {
@@ -86,12 +100,15 @@
         HasError = false;
         StatusMessage = string.Empty;
 
-        var url = BuildControllerUrl(
-            $"api/auth/login?username={Uri.EscapeDataString(user.Username ?? string.Empty)}&password={Uri.EscapeDataString(password)}");
-
         try
         {
-            using var httpResponse = await Http.PostAsync(url, content: null);
+            using var httpResponse = await Api.PostJsonAsync("api/auth/session/login", new
+            {
+                username = user.Username ?? string.Empty,
+                password,
+                rememberMe,
+            });
+
             if (!httpResponse.IsSuccessStatusCode)
             {
                 var errorText = await httpResponse.Content.ReadAsStringAsync();
@@ -104,11 +121,7 @@
                 throw new InvalidOperationException("Login failed.");
             }
 
-            await JS.InvokeVoidAsync(
-                "enigmaGame.setPlayerIdentity",
-                new PlayerIdentity { Username = response.User.Username },
-                rememberMe);
-
+            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = response.User.Username }, rememberMe);
             await JS.InvokeVoidAsync("enigmaGame.setUserSession", response.User, rememberMe);
 
             StatusMessage = response.DailyRewardGranted
@@ -128,18 +141,13 @@
         }
     }
 
+    private void TogglePasswordVisibility()
+    {
+        ShowPassword = !ShowPassword;
+    }
+
     private void OnRegisterClick()
     {
         NavigationManager.NavigateTo("/register");
-    }
-
-    private void OnForgotPasswordClick()
-    {
-        NavigationManager.NavigateTo("/forgot-password");
-    }
-
-    private string BuildControllerUrl(string relativePath)
-    {
-        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
     }
 }

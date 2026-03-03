@@ -1,5 +1,6 @@
 @page "/marketplace"
 @using System.ComponentModel.DataAnnotations
+@inject Enigma.Client.Services.EnigmaApiClient Api
 
 <PageTitle>Marketplace</PageTitle>
 
@@ -45,8 +46,8 @@ else
                     <strong>@Listings.Count</strong>
                 </div>
                 <div>
-                    <span>Owned Maps</span>
-                    <strong>@Session.MapsOwned.Count</strong>
+                    <span>Shop Items</span>
+                    <strong>@ShopItems.Count</strong>
                 </div>
             </div>
         </section>
@@ -110,10 +111,50 @@ else
                 <div class="marketplace-bullet-list">
                     <div>Listings use the map marketplace APIs and refresh live from the backend.</div>
                     <div>Buying transfers ownership, updates the seller payout, and moves the map into your collection.</div>
-                    <div>Map art is shown inside contained frames so the full image stays visible.</div>
+                    <div>The item shop uses the same secured session flow as the rest of the app and updates your inventory immediately.</div>
                 </div>
             </section>
         </div>
+
+        <section class="panel marketplace-shop-panel" data-tour-id="marketplace-shop">
+            <div class="panel-heading maps-heading">
+                <div>
+                    <span class="profile-eyebrow">Item Shop</span>
+                    <h2>Daily Merchant Stock</h2>
+                </div>
+                <span class="section-count">@ShopItems.Count</span>
+            </div>
+
+            @if (ShopItems.Count == 0)
+            {
+                <div class="empty-state-inline">No item shop stock was returned.</div>
+            }
+            else
+            {
+                <div class="catalog-card-grid marketplace-shop-grid">
+                    @foreach (var item in ShopItems.OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase))
+                    {
+                        <article class="catalog-card marketplace-item-card">
+                            <div class="catalog-card-body">
+                                <span class="catalog-card-kicker">@item.Rarity @item.SlotKind</span>
+                                <h3>@item.Name</h3>
+                                <p class="catalog-card-subline">@item.Description</p>
+                                <strong class="catalog-card-price">@item.Price.ToString("N0") MN</strong>
+                                <div class="catalog-card-meta">
+                                    <span class="catalog-card-meta-pill">Stock @item.Stock</span>
+                                    <span class="catalog-card-meta-pill">Owned @GetOwnedCount(item.ItemId)</span>
+                                    <span class="catalog-card-meta-pill">@item.Kind</span>
+                                    <span class="catalog-card-meta-pill">Max @item.MaxPerRun</span>
+                                </div>
+                                <button class="btn btn-primary" type="button" disabled="@(!CanPurchase(item) || IsActionBusy)" @onclick="() => PurchaseItemAsync(item)">
+                                    @GetPurchaseLabel(item)
+                                </button>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
 
         @if (IsLoading)
         {
@@ -177,7 +218,6 @@ else
 
 @code {
     [Inject] private NavigationManager NavigationManager { get; set; } = default!;
-    [Inject] private HttpClient Http { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private bool IsLoading { get; set; } = true;
@@ -187,6 +227,7 @@ else
     private string StatusMessage { get; set; } = string.Empty;
     private LoginUserSummary? Session { get; set; }
     private List<MarketplaceListing> Listings { get; set; } = [];
+    private List<ItemCatalogEntry> ShopItems { get; set; } = [];
     private MarketplaceSellForm SellRequest { get; set; } = new();
 
     private List<MapSummary> AvailableOwnedMaps =>
@@ -206,10 +247,10 @@ else
             return;
         }
 
-        Session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        Session = await Api.GetSessionAsync();
         if (Session is null || string.IsNullOrWhiteSpace(Session.Username))
         {
-            NavigationManager.NavigateTo("/");
+            NavigationManager.NavigateTo("/", replace: true);
             return;
         }
 
@@ -225,17 +266,19 @@ else
 
         try
         {
-            using var response = await Http.GetAsync(BuildControllerUrl("api/auth/marketplace"));
+            using var response = await Api.GetAsync("api/auth/marketplace");
             if (!response.IsSuccessStatusCode)
             {
                 HasError = true;
                 StatusMessage = await response.Content.ReadAsStringAsync();
                 Listings = [];
+                ShopItems = [];
                 return;
             }
 
             var payload = await response.Content.ReadFromJsonAsync<MarketplaceResponse>();
             Listings = payload?.Listings ?? [];
+            ShopItems = (await Api.GetFromJsonAsync<ItemShopResponse>("api/auth/items/shop"))?.Items ?? [];
 
             if (AvailableOwnedMaps.Count > 0 && string.IsNullOrWhiteSpace(SellRequest.MapName))
             {
@@ -247,6 +290,7 @@ else
             HasError = true;
             StatusMessage = ex.Message;
             Listings = [];
+            ShopItems = [];
         }
         finally
         {
@@ -264,8 +308,11 @@ else
         }
 
         await PerformMarketplaceActionAsync(
-            BuildControllerUrl(
-                $"api/auth/marketplace/add?user={Uri.EscapeDataString(Session.Username)}&mapName={Uri.EscapeDataString(SellRequest.MapName)}&price={SellRequest.Price}"),
+            () => Api.PostJsonAsync("api/auth/marketplace/add", new
+            {
+                mapName = SellRequest.MapName,
+                price = SellRequest.Price,
+            }),
             successFallback: "Map listed.");
 
         await LoadMarketplaceAsync();
@@ -279,33 +326,35 @@ else
         }
 
         await PerformMarketplaceActionAsync(
-            BuildControllerUrl(
-                $"api/auth/marketplace/buy?mapName={Uri.EscapeDataString(listing.MapName)}&buyer={Uri.EscapeDataString(Session.Username)}"),
+            () => Api.PostJsonAsync("api/auth/marketplace/buy", new
+            {
+                mapName = listing.MapName,
+            }),
             successFallback: "Purchase completed.",
             asyncOnSuccess: async () =>
             {
-                Session.MazeNuggets = Math.Max(0, Session.MazeNuggets - listing.Price);
-                if (!Session.MapsOwned.Any(map => EqualsIgnoreCase(map.MapName, listing.MapName)))
-                {
-                    Session.MapsOwned.Add(new MapSummary
-                    {
-                        MapName = listing.MapName,
-                        MapImage = listing.MapImage,
-                        Difficulty = listing.Difficulty,
-                        Size = listing.Size,
-                        Value = listing.Value,
-                        ImageAvailable = listing.ImageAvailable,
-                        ImageStatus = listing.ImageStatus,
-                        Theme = listing.Theme,
-                    });
-                }
-
-                await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", Session);
+                await RefreshSessionAsync();
                 await LoadMarketplaceAsync();
             });
     }
 
-    private async Task PerformMarketplaceActionAsync(string url, string successFallback, Func<Task>? asyncOnSuccess = null)
+    private async Task PurchaseItemAsync(ItemCatalogEntry item)
+    {
+        await PerformMarketplaceActionAsync(
+            () => Api.PostJsonAsync("api/auth/items/purchase", new
+            {
+                itemId = item.ItemId,
+                quantity = 1,
+            }),
+            successFallback: $"{item.Name} purchased.",
+            asyncOnSuccess: async () =>
+            {
+                await RefreshSessionAsync();
+                await LoadMarketplaceAsync();
+            });
+    }
+
+    private async Task PerformMarketplaceActionAsync(Func<Task<HttpResponseMessage>> requestFactory, string successFallback, Func<Task>? asyncOnSuccess = null)
     {
         IsActionBusy = true;
         HasError = false;
@@ -314,7 +363,7 @@ else
 
         try
         {
-            using var response = await Http.PostAsync(url, content: null);
+            using var response = await requestFactory();
             var payload = await response.Content.ReadFromJsonAsync<ApiStatusResponse>();
 
             if (!response.IsSuccessStatusCode)
@@ -355,6 +404,11 @@ else
             && Session.MazeNuggets >= listing.Price;
     }
 
+    private bool CanPurchase(ItemCatalogEntry item)
+    {
+        return Session is not null && item.Stock > 0 && Session.MazeNuggets >= item.Price;
+    }
+
     private bool IsOwnListing(MarketplaceListing listing)
     {
         return Session is not null && EqualsIgnoreCase(Session.Username, listing.Seller);
@@ -363,6 +417,11 @@ else
     private static bool EqualsIgnoreCase(string? left, string? right)
     {
         return string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private int GetOwnedCount(string itemId)
+    {
+        return Session?.ItemCounts.TryGetValue(itemId, out var count) == true ? count : 0;
     }
 
     private string GetBuyLabel(MarketplaceListing listing)
@@ -383,6 +442,31 @@ else
         }
 
         return $"Buy for {listing.Price:N0} MN";
+    }
+
+    private string GetPurchaseLabel(ItemCatalogEntry item)
+    {
+        if (IsActionBusy)
+        {
+            return "Processing...";
+        }
+
+        if (Session is null)
+        {
+            return "Sign in";
+        }
+
+        if (item.Stock <= 0)
+        {
+            return "Out of stock";
+        }
+
+        if (Session.MazeNuggets < item.Price)
+        {
+            return "Not enough MN";
+        }
+
+        return $"Buy for {item.Price:N0} MN";
     }
 
     private static string DisplayLastSale(MarketplaceListing listing)
@@ -423,11 +507,6 @@ else
         };
     }
 
-    private string BuildControllerUrl(string relativePath)
-    {
-        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
-    }
-
     private void GoHome()
     {
         NavigationManager.NavigateTo("/home");
@@ -436,6 +515,18 @@ else
     private void GoLogin()
     {
         NavigationManager.NavigateTo("/");
+    }
+
+    private async Task RefreshSessionAsync()
+    {
+        var session = await Api.GetSessionAsync();
+        if (session is null)
+        {
+            return;
+        }
+
+        Session = session;
+        await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
     }
 
     private sealed class MarketplaceSellForm

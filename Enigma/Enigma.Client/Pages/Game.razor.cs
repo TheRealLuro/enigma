@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using Enigma.Client.Models.Gameplay;
+using Enigma.Client.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.JSInterop;
 
 namespace Enigma.Client.Pages;
@@ -24,13 +26,16 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private DateTime _bannerExpiresAtUtc = DateTime.MinValue;
     private DateTime _lastPlayerStateSyncUtc = DateTime.MinValue;
     private string? _loadedSeed;
+    private string _runNonce = Guid.NewGuid().ToString("N");
     private bool _completionTriggered;
+    private bool _abandonTriggered;
+    private bool _allowRouteExit;
     private bool _jsReady;
     private bool _playerStateDirty = true;
-    private bool _resumeAttempted;
 
     [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
+    [Inject] protected EnigmaApiClient Api { get; set; } = default!;
 
     [SupplyParameterFromQuery(Name = "seed")]
     public string? Seed { get; set; }
@@ -40,6 +45,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     [SupplyParameterFromQuery(Name = "source")]
     public string? Source { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tutorial")]
+    public bool Tutorial { get; set; }
 
     protected bool UsePlaceholderGraphics { get; } = true;
     protected string GameSurfaceId { get; } = $"enigma-game-{Guid.NewGuid():N}";
@@ -95,20 +103,18 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected int TotalRoomCount => _roomStates.Count;
     protected string DifficultyLabel => ParsedSeed?.Difficulty.ToString() ?? "Unknown";
     protected string RoomCoordinateLabel => CurrentRoom is null ? "(0, 0)" : CurrentRoom.Coordinates.ToString();
-    protected string CurrentMapSourceLabel => string.Equals(NormalizedSource, "load", StringComparison.Ordinal) ? "Loaded map" : "Generated map";
-    protected string CurrentMapLabel => string.IsNullOrWhiteSpace(MapName) ? "Unsaved seed" : MapName!;
+    protected string CurrentMapLabel => string.IsNullOrWhiteSpace(MapName) ? "UNKNOWN" : MapName!;
     protected string NormalizedSource => string.Equals(Source, "load", StringComparison.OrdinalIgnoreCase) ? "load" : "new";
     protected string ElapsedTimeLabel => FormatElapsed(_sessionStopwatch.Elapsed);
     protected bool CanShowRoom => ParsedSeed is not null && CurrentRoom is not null && CurrentRoomState is not null;
     protected bool PortalReady => CurrentRoomState?.FinishPortalVisible == true;
+    protected bool IsTutorialRun => Tutorial;
 
     protected override void OnParametersSet()
     {
         if (string.IsNullOrWhiteSpace(Seed))
         {
-            LoadError = _resumeAttempted
-                ? "Open a generated or loaded seed from the Play page before starting the game."
-                : null;
+            LoadError = "Open a generated or loaded seed from the Play page before starting the game.";
             IsLoaded = false;
             return;
         }
@@ -119,6 +125,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
 
         ResetRuntimeState();
+        _runNonce = Guid.NewGuid().ToString("N");
+        _abandonTriggered = false;
+        _allowRouteExit = false;
 
         try
         {
@@ -128,7 +137,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 _roomStates[room.Coordinates] = new RoomRuntimeState
                 {
                     Definition = room,
-                    Puzzle = PuzzleFactory.Create(ParsedSeed.RawSeed, room, ParsedSeed.Difficulty),
+                    Puzzle = PuzzleFactory.Create(ParsedSeed.RawSeed, room, ParsedSeed.Difficulty, _runNonce),
                     PuzzleGoldReward = PuzzleFactory.GetPuzzleReward(ParsedSeed.RawSeed, room, ParsedSeed.Difficulty),
                     RewardPickupGold = PuzzleFactory.GetRewardPickupBonus(ParsedSeed.RawSeed, room, ParsedSeed.Difficulty),
                     RewardPickupBounds = PuzzleFactory.CreateRewardPickupBounds(ParsedSeed.RawSeed, room),
@@ -158,22 +167,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_resumeAttempted && string.IsNullOrWhiteSpace(Seed))
+        if (string.IsNullOrWhiteSpace(Seed))
         {
-            _resumeAttempted = true;
-            var activeRun = await JS.InvokeAsync<ActiveGameSession?>("enigmaGame.getActiveGameSession");
-            if (!string.IsNullOrWhiteSpace(activeRun?.Seed))
-            {
-                var url = $"/game?seed={Uri.EscapeDataString(activeRun.Seed)}&source={Uri.EscapeDataString(activeRun.Source)}";
-                if (!string.IsNullOrWhiteSpace(activeRun.MapName))
-                {
-                    url += $"&mapName={Uri.EscapeDataString(activeRun.MapName)}";
-                }
-
-                NavigationManager.NavigateTo(url, replace: true);
-                return;
-            }
-
             LoadError = "Open a generated or loaded seed from the Play page before starting the game.";
             await InvokeAsync(StateHasChanged);
             return;
@@ -185,24 +180,24 @@ public partial class Game : ComponentBase, IAsyncDisposable
             await JS.InvokeVoidAsync("enigmaGame.registerInput", _dotNetReference);
             await JS.InvokeVoidAsync("enigmaGame.focusElement", GameSurfaceId);
             await JS.InvokeVoidAsync("enigmaGame.sessionRemove", CompletionSummaryStorageKey);
+            await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
 
-            var identity = await JS.InvokeAsync<PlayerIdentity?>("enigmaGame.getPlayerIdentity");
-            if (!string.IsNullOrWhiteSpace(identity?.Username))
+            var session = await Api.GetSessionAsync();
+            if (!string.IsNullOrWhiteSpace(session?.Username))
             {
-                Username = identity!.Username;
+                Username = session!.Username;
             }
 
             _jsReady = true;
-            await PersistActiveGameSessionAsync();
+            if (!IsTutorialRun)
+            {
+                await JS.InvokeVoidAsync("enigmaGame.registerLossUnload", Api.BuildUrl("api/auth/game/abandon"));
+                await UpdatePendingLossDraftAsync(force: true);
+            }
             await SyncLivePlayerStateAsync(force: true);
             StartGameLoop();
             await InvokeAsync(StateHasChanged);
             return;
-        }
-
-        if (_jsReady && IsLoaded)
-        {
-            await PersistActiveGameSessionAsync();
         }
     }
 
@@ -299,6 +294,14 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
     }
 
+    protected void RotateSignalTile(int index)
+    {
+        if (CurrentRoomState?.Puzzle is SignalRotationNetworkPuzzle puzzle)
+        {
+            puzzle.Rotate(index);
+        }
+    }
+
     protected void PressPatternDirection(PlayerDirection direction)
     {
         if (CurrentRoomState?.Puzzle is UnlockPatternPuzzle puzzle)
@@ -312,6 +315,14 @@ public partial class Game : ComponentBase, IAsyncDisposable
         if (CurrentRoomState?.Puzzle is ValveFlowPuzzle puzzle)
         {
             puzzle.Toggle(index);
+        }
+        else if (CurrentRoomState?.Puzzle is FlowRedistributionPuzzle redistribution)
+        {
+            redistribution.Pulse(index);
+        }
+        else if (CurrentRoomState?.Puzzle is ConservationNetworkPuzzle conservation)
+        {
+            conservation.Pulse(index);
         }
     }
 
@@ -336,6 +347,166 @@ public partial class Game : ComponentBase, IAsyncDisposable
         if (CurrentRoomState?.Puzzle is YarnUntanglePuzzle puzzle)
         {
             puzzle.Select(index);
+        }
+        else if (CurrentRoomState?.Puzzle is KnotTopologyPuzzle knot)
+        {
+            knot.Select(index);
+        }
+    }
+
+    protected void ToggleDualPulseA()
+    {
+        if (CurrentRoomState?.Puzzle is DualPulseLockPuzzle puzzle)
+        {
+            puzzle.ToggleMeterA();
+        }
+    }
+
+    protected void ToggleDualPulseB()
+    {
+        if (CurrentRoomState?.Puzzle is DualPulseLockPuzzle puzzle)
+        {
+            puzzle.ToggleMeterB();
+        }
+    }
+
+    protected void SelectSymbolLogicSymbol(string symbol)
+    {
+        if (CurrentRoomState?.Puzzle is SymbolLogicPuzzle puzzle)
+        {
+            puzzle.SelectSymbol(symbol);
+        }
+    }
+
+    protected void ClearSymbolLogicSelection()
+    {
+        if (CurrentRoomState?.Puzzle is SymbolLogicPuzzle puzzle)
+        {
+            puzzle.ClearSelection();
+        }
+    }
+
+    protected void PressEchoDirection(PlayerDirection direction)
+    {
+        if (CurrentRoomState?.Puzzle is DirectionalEchoPuzzle puzzle)
+        {
+            puzzle.Press(direction);
+        }
+        else if (CurrentRoomState?.Puzzle is DimensionalPatternShiftPuzzle dimensional)
+        {
+            dimensional.Press(direction);
+        }
+    }
+
+    protected void RotateBinaryLeft()
+    {
+        if (CurrentRoomState?.Puzzle is BinaryShiftPuzzle puzzle)
+        {
+            puzzle.RotateLeft();
+        }
+        else if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle transformation)
+        {
+            transformation.RotateLeft();
+        }
+    }
+
+    protected void RotateBinaryRight()
+    {
+        if (CurrentRoomState?.Puzzle is BinaryShiftPuzzle puzzle)
+        {
+            puzzle.RotateRight();
+        }
+        else if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle transformation)
+        {
+            transformation.RotateRight();
+        }
+    }
+
+    protected void FlipBinaryCenter()
+    {
+        if (CurrentRoomState?.Puzzle is BinaryShiftPuzzle puzzle)
+        {
+            puzzle.FlipCenter();
+        }
+    }
+
+    protected void SelectCrossingLeft(int index)
+    {
+        if (CurrentRoomState?.Puzzle is CrossingPathPuzzle puzzle)
+        {
+            puzzle.SelectLeft(index);
+        }
+    }
+
+    protected void ConnectCrossingRight(int index)
+    {
+        if (CurrentRoomState?.Puzzle is CrossingPathPuzzle puzzle)
+        {
+            puzzle.ConnectRight(index);
+        }
+    }
+
+    protected void ToggleTemporalRing(int index)
+    {
+        if (CurrentRoomState?.Puzzle is TemporalLockPuzzle puzzle)
+        {
+            puzzle.ToggleRing(index);
+        }
+    }
+
+    protected void PullParadoxLever(int index)
+    {
+        if (CurrentRoomState?.Puzzle is LogicalParadoxPuzzle puzzle)
+        {
+            puzzle.PullLever(index);
+        }
+    }
+
+    protected void PressInterferenceRune(string rune)
+    {
+        if (CurrentRoomState?.Puzzle is MemoryInterferencePuzzle puzzle)
+        {
+            puzzle.Press(rune);
+        }
+    }
+
+    protected void RotateCipherRow(int row)
+    {
+        if (CurrentRoomState?.Puzzle is RotationalCipherGridPuzzle puzzle)
+        {
+            puzzle.RotateRow(row);
+        }
+    }
+
+    protected void RotateCipherColumn(int column)
+    {
+        if (CurrentRoomState?.Puzzle is RotationalCipherGridPuzzle puzzle)
+        {
+            puzzle.RotateColumn(column);
+        }
+    }
+
+    protected void InvertBinaryAll()
+    {
+        if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle puzzle)
+        {
+            puzzle.InvertAll();
+        }
+    }
+
+    protected void FlipBinaryAlternate()
+    {
+        if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle puzzle)
+        {
+            puzzle.FlipAlternate();
+        }
+    }
+
+    protected void ApplyBinaryXorMask()
+    {
+        if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle puzzle)
+        {
+            puzzle.ApplyXorMask();
         }
     }
 
@@ -472,10 +643,16 @@ public partial class Game : ComponentBase, IAsyncDisposable
             Size = ParsedSeed.Size,
         };
 
-        await JS.InvokeVoidAsync("enigmaGame.sessionSetJson", CompletionSummaryStorageKey, summary);
         await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
         await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
         await JS.InvokeVoidAsync("enigmaGame.disposeInput");
+        if (IsTutorialRun)
+        {
+            await InvokeAsync(() => NavigationManager.NavigateTo("/leaderboard", replace: true));
+            return;
+        }
+
+        await JS.InvokeVoidAsync("enigmaGame.sessionSetJson", CompletionSummaryStorageKey, summary);
         await InvokeAsync(() => NavigationManager.NavigateTo("/gameend/win"));
     }
 
@@ -516,6 +693,21 @@ public partial class Game : ComponentBase, IAsyncDisposable
         IsMoving = true;
         PlayerX += deltaX * PlayerSpeed * deltaTime;
         PlayerY += deltaY * PlayerSpeed * deltaTime;
+
+        if (CurrentRoomState?.Puzzle is IBlockPushPuzzle blockPushPuzzle)
+        {
+            var playerRect = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
+            if (blockPushPuzzle.BlocksPlayer(playerRect))
+            {
+                _ = blockPushPuzzle.TryPush(PlayerFacing, playerRect);
+                playerRect = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
+                if (blockPushPuzzle.BlocksPlayer(playerRect))
+                {
+                    PlayerX = previousX;
+                    PlayerY = previousY;
+                }
+            }
+        }
 
         if (TryTransition(PlayerDirection.Left) ||
             TryTransition(PlayerDirection.Right) ||
@@ -689,6 +881,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
         IsLoaded = false;
         TotalGold = 0;
         _completionTriggered = false;
+        _abandonTriggered = false;
+        _allowRouteExit = false;
         _pressedKeys.Clear();
         _lastPlayerStateSyncUtc = DateTime.MinValue;
         _playerStateDirty = true;
@@ -698,6 +892,55 @@ public partial class Game : ComponentBase, IAsyncDisposable
         $"{elapsed.Hours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}:{elapsed.Milliseconds:000}";
 
     private static double ToPercent(double value) => Math.Round((value / RoomSize) * 100d, 4);
+
+    protected static string GetDirectionArrow(PlayerDirection direction) => direction switch
+    {
+        PlayerDirection.Up => "↑",
+        PlayerDirection.Right => "→",
+        PlayerDirection.Down => "↓",
+        PlayerDirection.Left => "←",
+        _ => "?",
+    };
+
+    protected static string GetBinaryString(IEnumerable<bool> bits) => string.Concat(bits.Select(bit => bit ? '1' : '0'));
+
+    protected static string GetPipeGlyph(int mask) => mask switch
+    {
+        0b0101 => "│",
+        0b1010 => "─",
+        0b0011 => "└",
+        0b0110 => "┌",
+        0b1100 => "┐",
+        0b1001 => "┘",
+        0b0111 => "├",
+        0b1110 => "┬",
+        0b1101 => "┤",
+        0b1011 => "┴",
+        0b1111 => "┼",
+        0b0001 => "╵",
+        0b0010 => "╶",
+        0b0100 => "╷",
+        0b1000 => "╴",
+        _ => "•",
+    };
+
+    protected string GetConnectionLineStyle(PlayAreaPoint start, PlayAreaPoint end)
+    {
+        var deltaX = end.X - start.X;
+        var deltaY = end.Y - start.Y;
+        var length = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+        var angle = Math.Atan2(deltaY, deltaX) * (180d / Math.PI);
+        return $"left: {ToPercent(start.X)}%; top: {ToPercent(start.Y)}%; width: {ToPercent(length)}%; transform: rotate({Math.Round(angle, 2)}deg);";
+    }
+
+    protected static string GetModifierLabel(RecursiveZoneModifier modifier) => modifier switch
+    {
+        RecursiveZoneModifier.ReverseRemaining => "Reverse",
+        RecursiveZoneModifier.RotateRemaining => "Rotate",
+        RecursiveZoneModifier.SwapExtremes => "Swap Ends",
+        RecursiveZoneModifier.ExtendNextHold => "Long Hold",
+        _ => "Shift",
+    };
 
     private async Task SyncLivePlayerStateAsync(bool force = false)
     {
@@ -749,33 +992,151 @@ public partial class Game : ComponentBase, IAsyncDisposable
         };
 
         await JS.InvokeVoidAsync("enigmaGame.setLivePlayerState", payload);
-        await PersistActiveGameSessionAsync();
+        await UpdatePendingLossDraftAsync(force: force);
         _lastPlayerStateSyncUtc = nowUtc;
         _playerStateDirty = false;
     }
 
-    private async Task PersistActiveGameSessionAsync()
+    private PendingLossSummary BuildPendingLossSummary(string reason = "abandoned")
     {
-        if (!_jsReady || !IsLoaded || ParsedSeed is null || CurrentRoom is null)
+        var mapValue = CalculateMapValue();
+        var projectedCompletionPayout = CalculateProjectedCompletionPayout();
+        return new PendingLossSummary
+        {
+            RunNonce = _runNonce,
+            Username = Username,
+            Seed = ParsedSeed?.RawSeed ?? string.Empty,
+            MapName = MapName,
+            Source = NormalizedSource,
+            Difficulty = ParsedSeed?.Difficulty.ToString() ?? string.Empty,
+            ThemeLabel = "Unknown",
+            MapValue = mapValue,
+            ForfeitedRunPayout = TotalGold,
+            ProjectedCompletionPayout = projectedCompletionPayout,
+            UsedItems = [],
+            Reason = reason,
+            AbandonedAtUtc = DateTime.UtcNow.ToString("O"),
+        };
+    }
+
+    private async Task UpdatePendingLossDraftAsync(bool force = false)
+    {
+        if (IsTutorialRun || !_jsReady || !IsLoaded || ParsedSeed is null || _completionTriggered || _abandonTriggered)
         {
             return;
         }
 
-        var activeRun = new ActiveGameSession
+        if (!force && !_playerStateDirty)
         {
-            Seed = ParsedSeed.RawSeed,
-            MapName = MapName,
-            Source = NormalizedSource,
-            Username = Username,
-            Difficulty = ParsedSeed.Difficulty.ToString(),
-            Size = ParsedSeed.Size,
-            CurrentRoomLabel = CurrentRoom.Coordinates.ToString(),
-            SavedAtUtc = DateTime.UtcNow.ToString("O"),
-        };
+            return;
+        }
 
-        await JS.InvokeVoidAsync("enigmaGame.setActiveGameSession", activeRun);
+        await JS.InvokeVoidAsync("enigmaGame.setPendingLossDraft", BuildPendingLossSummary());
     }
 
+    private int CalculateProjectedCompletionPayout()
+    {
+        var total = TotalGold;
+        foreach (var roomState in _roomStates.Values)
+        {
+            if (!roomState.PuzzleRewardGranted)
+            {
+                total += roomState.PuzzleGoldReward;
+            }
+
+            if (roomState.RewardPickupVisible)
+            {
+                total += roomState.RewardPickupGold;
+            }
+        }
+
+        return total;
+    }
+
+    private int CalculateMapValue()
+    {
+        if (ParsedSeed is null)
+        {
+            return 0;
+        }
+
+        var roomCount = ParsedSeed.Rooms.Count;
+        var rewardCount = ParsedSeed.Rooms.Values.Count(room => room.Kind == MazeRoomKind.Reward);
+        var difficultyMultiplier = ParsedSeed.Difficulty switch
+        {
+            MazeDifficulty.Medium => 1.25d,
+            MazeDifficulty.Hard => 1.5d,
+            _ => 1d,
+        };
+
+        var rewardMultiplier = rewardCount / 1.5d;
+        var roomMultiplier = roomCount / 16d;
+        return (int)Math.Round(((100d * difficultyMultiplier) * rewardMultiplier) * roomMultiplier);
+    }
+
+    public async Task HandleBeforeInternalNavigation(LocationChangingContext context)
+    {
+        if (IsTutorialRun || _allowRouteExit || _completionTriggered || _abandonTriggered || !IsLoaded || ParsedSeed is null)
+        {
+            return;
+        }
+
+        if (string.Equals(context.TargetLocation, NavigationManager.Uri, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        context.PreventNavigation();
+        await AbandonAndRedirectAsync("navigation");
+    }
+
+    private async Task AbandonAndRedirectAsync(string reason)
+    {
+        if (_abandonTriggered || ParsedSeed is null)
+        {
+            return;
+        }
+
+        _abandonTriggered = true;
+        _allowRouteExit = true;
+        _sessionStopwatch.Stop();
+
+        var summary = BuildPendingLossSummary(reason);
+        await JS.InvokeVoidAsync("enigmaGame.setPendingLossSummary", summary);
+        await JS.InvokeVoidAsync("enigmaGame.clearPendingLossDraft");
+        await SubmitAbandonSummaryAsync(summary);
+        await JS.InvokeVoidAsync("enigmaGame.clearLossUnload");
+        await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
+        await JS.InvokeVoidAsync("enigmaGame.disposeInput");
+        await InvokeAsync(() => NavigationManager.NavigateTo("/lose", replace: true));
+    }
+
+    private async Task SubmitAbandonSummaryAsync(PendingLossSummary summary)
+    {
+        try
+        {
+            using var response = await Api.PostJsonAsync("api/auth/game/abandon", new
+            {
+                runNonce = summary.RunNonce,
+                seed = summary.Seed,
+                mapName = summary.MapName,
+                source = summary.Source,
+                usedItems = summary.UsedItems,
+                forfeitedRunPayout = summary.ForfeitedRunPayout,
+                projectedCompletionPayout = summary.ProjectedCompletionPayout,
+                mapValue = summary.MapValue,
+                reason = summary.Reason,
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _ = await response.Content.ReadAsStringAsync();
+            }
+        }
+        catch
+        {
+        }
+    }
     private void MarkPlayerStateDirty(
         double previousX,
         double previousY,
@@ -795,3 +1156,4 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     protected sealed record WallSegment(string CssClass, string Style);
 }
+

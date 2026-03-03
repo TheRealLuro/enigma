@@ -49,5 +49,29 @@ public class ProfileUserData
     [JsonPropertyName("discovered_maps_count")]
     public int DiscoveredMapsCount { get; set; }
 
+    [JsonPropertyName("profile_image")]
+    public ProfileImageState? ProfileImage { get; set; }
+
+    [JsonPropertyName("is_system_account")]
+    public bool IsSystemAccount { get; set; }
+
+    [JsonPropertyName("allow_public_profile")]
+    public bool AllowPublicProfile { get; set; } = true;
+
+    [JsonPropertyName("relationship")]
+    public FriendRelationshipState Relationship { get; set; } = new();
+
     public double WinRate => NumberOfMapsPlayed <= 0 ? 0 : (double)MapsCompleted / NumberOfMapsPlayed;
+}
+
+public class FriendRelationshipState
+{
+    [JsonPropertyName("are_friends")]
+    public bool AreFriends { get; set; }
+
+    [JsonPropertyName("incoming_request")]
+    public bool HasIncomingRequest { get; set; }
+
+    [JsonPropertyName("outgoing_request")]
+    public bool HasOutgoingRequest { get; set; }
 }

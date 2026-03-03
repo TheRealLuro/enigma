@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from .db import merchant
+from .item_catalog import serialize_shop_item
 
 
 router = APIRouter(prefix="/database/merchant")
@@ -8,6 +9,4 @@ router = APIRouter(prefix="/database/merchant")
 @router.get("/items")
 def get_item_shop():
     docs = list(merchant.find({}))
-    for doc in docs:
-        doc["_id"] = str(doc["_id"])
-    return {"items": docs}
+    return {"status": "success", "items": [serialize_shop_item(doc) for doc in docs]}

@@ -55,5 +55,26 @@ public class LoginUserSummary
     [JsonPropertyName("last_login_at")]
     public string? LastLoginAt { get; set; }
 
+    [JsonPropertyName("email")]
+    public string Email { get; set; } = string.Empty;
+
+    [JsonPropertyName("profile_image")]
+    public ProfileImageState? ProfileImage { get; set; }
+
+    [JsonPropertyName("tutorial_state")]
+    public TutorialState TutorialState { get; set; } = new();
+
+    [JsonPropertyName("is_system_account")]
+    public bool IsSystemAccount { get; set; }
+
+    [JsonPropertyName("allow_public_profile")]
+    public bool AllowPublicProfile { get; set; } = true;
+
+    [JsonPropertyName("owned_maps_count")]
+    public int OwnedMapsCount { get; set; }
+
+    [JsonPropertyName("discovered_maps_count")]
+    public int DiscoveredMapsCount { get; set; }
+
     public double WinRate => NumberOfMapsPlayed <= 0 ? 0 : (double)MapsCompleted / NumberOfMapsPlayed;
 }

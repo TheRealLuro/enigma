@@ -1,14 +1,16 @@
 @inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@inject Enigma.Client.Services.EnigmaApiClient Api
 @implements IDisposable
+@using Enigma.Client.Models
+@using Enigma.Client.Models.Gameplay
 
 <div class="page">
     @if (ShouldShowHeader)
     {
         <header class="app-header app-shell-header">
             <div class="app-shell-brand">
-                <button class="btn btn-secondary app-back-button" @onclick="GoBackAsync">Back</button>
                 <div class="app-shell-brand-copy">
                     <button class="app-brand-button" @onclick="GoHome">Enigma</button>
                     <span class="app-shell-brand-tag">Question Everything</span>
@@ -25,11 +27,19 @@
             </nav>
 
             <div class="app-shell-account">
-                <button class="app-shell-user-chip" @onclick="GoProfile">
+                <button class="app-shell-user-chip" @onclick="ToggleAccountMenu">
                     <span class="app-shell-user-kicker">Signed in</span>
                     <strong>@(Session?.Username ?? "Explorer")</strong>
                 </button>
-                <button class="btn btn-secondary app-logout-button" @onclick="LogoutAsync">Logout</button>
+
+                @if (IsAccountMenuOpen)
+                {
+                    <div class="app-shell-account-menu">
+                        <button class="app-shell-account-link" @onclick="GoProfile">View Profile</button>
+                        <button class="app-shell-account-link" @onclick="GoToSettings">Settings</button>
+                        <button class="app-shell-account-link danger" @onclick="LogoutAsync">Sign Out</button>
+                    </div>
+                }
             </div>
         </header>
     }
@@ -53,10 +63,30 @@
     </main>
 </div>
 
+@if (TutorialVisible && CurrentTutorialStep is not null)
+{
+    <div class="enigma-modal-backdrop tutorial-backdrop">
+        <div class="enigma-modal-card tutorial-modal-card">
+            <span class="profile-kicker">@CurrentTutorialStep.Eyebrow</span>
+            <h2>@CurrentTutorialStep.Title</h2>
+            <p>@CurrentTutorialStep.Description</p>
+            <div class="tutorial-progress-row">
+                <span>Step @(_tutorialIndex + 1) of @_tutorialSteps.Count</span>
+                <span>@GetTutorialRouteLabel()</span>
+            </div>
+            <div class="enigma-end-actions tutorial-action-row">
+                <button class="btn btn-secondary" type="button" @onclick="SkipTutorialAsync">Skip</button>
+                <button class="btn btn-secondary" type="button" disabled="@(_tutorialIndex == 0)" @onclick="GoToPreviousTutorialStepAsync">Previous</button>
+                <button class="btn btn-primary" type="button" @onclick="GoToNextTutorialStepAsync">@(_tutorialIndex == _tutorialSteps.Count - 1 ? "Finish" : "Next")</button>
+            </div>
+        </div>
+    </div>
+}
+
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    <span class="dismiss">X</span>
 </div>
 
 @code {
@@ -69,14 +99,30 @@
     private LoginUserSummary? Session { get; set; }
     private bool AuthCheckComplete { get; set; }
     private bool IsAuthenticated { get; set; }
+    private bool IsAccountMenuOpen { get; set; }
+    private bool TutorialVisible { get; set; }
+    private bool _tutorialSeenRecorded;
+    private int _tutorialIndex;
 
-    private bool ShouldShowHeader
-    {
-        get
-        {
-            return !IsPublicPath() && AuthCheckComplete && IsAuthenticated;
-        }
-    }
+    private readonly List<TutorialStepDefinition> _tutorialSteps =
+    [
+        new() { Eyebrow = "Home", Title = "Main Menu", Description = "This is the central hub. Use it to jump into runs, rankings, players, your profile, and the marketplace.", Path = "/home" },
+        new() { Eyebrow = "Play", Title = "Run Setup", Description = "Generate or load a maze here, select your item loadout, and confirm fullscreen before entering.", Path = "/play" },
+        new() { Eyebrow = "Game Demo", Title = "Live Maze", Description = "This tutorial run is a safe demo. It shows the HUD, puzzles, movement, and room flow without risking a real run.", Path = "/game?tutorial=1" },
+        new() { Eyebrow = "Leaderboard", Title = "Rankings", Description = "Switch between top maps and top players. Founder names and record holders link directly to profiles.", Path = "/leaderboard" },
+        new() { Eyebrow = "Marketplace", Title = "Trading Floor", Description = "Buy maps, list your owned maps, and purchase support items from the item shop.", Path = "/marketplace" },
+        new() { Eyebrow = "Players", Title = "Explorer Search", Description = "Find other explorers, inspect their public stats, and jump straight to their profiles.", Path = "/players" },
+        new() { Eyebrow = "Profile", Title = "Your Profile", Description = "Review your collection, private social graph, inventory, and public-facing explorer stats.", Path = "/profile" },
+        new() { Eyebrow = "Settings", Title = "Account Controls", Description = "Update email, password, avatar, tutorial state, and account-level settings from here.", Path = "/profile?tab=settings" },
+        new() { Eyebrow = "Policy", Title = "Inactivity Warning", Description = "If you are inactive for 2 consecutive months, your account and owned maps are permanently deleted and cannot be recovered.", Path = "/home" },
+    ];
+
+    private TutorialStepDefinition? CurrentTutorialStep =>
+        _tutorialIndex >= 0 && _tutorialIndex < _tutorialSteps.Count
+            ? _tutorialSteps[_tutorialIndex]
+            : null;
+
+    private bool ShouldShowHeader => !IsPublicPath() && !IsGamePath() && AuthCheckComplete && IsAuthenticated;
 
     private bool CanRenderCurrentRoute => IsPublicPath() || (AuthCheckComplete && IsAuthenticated);
 
@@ -98,27 +144,49 @@
             return;
         }
 
-        var session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
-        AuthCheckComplete = true;
-        IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
-        Session = session;
-
-        if (!IsAuthenticated)
+        try
         {
-            NavigationManager.NavigateTo("/", replace: true);
-            return;
+            var session = await Api.GetSessionAsync();
+            if (!string.Equals(Session?.Username, session?.Username, StringComparison.OrdinalIgnoreCase))
+            {
+                _tutorialSeenRecorded = false;
+            }
+            AuthCheckComplete = true;
+            IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
+            Session = session;
+
+            if (!IsAuthenticated)
+            {
+                await ClearBrowserSessionAsync();
+                NavigationManager.NavigateTo("/", replace: true);
+                return;
+            }
+
+            var pendingLoss = await JS.InvokeAsync<PendingLossSummary?>("enigmaGame.getPendingLossSummary");
+            if (pendingLoss is not null && !IsLosePath())
+            {
+                NavigationManager.NavigateTo("/lose", replace: true);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
+            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session!.Username }, false);
+            await EnsureTutorialStateAsync(session);
+            await InvokeAsync(StateHasChanged);
         }
-
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task GoBackAsync()
-    {
-        await JS.InvokeVoidAsync("enigmaGame.goBack", "/home");
+        catch
+        {
+            AuthCheckComplete = true;
+            IsAuthenticated = false;
+            Session = null;
+            await ClearBrowserSessionAsync();
+            NavigationManager.NavigateTo("/", replace: true);
+        }
     }
 
     private void GoHome()
     {
+        IsAccountMenuOpen = false;
         NavigationManager.NavigateTo("/home");
     }
 
@@ -129,22 +197,56 @@
             return;
         }
 
+        IsAccountMenuOpen = false;
         NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(Session.Username)}");
+    }
+
+    private void GoToSettings()
+    {
+        IsAccountMenuOpen = false;
+        NavigationManager.NavigateTo("/profile?tab=settings");
+    }
+
+    private void ToggleAccountMenu()
+    {
+        IsAccountMenuOpen = !IsAccountMenuOpen;
     }
 
     private async Task LogoutAsync()
     {
-        await JS.InvokeVoidAsync("enigmaGame.clearPlayerIdentity");
-        await JS.InvokeVoidAsync("enigmaGame.clearUserSession");
-        await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
+        IsAccountMenuOpen = false;
+        try
+        {
+            await Api.LogoutAsync();
+        }
+        catch
+        {
+        }
+
+        await ClearBrowserSessionAsync();
         Session = null;
         AuthCheckComplete = true;
         IsAuthenticated = false;
+        TutorialVisible = false;
+        _tutorialSeenRecorded = false;
         NavigationManager.NavigateTo("/", replace: true);
+    }
+
+    private async Task ClearBrowserSessionAsync()
+    {
+        await JS.InvokeVoidAsync("enigmaGame.clearPlayerIdentity");
+        await JS.InvokeVoidAsync("enigmaGame.clearUserSession");
+        await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
+        await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
+        await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
+        await JS.InvokeVoidAsync("enigmaGame.clearRunLoadout");
+        await JS.InvokeVoidAsync("enigmaGame.consumeTutorialRequest");
     }
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
     {
+        IsAccountMenuOpen = false;
+        UpdateTutorialIndexFromUri(args.Location);
         ResetAuthStateForCurrentPath(args.Location);
         _ = InvokeAsync(StateHasChanged);
     }
@@ -156,11 +258,24 @@
             AuthCheckComplete = true;
             IsAuthenticated = true;
             Session = null;
+            TutorialVisible = false;
             return;
         }
 
         AuthCheckComplete = false;
         IsAuthenticated = false;
+    }
+
+    private bool IsGamePath(string? uri = null)
+    {
+        var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
+        return string.Equals(cleanPath, "game", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsLosePath(string? uri = null)
+    {
+        var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
+        return string.Equals(cleanPath, "lose", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool IsPublicPath(string? uri = null)
@@ -173,6 +288,193 @@
     {
         var relativePath = new Uri(uri, UriKind.Absolute).AbsolutePath.Trim('/');
         return relativePath.ToLowerInvariant();
+    }
+
+    private async Task EnsureTutorialStateAsync(LoginUserSummary session)
+    {
+        if (session.IsSystemAccount || IsPublicPath() || IsLosePath())
+        {
+            return;
+        }
+
+        var requested = await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
+        var shouldAutoStart = requested || string.IsNullOrWhiteSpace(session.TutorialState.SeenAt);
+        if (!shouldAutoStart)
+        {
+            return;
+        }
+
+        if (!_tutorialSeenRecorded)
+        {
+            _tutorialSeenRecorded = true;
+            try
+            {
+                using var response = await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "seen" });
+                if (response.IsSuccessStatusCode)
+                {
+                    var payload = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                    if (payload?.User is not null)
+                    {
+                        Session = payload.User;
+                        await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", payload.User);
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        TutorialVisible = true;
+        UpdateTutorialIndexFromUri(NavigationManager.Uri);
+    }
+
+    private void UpdateTutorialIndexFromUri(string uri)
+    {
+        if (!TutorialVisible)
+        {
+            return;
+        }
+
+        _tutorialIndex = GetTutorialIndexForUri(uri);
+    }
+
+    private int GetTutorialIndexForUri(string uri)
+    {
+        var current = new Uri(uri, UriKind.Absolute);
+        var path = current.AbsolutePath.Trim('/').ToLowerInvariant();
+        var query = current.Query.ToLowerInvariant();
+
+        if (path == "play")
+        {
+            return 1;
+        }
+
+        if (path == "game" && query.Contains("tutorial=1", StringComparison.Ordinal))
+        {
+            return 2;
+        }
+
+        if (path == "leaderboard")
+        {
+            return 3;
+        }
+
+        if (path == "marketplace")
+        {
+            return 4;
+        }
+
+        if (path == "players")
+        {
+            return 5;
+        }
+
+        if (path == "profile" && query.Contains("tab=settings", StringComparison.Ordinal))
+        {
+            return 7;
+        }
+
+        if (path == "profile")
+        {
+            return 6;
+        }
+
+        return 0;
+    }
+
+    private string GetTutorialRouteLabel()
+    {
+        var step = CurrentTutorialStep;
+        if (step is null)
+        {
+            return string.Empty;
+        }
+
+        return step.Path.StartsWith("/game", StringComparison.OrdinalIgnoreCase) ? "Game demo" : step.Path.TrimStart('/');
+    }
+
+    private async Task GoToPreviousTutorialStepAsync()
+    {
+        if (_tutorialIndex <= 0)
+        {
+            return;
+        }
+
+        _tutorialIndex--;
+        await NavigateToTutorialStepAsync(_tutorialIndex);
+    }
+
+    private async Task GoToNextTutorialStepAsync()
+    {
+        if (_tutorialIndex >= _tutorialSteps.Count - 1)
+        {
+            await CompleteTutorialAsync();
+            return;
+        }
+
+        _tutorialIndex++;
+        await NavigateToTutorialStepAsync(_tutorialIndex);
+    }
+
+    private async Task NavigateToTutorialStepAsync(int index)
+    {
+        if (index < 0 || index >= _tutorialSteps.Count)
+        {
+            return;
+        }
+
+        if (index == 2)
+        {
+            try
+            {
+                var seed = await Api.GetFromJsonAsync<SeedEnvelope>("api/auth/newMap?difficulty=easy&size=3");
+                if (!string.IsNullOrWhiteSpace(seed?.Seed))
+                {
+                    NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(seed.Seed)}&source=new&tutorial=1", replace: true);
+                    return;
+                }
+            }
+            catch
+            {
+            }
+
+            NavigationManager.NavigateTo("/play", replace: true);
+            return;
+        }
+
+        NavigationManager.NavigateTo(_tutorialSteps[index].Path, replace: true);
+    }
+
+    private async Task SkipTutorialAsync()
+    {
+        TutorialVisible = false;
+        try
+        {
+            await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "skipped" });
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task CompleteTutorialAsync()
+    {
+        TutorialVisible = false;
+        try
+        {
+            await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "completed" });
+        }
+        catch
+        {
+        }
+
+        NavigationManager.NavigateTo("/home", replace: true);
+    }
+
+    private sealed class SeedEnvelope
+    {
+        public string Seed { get; set; } = string.Empty;
     }
 
     public void Dispose()

@@ -154,10 +154,8 @@ Enigma introduces the concept of **maze value**.
 
 Planned systems:
 - Maze rarity tiers
-- Ownership tracking
 - Map trading
-- Marketplace economy
-- Merchant systems
+
 
 Each maze becomes a **digital artifact**.
 

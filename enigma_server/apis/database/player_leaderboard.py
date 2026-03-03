@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from .db import users_collection
 from .map_utils import normalize_int
+from .user_utils import apply_user_defaults
 
 router = APIRouter(prefix="/database/leaderboard")
 
@@ -40,7 +41,14 @@ def get_players_leaderboard(
         "maps_completed": 1,
         "maps_lost": 1,
         "number_of_maps_played": 1,
+        "is_system_account": 1,
+        "allow_public_profile": 1,
+        "profile_image": 1,
     }):
+        user = apply_user_defaults(user)
+        if user.get("is_system_account") or not user.get("allow_public_profile", True):
+            continue
+
         owned_ids = {str(map_id) for map_id in user.get("maps_owned", [])}
         discovered_ids = {str(map_id) for map_id in user.get("maps_discovered", [])}
         effective_owned_count = len(owned_ids | discovered_ids)
@@ -60,6 +68,7 @@ def get_players_leaderboard(
                 "maps_lost": losses,
                 "maps_played": maps_played,
                 "win_rate": win_rate,
+                "profile_image": user.get("profile_image"),
             }
         )
 

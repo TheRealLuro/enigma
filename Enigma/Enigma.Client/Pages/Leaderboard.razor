@@ -1,4 +1,5 @@
 @page "/leaderboard"
+@inject Enigma.Client.Services.EnigmaApiClient Api
 
 <PageTitle>Leaderboard</PageTitle>
 
@@ -77,7 +78,7 @@
                 {
                     <article class="podium-card player-podium-card rank-@entry.Rank">
                         <span class="podium-rank">#@entry.Rank</span>
-                        <div class="player-podium-avatar">@GetInitials(entry.Player.Username)</div>
+                        <ProfileAvatar Image="@entry.Player.ProfileImage" AltText="@($"{entry.Player.Username} profile picture")" FallbackText="@GetInitials(entry.Player.Username)" Class="player-podium-avatar-frame" />
                         <button class="map-link-button podium-map-title" type="button" @onclick="() => GoToProfile(entry.Player.Username)">
                             @entry.Player.Username
                         </button>
@@ -131,7 +132,7 @@
                                     <td><span class="leaderboard-rank-pill">#@entry.Rank</span></td>
                                     <td>
                                         <div class="leaderboard-player-cell">
-                                            <div class="player-table-avatar">@GetInitials(entry.Player.Username)</div>
+                                            <ProfileAvatar Image="@entry.Player.ProfileImage" AltText="@($"{entry.Player.Username} profile picture")" FallbackText="@GetInitials(entry.Player.Username)" Class="player-table-avatar-frame" />
                                             <div class="leaderboard-map-copy">
                                                 <button class="map-link-button leaderboard-map-title" type="button" @onclick="() => GoToProfile(entry.Player.Username)">
                                                     @entry.Player.Username
@@ -202,7 +203,7 @@
                     <button class="map-link-button podium-map-title" type="button" @onclick="() => OpenMapAsync(entry.Map.MapName)">
                         @entry.Map.MapName
                     </button>
-                    <p>@entry.Map.Difficulty maze - @FormatThemeLabel(entry.Map.Theme)</p>
+                    <p>@entry.Map.Difficulty maze - @FormatThemeLabel(entry.Map)</p>
                     <div class="podium-metrics">
                         <div>
                             <span>Rating</span>
@@ -214,7 +215,7 @@
                         </div>
                         <div class="podium-best-time-card">
                             <span>Best Time</span>
-                            <strong>@FormatHumanTime(entry.Map.BestTime)</strong>
+                            <strong>@FormatHumanTime(entry.Map.BestTimeDisplay)</strong>
                             @if (!string.IsNullOrWhiteSpace(entry.Map.UserWithBestTime))
                             {
                                 <button class="inline-link-button compact podium-record-link" type="button" @onclick="() => GoToProfile(entry.Map.UserWithBestTime)">
@@ -275,7 +276,7 @@
                                             <button class="map-link-button leaderboard-map-title" type="button" @onclick="() => OpenMapAsync(entry.Map.MapName)">
                                                 @entry.Map.MapName
                                             </button>
-                                            <span class="leaderboard-theme-text">@FormatThemeLabel(entry.Map.Theme)</span>
+                                            <span class="leaderboard-theme-text">@FormatThemeLabel(entry.Map)</span>
                                             @if (!string.IsNullOrWhiteSpace(entry.Map.Founder))
                                             {
                                                 <button class="inline-link-button compact leaderboard-user-link" type="button" @onclick="() => GoToProfile(entry.Map.Founder)">
@@ -302,7 +303,7 @@
                                 </td>
                                 <td>
                                     <div class="leaderboard-time-cell">
-                                        <strong>@FormatHumanTime(entry.Map.BestTime)</strong>
+                                        <strong>@FormatHumanTime(entry.Map.BestTimeDisplay)</strong>
                                         @if (!string.IsNullOrWhiteSpace(entry.Map.UserWithBestTime))
                                         {
                                             <button class="inline-link-button compact leaderboard-user-link" type="button" @onclick="() => GoToProfile(entry.Map.UserWithBestTime)">
@@ -332,7 +333,6 @@
 
 @code {
     [Inject] private NavigationManager NavigationManager { get; set; } = default!;
-    [Inject] private HttpClient Http { get; set; } = default!;
 
     private bool IsLoading { get; set; } = true;
     private string ErrorMessage { get; set; } = string.Empty;
@@ -395,8 +395,8 @@
         {
             if (IsPlayerMode)
             {
-                using var playerResponse = await Http.GetAsync(
-                    BuildControllerUrl($"api/auth/playerLeaderboard?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}"));
+                using var playerResponse = await Api.GetAsync(
+                    $"api/auth/leaderboard/players?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}");
 
                 if (!playerResponse.IsSuccessStatusCode)
                 {
@@ -411,8 +411,8 @@
             }
             else
             {
-                using var response = await Http.GetAsync(
-                    BuildControllerUrl($"api/auth/leaderboard?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}"));
+                using var response = await Api.GetAsync(
+                    $"api/auth/leaderboard/maps?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}");
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -443,11 +443,6 @@
         return BoardMode == mode ? "btn btn-primary" : "btn btn-secondary";
     }
 
-    private string BuildControllerUrl(string relativePath)
-    {
-        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
-    }
-
     private static string GetDifficultyClass(string difficulty)
     {
         return difficulty?.Trim().ToLowerInvariant() switch
@@ -464,11 +459,12 @@
         return string.IsNullOrWhiteSpace(theme) ? "?" : char.ToUpperInvariant(theme[0]).ToString();
     }
 
-    private static string FormatThemeLabel(string? theme)
+    private static string FormatThemeLabel(MapSummary map)
     {
+        var theme = !string.IsNullOrWhiteSpace(map.ThemeLabel) ? map.ThemeLabel : map.Theme;
         if (string.IsNullOrWhiteSpace(theme))
         {
-            return "Unknown theme";
+            return "Cartoon";
         }
 
         return theme.Replace('_', ' ').Trim();
@@ -488,8 +484,8 @@
 
         try
         {
-            var response = await Http.GetFromJsonAsync<SeedApiResponse>(
-                BuildControllerUrl($"api/auth/loadMap?name={Uri.EscapeDataString(mapName)}"));
+            var response = await Api.GetFromJsonAsync<SeedApiResponse>(
+                $"api/auth/loadMap?name={Uri.EscapeDataString(mapName)}");
 
             if (string.IsNullOrWhiteSpace(response?.Seed))
             {
@@ -518,9 +514,9 @@
 
     private static string FormatFoundedDate(MapSummary map)
     {
-        var source = !string.IsNullOrWhiteSpace(map.TimeFounded)
-            ? map.TimeFounded
-            : map.TimeFoundedDisplay;
+        var source = !string.IsNullOrWhiteSpace(map.TimeFoundedDisplay)
+            ? map.TimeFoundedDisplay
+            : map.TimeFounded;
 
         if (string.IsNullOrWhiteSpace(source))
         {

@@ -1,68 +1,121 @@
 @page "/play"
 @using System.ComponentModel.DataAnnotations
 @using Enigma.Client.Models.Gameplay
+@inject Enigma.Client.Services.EnigmaApiClient Api
 
 <PageTitle>Play Game</PageTitle>
 
-<div class="container mt-5" style="max-width: 760px;">
+<div class="container mt-5 play-page-shell" style="max-width: 1080px;">
 
-    <h1 class="text-center mb-4">Start a Maze Run</h1>
-
-    @if (ActiveRun is not null)
-    {
-        <div class="card shadow-sm p-4 mb-4">
-            <h4 class="mb-3">Resume Current Maze</h4>
-            <p class="mb-3">@GetActiveRunDescription()</p>
-            <button class="btn btn-warning w-100" @onclick="ResumeActiveRun">
-                Resume Maze
-            </button>
+    <section class="play-page-header">
+        <div>
+            <span class="profile-kicker">Run Setup</span>
+            <h1 class="mb-2">Start a Maze Run</h1>
+            <p>Choose a maze, equip up to three items, and confirm fullscreen before you enter.</p>
         </div>
-    }
+        @if (Session is not null)
+        {
+            <div class="play-header-metrics">
+                <div>
+                    <span>Maze Nuggets</span>
+                    <strong>@Session.MazeNuggets.ToString("N0") MN</strong>
+                </div>
+                <div>
+                    <span>Inventory</span>
+                    <strong>@Inventory.Count items</strong>
+                </div>
+            </div>
+        }
+    </section>
 
-    <div class="card shadow-sm p-4 mb-4">
-        <h4 class="mb-3">Generate New Maze</h4>
+    <div class="play-setup-grid">
+        <div class="play-forms-column">
+            <div class="card shadow-sm p-4 mb-4 play-card">
+                <h4 class="mb-3">Generate New Maze</h4>
 
-        <EditForm FormName="NewForm" OnValidSubmit="OnNewClick" Model="newMazeRequest">
-            <DataAnnotationsValidator />
+                <EditForm FormName="NewForm" OnValidSubmit="OnNewClick" Model="newMazeRequest">
+                    <DataAnnotationsValidator />
 
-            <div class="mb-3">
-                <label class="form-label">Difficulty</label>
-                <InputSelect class="form-select" @bind-Value="newMazeRequest.Difficulty">
-                    @foreach (var difficulty in Enum.GetValues<Difficulty>())
+                    <div class="mb-3">
+                        <label class="form-label">Difficulty</label>
+                        <InputSelect class="form-select" @bind-Value="newMazeRequest.Difficulty">
+                            @foreach (var difficulty in Enum.GetValues<Difficulty>())
+                            {
+                                <option value="@difficulty">@difficulty</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Size</label>
+                        <InputNumber @bind-Value="newMazeRequest.Size" class="form-control" />
+                        <ValidationMessage For="() => newMazeRequest.Size" />
+                    </div>
+
+                    <button class="btn btn-success w-100" disabled="@IsBusy">
+                        @(IsBusy ? "Generating..." : "Generate Maze")
+                    </button>
+                </EditForm>
+            </div>
+
+            <div class="card shadow-sm p-4 mb-4 play-card">
+                <h4 class="mb-3">Load Maze by Name</h4>
+
+                <EditForm FormName="FromNameForm" OnValidSubmit="OnSeedClick" Model="loadMazeRequest">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-3">
+                        <label class="form-label">Map Name</label>
+                        <InputText @bind-Value="loadMazeRequest.MapName" class="form-control" />
+                        <ValidationMessage For="() => loadMazeRequest.MapName" />
+                    </div>
+
+                    <button class="btn btn-primary w-100" disabled="@IsBusy">
+                        @(IsBusy ? "Loading..." : "Load Maze")
+                    </button>
+                </EditForm>
+            </div>
+        </div>
+
+        <div class="card shadow-sm p-4 play-card play-loadout-card">
+            <div class="play-loadout-heading">
+                <div>
+                    <span class="profile-kicker">Inventory</span>
+                    <h4 class="mb-1">Select Your Loadout</h4>
+                </div>
+                <span class="section-count">@SelectedItems.Count / 3</span>
+            </div>
+            <p class="play-loadout-copy">Pick up to three items. Passive items count toward the same cap.</p>
+
+            @if (Inventory.Count == 0)
+            {
+                <div class="empty-state-inline">No owned items yet. Buy items from the marketplace item shop.</div>
+            }
+            else
+            {
+                <div class="play-loadout-grid">
+                    @foreach (var item in Inventory)
                     {
-                        <option value="@difficulty">@difficulty</option>
+                        var isSelected = SelectedItems.TryGetValue(item.ItemId, out var selectedQty) && selectedQty > 0;
+                        <article class="play-item-card @(isSelected ? "selected" : string.Empty)">
+                            <div>
+                                <strong>@item.Name</strong>
+                                <p>@item.Description</p>
+                            </div>
+                            <div class="play-item-meta">
+                                <span>@item.Rarity</span>
+                                <span>@item.Count owned</span>
+                            </div>
+                            <div class="play-item-actions">
+                                <button class="btn btn-secondary" type="button" @onclick="(() => ChangeItemSelection(item, -1))" disabled="@(!isSelected)">-</button>
+                                <span class="mono-numeric">@(isSelected ? selectedQty : 0)</span>
+                                <button class="btn btn-secondary" type="button" @onclick="(() => ChangeItemSelection(item, 1))" disabled="@(!CanIncreaseItem(item))">+</button>
+                            </div>
+                        </article>
                     }
-                </InputSelect>
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">Size</label>
-                <InputNumber @bind-Value="newMazeRequest.Size" class="form-control" />
-                <ValidationMessage For="() => newMazeRequest.Size" />
-            </div>
-
-            <button class="btn btn-success w-100" disabled="@IsBusy">
-                @(IsBusy ? "Generating..." : "Generate Maze")
-            </button>
-        </EditForm>
-    </div>
-
-    <div class="card shadow-sm p-4 mb-4">
-        <h4 class="mb-3">Load Maze by Name</h4>
-
-        <EditForm FormName="FromNameForm" OnValidSubmit="OnSeedClick" Model="loadMazeRequest">
-            <DataAnnotationsValidator />
-
-            <div class="mb-3">
-                <label class="form-label">Map Name</label>
-                <InputText @bind-Value="loadMazeRequest.MapName" class="form-control" />
-                <ValidationMessage For="() => loadMazeRequest.MapName" />
-            </div>
-
-            <button class="btn btn-primary w-100" disabled="@IsBusy">
-                @(IsBusy ? "Loading..." : "Load Maze")
-            </button>
-        </EditForm>
+                </div>
+            }
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(StatusMessage))
@@ -70,25 +123,42 @@
         <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
     }
 
-    <div class="text-center">
-        <button class="btn btn-secondary" @onclick="OnBackClick">
-            Back to Menu
-        </button>
-    </div>
+    @if (IsFullscreenPromptOpen)
+    {
+        <div class="enigma-modal-backdrop">
+            <div class="enigma-modal-card fullscreen-modal-card">
+                <span class="profile-kicker">Before You Enter</span>
+                <h2>Go Fullscreen?</h2>
+                <p>The maze plays better fullscreen. You can keep playing windowed if you want.</p>
+                <label class="fullscreen-optout-toggle">
+                    <input type="checkbox" @bind="DoNotAskFullscreenAgain" />
+                    <span>Don't ask me again</span>
+                </label>
+                <div class="enigma-end-actions">
+                    <button class="btn btn-primary" @onclick="EnterFullscreenAndStartAsync">Enter Fullscreen</button>
+                    <button class="btn btn-secondary" @onclick="StartWindowedAsync">Continue Windowed</button>
+                </div>
+            </div>
+        </div>
+    }
 
 </div>
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; } = default!;
-    [Inject] HttpClient Http { get; set; } = default!;
     [Inject] IJSRuntime JS { get; set; } = default!;
 
     private NewMazeRequest newMazeRequest = new();
     private LoadMazeRequest loadMazeRequest = new();
-    private ActiveGameSession? ActiveRun { get; set; }
     private bool IsBusy { get; set; }
     private bool HasError { get; set; }
+    private bool IsFullscreenPromptOpen { get; set; }
+    private bool DoNotAskFullscreenAgain { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
+    private string? PendingGameNavigationUrl { get; set; }
+    private LoginUserSummary? Session { get; set; }
+    private List<ItemCatalogEntry> Inventory { get; set; } = [];
+    private Dictionary<string, int> SelectedItems { get; set; } = [];
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -97,8 +167,29 @@
             return;
         }
 
-        ActiveRun = await JS.InvokeAsync<ActiveGameSession?>("enigmaGame.getActiveGameSession");
+        Session = await Api.GetSessionAsync();
+        if (Session is null)
+        {
+            NavigationManager.NavigateTo("/", replace: true);
+            return;
+        }
+
+        DoNotAskFullscreenAgain = await JS.InvokeAsync<bool>("enigmaGame.getFullscreenOptOut");
+        await LoadInventoryAsync();
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadInventoryAsync()
+    {
+        try
+        {
+            var inventory = await Api.GetFromJsonAsync<InventoryResponse>("api/auth/items/inventory");
+            Inventory = inventory?.Items ?? [];
+        }
+        catch
+        {
+            Inventory = [];
+        }
     }
 
     private async Task OnNewClick()
@@ -109,16 +200,15 @@
 
         try
         {
-            var response = await Http.GetFromJsonAsync<SeedApiResponse>(
-                BuildControllerUrl(
-                    $"api/auth/newMap?difficulty={Uri.EscapeDataString(newMazeRequest.Difficulty.ToString().ToLowerInvariant())}&size={newMazeRequest.Size}"));
+            var response = await Api.GetFromJsonAsync<SeedApiResponse>(
+                $"api/auth/newMap?difficulty={Uri.EscapeDataString(newMazeRequest.Difficulty.ToString().ToLowerInvariant())}&size={newMazeRequest.Size}");
 
             if (string.IsNullOrWhiteSpace(response?.Seed))
             {
                 throw new InvalidOperationException("The backend returned an empty seed.");
             }
 
-            NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(response.Seed)}&source=new");
+            await BeginRunAsync($"/game?seed={Uri.EscapeDataString(response.Seed)}&source=new");
         }
         catch (Exception ex)
         {
@@ -139,17 +229,15 @@
 
         try
         {
-            var response = await Http.GetFromJsonAsync<SeedApiResponse>(
-                BuildControllerUrl(
-                    $"api/auth/loadMap?name={Uri.EscapeDataString(loadMazeRequest.MapName)}"));
+            var response = await Api.GetFromJsonAsync<SeedApiResponse>(
+                $"api/auth/loadMap?name={Uri.EscapeDataString(loadMazeRequest.MapName)}");
 
             if (string.IsNullOrWhiteSpace(response?.Seed))
             {
                 throw new InvalidOperationException("The requested map did not return a seed.");
             }
 
-            NavigationManager.NavigateTo(
-                $"/game?seed={Uri.EscapeDataString(response.Seed)}&source=load&mapName={Uri.EscapeDataString(loadMazeRequest.MapName)}");
+            await BeginRunAsync($"/game?seed={Uri.EscapeDataString(response.Seed)}&source=load&mapName={Uri.EscapeDataString(loadMazeRequest.MapName)}");
         }
         catch (Exception ex)
         {
@@ -162,42 +250,119 @@
         }
     }
 
-    private void OnBackClick()
+    private async Task BeginRunAsync(string navigationUrl)
     {
-        NavigationManager.NavigateTo("/home");
+        var validationError = ValidateSelection();
+        if (!string.IsNullOrWhiteSpace(validationError))
+        {
+            HasError = true;
+            StatusMessage = validationError;
+            return;
+        }
+
+        PendingGameNavigationUrl = navigationUrl;
+        var loadout = Inventory
+            .Where(item => SelectedItems.TryGetValue(item.ItemId, out var count) && count > 0)
+            .Select(item => new RunLoadoutSelection
+            {
+                ItemId = item.ItemId,
+                Name = item.Name,
+                Quantity = SelectedItems[item.ItemId],
+                Kind = item.Kind,
+                SlotKind = item.SlotKind,
+            })
+            .ToList();
+
+        await JS.InvokeVoidAsync("enigmaGame.setRunLoadout", loadout);
+
+        if (DoNotAskFullscreenAgain)
+        {
+            NavigationManager.NavigateTo(PendingGameNavigationUrl);
+            return;
+        }
+
+        IsFullscreenPromptOpen = true;
+        await InvokeAsync(StateHasChanged);
     }
 
-    private void ResumeActiveRun()
+    private async Task EnterFullscreenAndStartAsync()
     {
-        if (string.IsNullOrWhiteSpace(ActiveRun?.Seed))
+        if (DoNotAskFullscreenAgain)
+        {
+            await JS.InvokeVoidAsync("enigmaGame.setFullscreenOptOut", true);
+        }
+
+        await JS.InvokeVoidAsync("enigmaGame.requestFullscreen", string.Empty);
+        await StartRunNavigationAsync();
+    }
+
+    private async Task StartWindowedAsync()
+    {
+        if (DoNotAskFullscreenAgain)
+        {
+            await JS.InvokeVoidAsync("enigmaGame.setFullscreenOptOut", true);
+        }
+
+        await StartRunNavigationAsync();
+    }
+
+    private Task StartRunNavigationAsync()
+    {
+        IsFullscreenPromptOpen = false;
+        if (!string.IsNullOrWhiteSpace(PendingGameNavigationUrl))
+        {
+            NavigationManager.NavigateTo(PendingGameNavigationUrl);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private bool CanIncreaseItem(ItemCatalogEntry item)
+    {
+        if (!SelectedItems.TryGetValue(item.ItemId, out var quantity))
+        {
+            quantity = 0;
+        }
+
+        return quantity < Math.Min(item.Count, Math.Max(1, item.MaxPerRun));
+    }
+
+    private void ChangeItemSelection(ItemCatalogEntry item, int delta)
+    {
+        var next = (SelectedItems.TryGetValue(item.ItemId, out var current) ? current : 0) + delta;
+        if (next <= 0)
+        {
+            SelectedItems.Remove(item.ItemId);
+            return;
+        }
+
+        if (!CanIncreaseItem(item) && delta > 0)
         {
             return;
         }
 
-        var url = $"/game?seed={Uri.EscapeDataString(ActiveRun.Seed)}&source={Uri.EscapeDataString(ActiveRun.Source)}";
-        if (!string.IsNullOrWhiteSpace(ActiveRun.MapName))
-        {
-            url += $"&mapName={Uri.EscapeDataString(ActiveRun.MapName)}";
-        }
-
-        NavigationManager.NavigateTo(url);
+        SelectedItems[item.ItemId] = next;
     }
 
-    private string GetActiveRunDescription()
+    private string ValidateSelection()
     {
-        if (ActiveRun is null)
+        if (SelectedItems.Count > 3)
         {
-            return string.Empty;
+            return "You can only equip three item types per run.";
         }
 
-        var name = string.IsNullOrWhiteSpace(ActiveRun.MapName) ? "Unsaved generated maze" : ActiveRun.MapName;
-        var room = string.IsNullOrWhiteSpace(ActiveRun.CurrentRoomLabel) ? "room unknown" : $"room {ActiveRun.CurrentRoomLabel}";
-        return $"{name} | {ActiveRun.Difficulty} | {room}";
-    }
+        var selectedCatalog = Inventory.Where(item => SelectedItems.ContainsKey(item.ItemId)).ToList();
+        if (selectedCatalog.Count(item => string.Equals(item.SlotKind, "passive", StringComparison.OrdinalIgnoreCase)) > 1)
+        {
+            return "Only one passive item can be equipped per run.";
+        }
 
-    private string BuildControllerUrl(string relativePath)
-    {
-        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
+        if (selectedCatalog.Count(item => string.Equals(item.SlotKind, "high_power", StringComparison.OrdinalIgnoreCase)) > 1)
+        {
+            return "Only one high-power item can be equipped per run.";
+        }
+
+        return string.Empty;
     }
 
     private sealed class SeedApiResponse

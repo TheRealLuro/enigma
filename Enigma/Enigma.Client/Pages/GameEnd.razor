@@ -3,7 +3,7 @@
 
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
-@inject HttpClient Http
+@inject Enigma.Client.Services.EnigmaApiClient Api
 
 <PageTitle>Game Complete</PageTitle>
 
@@ -176,19 +176,22 @@ else
 
         try
         {
+            var completionTime = ParseCompletionTime(Summary.CompletionTime);
             if (Summary.Source == "load")
             {
-                await UpdateExistingMapAsync();
+                await UpdateExistingMapAsync(completionTime);
                 await UpdateUserProgressAsync(seedExisted: true);
             }
             else
             {
-                await AddNewMapAsync();
+                await AddNewMapAsync(completionTime);
                 await UpdateUserProgressAsync(seedExisted: false);
             }
 
             Summary.HasBeenSubmitted = true;
             await JS.InvokeVoidAsync("enigmaGame.sessionSetJson", CompletionSummaryStorageKey, Summary);
+            await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
+            await JS.InvokeVoidAsync("enigmaGame.clearRunLoadout");
             SubmissionSucceeded = true;
             StatusMessage = "Run submitted successfully.";
         }
@@ -203,40 +206,38 @@ else
         }
     }
 
-    private async Task AddNewMapAsync()
+    private async Task AddNewMapAsync(TimeOnly completionTime)
     {
         if (Summary is null)
         {
             return;
         }
 
-        var url =
-            $"database/maps/add?map_name={Uri.EscapeDataString(MapName)}" +
-            $"&seed={Uri.EscapeDataString(Summary.Seed)}" +
-            $"&size={Summary.Size}" +
-            $"&difficulty={Uri.EscapeDataString(Summary.Difficulty.ToLowerInvariant())}" +
-            $"&founder={Uri.EscapeDataString(Summary.Username)}" +
-            $"&time_completed={Uri.EscapeDataString(Summary.CompletionTime)}" +
-            $"&first_rating={Rating}";
-
-        using var response = await Http.PostAsync(url, content: null);
+        using var response = await Api.PostJsonAsync("api/auth/addMap", new
+        {
+            name = MapName,
+            seed = Summary.Seed,
+            size = Summary.Size,
+            difficulty = Summary.Difficulty.ToLowerInvariant(),
+            time = completionTime,
+            rating = Rating,
+        });
         await EnsureSuccessAsync(response, "Unable to save the new map.");
     }
 
-    private async Task UpdateExistingMapAsync()
+    private async Task UpdateExistingMapAsync(TimeOnly completionTime)
     {
         if (Summary is null)
         {
             return;
         }
 
-        var url =
-            $"database/maps/update_map?seed={Uri.EscapeDataString(Summary.Seed)}" +
-            $"&username={Uri.EscapeDataString(Summary.Username)}" +
-            $"&completion_time={Uri.EscapeDataString(Summary.CompletionTime)}" +
-            $"&rating={Rating}";
-
-        using var response = await Http.PutAsync(url, content: null);
+        using var response = await Api.PutJsonAsync("api/auth/updateMap", new
+        {
+            seed = Summary.Seed,
+            time = completionTime,
+            rating = Rating,
+        });
         await EnsureSuccessAsync(response, "Unable to update the existing map.");
     }
 
@@ -247,15 +248,14 @@ else
             return;
         }
 
-        var url =
-            $"database/users/update_progress?username={Uri.EscapeDataString(Summary.Username)}" +
-            $"&map_seed={Uri.EscapeDataString(Summary.Seed)}" +
-            $"&items_in_use=none" +
-            $"&earned_mn={Summary.GoldCollected}" +
-            $"&seed_existed={seedExisted.ToString().ToLowerInvariant()}" +
-            $"&map_lost=false";
-
-        using var response = await Http.PutAsync(url, content: null);
+        using var response = await Api.PutJsonAsync("api/auth/updateStats", new
+        {
+            seed = Summary.Seed,
+            items = "none",
+            reward = Summary.GoldCollected,
+            seedExisted,
+            mapLost = false,
+        });
         await EnsureSuccessAsync(response, "Unable to update the player progress.");
     }
 
@@ -274,7 +274,7 @@ else
     {
         if (Summary is null)
         {
-            GoPlay();
+            NavigationManager.NavigateTo("/play");
             return;
         }
 
@@ -290,11 +290,36 @@ else
     private async Task GoHome()
     {
         await JS.InvokeVoidAsync("enigmaGame.sessionRemove", CompletionSummaryStorageKey);
+        await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
+        await JS.InvokeVoidAsync("enigmaGame.clearRunLoadout");
         NavigationManager.NavigateTo("/home");
     }
 
-    private void GoPlay()
+    private async Task GoPlay()
     {
+        await JS.InvokeVoidAsync("enigmaGame.sessionRemove", CompletionSummaryStorageKey);
+        await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
+        await JS.InvokeVoidAsync("enigmaGame.clearRunLoadout");
         NavigationManager.NavigateTo("/play");
+    }
+
+    private static TimeOnly ParseCompletionTime(string value)
+    {
+        if (TimeOnly.TryParse(value, out var parsed))
+        {
+            return parsed;
+        }
+
+        var parts = value.Split(':', StringSplitOptions.TrimEntries);
+        if (parts.Length == 4
+            && int.TryParse(parts[0], out var hours)
+            && int.TryParse(parts[1], out var minutes)
+            && int.TryParse(parts[2], out var seconds)
+            && int.TryParse(parts[3], out var milliseconds))
+        {
+            return new TimeOnly(hours, minutes, seconds, milliseconds);
+        }
+
+        return new TimeOnly(0, 0, 0);
     }
 }

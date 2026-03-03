@@ -36,4 +36,7 @@ public class PlayerLeaderboardEntry
 
     [JsonPropertyName("win_rate")]
     public double WinRate { get; set; }
+
+    [JsonPropertyName("profile_image")]
+    public ProfileImageState? ProfileImage { get; set; }
 }

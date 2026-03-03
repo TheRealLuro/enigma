@@ -18,4 +18,19 @@ public class UserSearchResult
 
     [JsonPropertyName("maze_nuggets")]
     public int MazeNuggets { get; set; }
+
+    [JsonPropertyName("owned_maps_count")]
+    public int OwnedMapsCount { get; set; }
+
+    [JsonPropertyName("discovered_maps_count")]
+    public int DiscoveredMapsCount { get; set; }
+
+    [JsonPropertyName("maps_completed")]
+    public int MapsCompleted { get; set; }
+
+    [JsonPropertyName("maps_lost")]
+    public int MapsLost { get; set; }
+
+    [JsonPropertyName("profile_image")]
+    public ProfileImageState? ProfileImage { get; set; }
 }

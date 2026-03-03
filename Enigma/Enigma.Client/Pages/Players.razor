@@ -1,8 +1,9 @@
 @page "/players"
+@inject Enigma.Client.Services.EnigmaApiClient Api
 
 <PageTitle>Players</PageTitle>
 
-@if (!SessionReady)
+@if (IsLoading)
 {
     <div class="content">
         <div class="card enigma-game-message">
@@ -107,12 +108,13 @@ else
                         {
                             <article class="player-search-card">
                                 <div class="player-search-card-top">
-                                    <div class="player-search-avatar">@GetInitials(user.Username)</div>
+                                    <ProfileAvatar Image="@user.ProfileImage" AltText="@($"{user.Username} profile picture")" FallbackText="@GetInitials(user.Username)" Class="player-search-avatar-frame" />
                                     <div class="player-search-copy">
                                         <button class="map-link-button player-search-name" type="button" @onclick="() => OpenProfile(user.Username)">
                                             @user.Username
                                         </button>
                                         <p>@user.MazeNuggets.ToString("N0") Maze Nuggets</p>
+                                        <span class="leaderboard-secondary-text">@user.OwnedMapsCount owned | @user.DiscoveredMapsCount discovered | @user.MapsCompleted wins</span>
                                     </div>
                                 </div>
 
@@ -154,7 +156,7 @@ else
                         <article class="player-search-card top-player-card">
                             <div class="top-player-rank">#@entry.Rank</div>
                             <div class="player-search-card-top">
-                                <div class="player-search-avatar">@GetInitials(entry.Player.Username)</div>
+                                <ProfileAvatar Image="@entry.Player.ProfileImage" AltText="@($"{entry.Player.Username} profile picture")" FallbackText="@GetInitials(entry.Player.Username)" Class="player-search-avatar-frame" />
                                 <div class="player-search-copy">
                                     <button class="map-link-button player-search-name" type="button" @onclick="() => OpenProfile(entry.Player.Username)">
                                         @entry.Player.Username
@@ -191,11 +193,9 @@ else
 
 @code {
     [Inject] private NavigationManager NavigationManager { get; set; } = default!;
-    [Inject] private HttpClient Http { get; set; } = default!;
-    [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private LoginUserSummary? Session { get; set; }
-    private bool SessionReady { get; set; }
+    private bool IsLoading { get; set; } = true;
     private bool IsSearching { get; set; }
     private bool IsLoadingTopPlayers { get; set; } = true;
     private bool HasError { get; set; }
@@ -214,16 +214,16 @@ else
             return;
         }
 
-        Session = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
-        SessionReady = true;
+        Session = await Api.GetSessionAsync();
 
         if (Session is null || string.IsNullOrWhiteSpace(Session.Username))
         {
-            NavigationManager.NavigateTo("/");
+            NavigationManager.NavigateTo("/", replace: true);
             return;
         }
 
         await LoadTopPlayersAsync();
+        IsLoading = false;
         await InvokeAsync(StateHasChanged);
     }
 
@@ -234,8 +234,7 @@ else
 
         try
         {
-            using var response = await Http.GetAsync(
-                BuildControllerUrl("api/auth/playerLeaderboard?sortBy=maze_nuggets&order=desc"));
+            using var response = await Api.GetAsync("api/auth/leaderboard/players?sortBy=maze_nuggets&order=desc");
 
             if (!response.IsSuccessStatusCode)
             {
@@ -303,8 +302,8 @@ else
 
         try
         {
-            var response = await Http.GetFromJsonAsync<UserSearchResponse>(
-                BuildControllerUrl($"api/auth/userSearch?query={Uri.EscapeDataString(trimmedQuery)}&limit=8"));
+            var response = await Api.GetFromJsonAsync<UserSearchResponse>(
+                $"api/auth/players/search?query={Uri.EscapeDataString(trimmedQuery)}&limit=8");
 
             if (requestVersion != SearchVersion)
             {
@@ -352,8 +351,7 @@ else
     {
         try
         {
-            using var response = await Http.GetAsync(
-                BuildControllerUrl($"api/auth/user?username={Uri.EscapeDataString(username)}"));
+            using var response = await Api.GetAsync($"api/auth/user?username={Uri.EscapeDataString(username)}");
 
             if (!response.IsSuccessStatusCode)
             {
@@ -407,11 +405,6 @@ else
         }
 
         NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(username.Trim())}");
-    }
-
-    private string BuildControllerUrl(string relativePath)
-    {
-        return new Uri(new Uri(NavigationManager.BaseUri), relativePath).ToString();
     }
 
     private void GoHome()

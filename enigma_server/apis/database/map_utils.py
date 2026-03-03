@@ -5,6 +5,15 @@ from typing import Any, Iterable
 
 from bson import ObjectId
 
+THEME_LABEL_RULES = [
+    ("Neural Membrane", ("neural", "membrane", "biomech")),
+    ("Cartoon", ("cartoon", "whimsical", "toon")),
+    ("Dungeon", ("dungeon", "crypt", "castle")),
+    ("Sewer", ("sewer", "drain")),
+    ("Hedge", ("hedge", "garden", "maze_garden")),
+    ("Haunted House", ("haunted", "house", "manor", "ghost")),
+]
+
 
 def normalize_object_id(value: Any) -> ObjectId | None:
     if isinstance(value, ObjectId):
@@ -128,6 +137,18 @@ def serialize_datetime(value: Any) -> tuple[str | None, str]:
     return None, "Unknown"
 
 
+def normalize_theme_label(value: Any) -> str:
+    raw_value = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not raw_value:
+        return "Cartoon"
+
+    for label, keys in THEME_LABEL_RULES:
+        if any(key in raw_value for key in keys):
+            return label
+
+    return "Cartoon"
+
+
 def load_maps_by_ids(map_ids: Iterable[Any], collection) -> list[dict]:
     ordered_ids: list[ObjectId] = []
     seen: set[str] = set()
@@ -157,6 +178,8 @@ def serialize_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
     founded_at, founded_display = serialize_datetime(map_doc.get("time_founded"))
     ratings = map_doc.get("rating", [])
     map_image = map_doc.get("map_image") or None
+    theme_label = normalize_theme_label(map_doc.get("theme"))
+    best_time_display = format_best_time(map_doc.get("best_time"))
 
     return {
         "id": str(map_doc.get("_id", "")),
@@ -165,7 +188,8 @@ def serialize_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
         "image_available": bool(map_image),
         "image_status": map_doc.get("image_status") or ("ready" if map_image else "pending_upload"),
         "image_upload_error": map_doc.get("image_upload_error"),
-        "theme": map_doc.get("theme") or "Unknown theme",
+        "theme": theme_label,
+        "theme_label": theme_label,
         "difficulty": map_doc.get("difficulty", "unknown"),
         "size": normalize_int(map_doc.get("size")),
         "founder": map_doc.get("founder", "Unknown"),
@@ -173,11 +197,13 @@ def serialize_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
         "value": normalize_int(map_doc.get("value")),
         "sold_for_last": normalize_int(map_doc.get("sold_for_last")),
         "plays": normalize_int(map_doc.get("plays")),
-        "best_time": format_best_time(map_doc.get("best_time")),
+        "best_time": best_time_display,
+        "best_time_display": best_time_display,
         "best_time_ms": time_to_milliseconds(map_doc.get("best_time")),
         "user_with_best_time": map_doc.get("user_with_best_time", "Unknown"),
         "time_founded": founded_at,
         "time_founded_display": founded_display,
+        "founded_display": founded_display,
         "rating_average": average_rating(ratings),
         "rating_count": rating_count(ratings),
     }
@@ -185,6 +211,8 @@ def serialize_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
 
 def serialize_user_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
     map_image = map_doc.get("map_image") or None
+    theme_label = normalize_theme_label(map_doc.get("theme"))
+    best_time_display = format_best_time(map_doc.get("best_time"))
 
     return {
         "id": str(map_doc.get("_id", "")),
@@ -192,13 +220,17 @@ def serialize_user_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
         "map_image": map_image,
         "image_available": bool(map_image),
         "image_status": map_doc.get("image_status") or ("ready" if map_image else "pending_upload"),
-        "theme": map_doc.get("theme") or "Unknown theme",
+        "theme": theme_label,
+        "theme_label": theme_label,
         "difficulty": map_doc.get("difficulty", "unknown"),
         "size": normalize_int(map_doc.get("size")),
         "value": normalize_int(map_doc.get("value")),
-        "best_time": format_best_time(map_doc.get("best_time")),
+        "best_time": best_time_display,
+        "best_time_display": best_time_display,
         "best_time_ms": time_to_milliseconds(map_doc.get("best_time")),
         "user_with_best_time": map_doc.get("user_with_best_time", "Unknown"),
+        "owner": map_doc.get("owner", "Unknown"),
+        "founder": map_doc.get("founder", "Unknown"),
     }
 
 
@@ -243,6 +275,7 @@ def serialize_marketplace_listing(listing_doc: dict[str, Any], map_doc: dict[str
     last_bought, last_bought_display = serialize_datetime(last_bought_source)
     map_image = listing_doc.get("map_image") or (map_doc.get("map_image") if map_doc else None)
     image_status = listing_doc.get("image_status") or (map_doc.get("image_status") if map_doc else None)
+    theme_label = normalize_theme_label(listing_doc.get("theme") or (map_doc.get("theme") if map_doc else None))
 
     return {
         "id": str(listing_doc.get("_id", "")),
@@ -250,7 +283,8 @@ def serialize_marketplace_listing(listing_doc: dict[str, Any], map_doc: dict[str
         "map_image": map_image,
         "image_available": bool(map_image),
         "image_status": image_status or ("ready" if map_image else "pending_upload"),
-        "theme": listing_doc.get("theme") or (map_doc.get("theme") if map_doc else "Unknown theme"),
+        "theme": theme_label,
+        "theme_label": theme_label,
         "difficulty": listing_doc.get("difficulty") or (map_doc.get("difficulty") if map_doc else "unknown"),
         "size": normalize_int(listing_doc.get("size") if "size" in listing_doc else (map_doc.get("size") if map_doc else 0)),
         "value": normalize_int(listing_doc.get("value") if "value" in listing_doc else (map_doc.get("value") if map_doc else 0)),

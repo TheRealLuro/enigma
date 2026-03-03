@@ -1,7 +1,9 @@
-﻿@page "/register"
+@page "/register"
+@using Enigma.Client.Models.Gameplay
+@inject Enigma.Client.Services.EnigmaApiClient Api
 
-<div class="content" style="max-width: 480px; margin-top: 60px;">
-    <div class="card p-4 shadow-sm">
+<div class="content auth-shell" style="max-width: 520px; margin-top: 60px;">
+    <div class="card p-4 shadow-sm auth-card">
 
         <h3 class="mb-4 text-center">Create Account</h3>
 
@@ -24,24 +26,37 @@
 
             <div class="mb-3">
                 <label class="form-label">Password</label>
-                <InputText type="password"
-                           class="form-control"
-                           @bind-Value="password"
-                           placeholder="••••••••" />
+                <div class="password-field-wrap">
+                    <InputText type="@(ShowPassword ? "text" : "password")"
+                               class="form-control"
+                               @bind-Value="password"
+                               placeholder="Choose a password" />
+                    <button type="button" class="password-toggle-button" @onclick="TogglePasswordVisibility">
+                        @(ShowPassword ? "Hide" : "Show")
+                    </button>
+                </div>
             </div>
 
             <div class="mb-3">
                 <label class="form-label">Confirm Password</label>
-                <InputText type="password"
-                           class="form-control"
-                           @bind-Value="confirmPassword"
-                           placeholder="••••••••" />
+                <div class="password-field-wrap">
+                    <InputText type="@(ShowPassword ? "text" : "password")"
+                               class="form-control"
+                               @bind-Value="confirmPassword"
+                               placeholder="Repeat your password" />
+                </div>
             </div>
 
-            <button type="submit" class="btn btn-primary w-100">
-                Sign Up
+            <div class="mb-3">
+                <InputCheckbox @bind-Value="rememberMe" class="form-check-input" id="remember-signup" />
+                <label for="remember-signup" class="form-check-label ms-1">Keep me signed in</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100" disabled="@IsSubmitting">
+                @(IsSubmitting ? "Signing up..." : "Sign Up")
             </button>
         </EditForm>
+
         @if (!string.IsNullOrEmpty(errorMessage))
         {
             <div class="alert alert-danger mt-3">
@@ -65,14 +80,14 @@
     NavigationManager NavigationManager { get; set; } = default!;
 
     [Inject]
-    HttpClient Http { get; set; } = default!;
-
-    [Inject]
-    IConfiguration Config { get; set; } = default!;
+    IJSRuntime JS { get; set; } = default!;
 
     RegisterUser newUser = new();
     string password = string.Empty;
     string confirmPassword = string.Empty;
+    bool rememberMe;
+    bool IsSubmitting;
+    bool ShowPassword;
 
     string? errorMessage;
 
@@ -85,36 +100,54 @@
             errorMessage = "Passwords do not match.";
             return;
         }
-    
-        var url =
-            $"database/users/signup?username={Uri.EscapeDataString(newUser.DisplayName ?? string.Empty)}" +
-            $"&email={Uri.EscapeDataString(newUser.Email ?? string.Empty)}" +
-            $"&passwd={Uri.EscapeDataString(password)}";
+
+        IsSubmitting = true;
 
         try
         {
-            using var httpResponse = await Http.PostAsync(url, content: null);
-            httpResponse.EnsureSuccessStatusCode();
-            var response = await httpResponse.Content.ReadFromJsonAsync<SignUpResponse>();
+            using var httpResponse = await Api.PostJsonAsync("api/auth/session/signup", new
+            {
+                username = newUser.DisplayName ?? string.Empty,
+                email = newUser.Email ?? string.Empty,
+                password,
+                rememberMe,
+            });
 
-            if (response == null || response.Status != "success")
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                errorMessage = await httpResponse.Content.ReadAsStringAsync();
+                return;
+            }
+
+            var response = await httpResponse.Content.ReadFromJsonAsync<LoginResponse>();
+            if (response is null || response.Status != "success" || string.IsNullOrWhiteSpace(response.User?.Username))
             {
                 errorMessage = "Sign up failed.";
                 return;
             }
 
-            // Success 🎉
-            NavigationManager.NavigateTo("/");
+            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = response.User.Username }, rememberMe);
+            await JS.InvokeVoidAsync("enigmaGame.setUserSession", response.User, rememberMe);
+            NavigationManager.NavigateTo("/home");
         }
         catch (Exception ex)
         {
             errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsSubmitting = false;
         }
     }
 
     void OnLoginClick()
     {
         NavigationManager.NavigateTo("/");
+    }
+
+    void TogglePasswordVisibility()
+    {
+        ShowPassword = !ShowPassword;
     }
 
     public class RegisterUser

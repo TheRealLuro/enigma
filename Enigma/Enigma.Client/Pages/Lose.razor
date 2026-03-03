@@ -1,0 +1,120 @@
+@page "/lose"
+@using Enigma.Client.Models.Gameplay
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+
+<PageTitle>Run Lost</PageTitle>
+
+@if (IsLoading)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading loss report...</p>
+        </div>
+    </div>
+}
+else if (Summary is null)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Run Lost</h1>
+            <p>No lost run summary is available.</p>
+            <div class="enigma-end-actions">
+                <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/home"))'>Home</button>
+                <button class="btn btn-secondary" @onclick='@(() => NavigationManager.NavigateTo("/play"))'>Play Again</button>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="content enigma-end-page lose-page-shell">
+        <div class="card enigma-end-card lose-card">
+            <span class="enigma-kicker">Run Lost</span>
+            <h1>@(string.IsNullOrWhiteSpace(Summary.MapName) ? "UNKNOWN" : Summary.MapName)</h1>
+            <p class="enigma-game-subline">You left the maze. This run is gone forever.</p>
+
+            <div class="enigma-end-grid">
+                <div>
+                    <span>Player</span>
+                    <strong>@Summary.Username</strong>
+                </div>
+                <div>
+                    <span>Difficulty</span>
+                    <strong>@Summary.Difficulty</strong>
+                </div>
+                <div>
+                    <span>Theme</span>
+                    <strong>@Summary.ThemeLabel</strong>
+                </div>
+                <div>
+                    <span>Left At</span>
+                    <strong>@FormatTime(Summary.AbandonedAtUtc)</strong>
+                </div>
+            </div>
+
+            <div class="enigma-end-grid compact lose-metric-grid">
+                <div>
+                    <span>Map Value</span>
+                    <strong>@Summary.MapValue.ToString("N0") MN</strong>
+                </div>
+                <div>
+                    <span>Forfeited Run Payout</span>
+                    <strong>@Summary.ForfeitedRunPayout.ToString("N0") MN</strong>
+                </div>
+                <div>
+                    <span>Projected Completion Payout</span>
+                    <strong>@Summary.ProjectedCompletionPayout.ToString("N0") MN</strong>
+                </div>
+                <div>
+                    <span>Reason</span>
+                    <strong>@Summary.Reason</strong>
+                </div>
+            </div>
+
+            <div class="enigma-end-actions">
+                <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/home", replace: true))'>Home</button>
+                <button class="btn btn-secondary" @onclick='@(() => NavigationManager.NavigateTo("/play", replace: true))'>Play Again</button>
+                @if (!string.IsNullOrWhiteSpace(Summary.MapName) && string.Equals(Summary.Source, "load", StringComparison.OrdinalIgnoreCase))
+                {
+                    <button class="btn btn-secondary" @onclick="ViewMapProfile">View Map on Profile</button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsLoading { get; set; } = true;
+    private PendingLossSummary? Summary { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        Summary = await JS.InvokeAsync<PendingLossSummary?>("enigmaGame.consumePendingLossSummary");
+        IsLoading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ViewMapProfile()
+    {
+        NavigationManager.NavigateTo("/profile");
+    }
+
+    private static string FormatTime(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Unknown";
+        }
+
+        return DateTimeOffset.TryParse(value, out var timestamp)
+            ? timestamp.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+            : value;
+    }
+}
