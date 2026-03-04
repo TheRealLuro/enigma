@@ -536,19 +536,7 @@ public partial class Profile
         return ActiveTab == tab ? "profile-tab active" : "profile-tab";
     }
 
-    private string GetBannerCopy()
-    {
-        return IsOwnProfile
-            ? "Review your wallet, inventory, maps, and account settings from one place."
-            : "This is a public explorer profile. You can view stats, open maps, and manage your relationship with this player here.";
-    }
 
-    private string GetIdentityCopy()
-    {
-        return IsOwnProfile
-            ? "Private view with friends, requests, inventory, and account controls."
-            : "Public stats and map collection only.";
-    }
 
     private static string FormatPercent(double value)
     {

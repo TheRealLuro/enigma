@@ -955,23 +955,20 @@ h1:focus {
 }
 
 .enigma-game-page.content {
-    width: calc(100vw - 6px);
+    width: 100vw;
     max-width: none;
     margin-inline: calc(50% - 50vw);
-    padding-inline: clamp(2px, 0.2vw, 6px);
+    padding-inline: clamp(2px, 0.15vw, 6px);
 }
 
 .enigma-game-shell {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: clamp(20px, 1.8vw, 28px);
-    align-items: start;
+    display: block;
 }
 
 .enigma-room-shell {
     display: grid;
-    gap: 14px;
-    padding: clamp(8px, 0.85vw, 14px);
+    gap: 10px;
+    padding: 0;
     margin: 0;
 }
 
@@ -1053,22 +1050,22 @@ h1:focus {
 }
 
 .enigma-room-stage-wrap {
-    width: min(calc(100vw - 22px), calc(100vh - 132px));
+    width: min(calc(100vw - 10px), calc((100vh - 118px) * 16 / 9));
     max-width: 100%;
     overflow: auto;
-    border-radius: 18px;
+    border-radius: 16px;
     border: 1px solid var(--epic-border);
     background:
         radial-gradient(circle at top, rgba(118, 184, 255, 0.08), transparent 38%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
         #111822;
-    padding: 4px;
+    padding: 3px;
 }
 
 .enigma-room-stage {
     position: relative;
     width: 100%;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 16 / 9;
     min-height: 0;
     border-radius: 14px;
     overflow: hidden;
@@ -1218,9 +1215,12 @@ h1:focus {
     border-radius: 999px;
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
-    background: rgba(8, 12, 18, 0.66);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(7, 11, 18, 0.8);
+    border: 1px solid rgba(122, 181, 255, 0.18);
+    color: var(--epic-text);
     font-size: 0.8rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
 }
 
 .enigma-room-hud-right {
@@ -1238,7 +1238,17 @@ h1:focus {
     bottom: 14px;
     transform: translateX(-50%);
     min-width: min(70%, 460px);
+    min-height: 42px;
+    padding-inline: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
+    background: rgba(6, 10, 16, 0.92);
+    border-color: rgba(122, 181, 255, 0.24);
+    font-weight: 700;
+    line-height: 1.25;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.34);
 }
 
 .enigma-room-footer {
@@ -2769,7 +2779,7 @@ h1:focus {
     }
 
     .enigma-room-stage {
-        aspect-ratio: 1 / 1;
+        aspect-ratio: 16 / 9;
         min-height: 0;
     }
 
@@ -2812,8 +2822,8 @@ h1:focus {
     }
 
     .enigma-room-stage {
-        aspect-ratio: 1 / 1;
-        min-height: 460px;
+        aspect-ratio: 16 / 9;
+        min-height: 0;
     }
 
     .coop-puzzle-summary-metrics,
@@ -4463,10 +4473,9 @@ h1:focus {
 .profile-avatar-image {
     display: block;
     position: absolute;
-    inset: 0;
-    background-repeat: no-repeat;
-    background-size: cover;
-    background-position: center center;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover;
 }
 
 .profile-avatar-fallback {
@@ -5335,7 +5344,7 @@ h1:focus {
 }
 
 .enigma-room-stage {
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 16 / 9;
     min-height: 0;
 }
 
@@ -5356,7 +5365,13 @@ h1:focus {
 
 @media (min-width: 1400px) {
     .enigma-room-stage-wrap {
-        width: min(calc(100vw - 18px), calc(100vh - 120px));
+        width: min(calc(100vw - 8px), calc((100vh - 112px) * 16 / 9));
+    }
+}
+
+@media (max-aspect-ratio: 4/3) {
+    .enigma-room-stage-wrap {
+        width: min(calc(100vw - 8px), calc((100vh - 102px) * 16 / 9));
     }
 }
 
@@ -5497,15 +5512,19 @@ h1:focus {
 .enigma-console-prompt {
     position: absolute;
     z-index: 7;
-    min-height: 38px;
-    padding: 0 16px;
+    min-height: 42px;
+    padding: 0 18px;
     border-radius: 999px;
     display: inline-flex;
     align-items: center;
-    background: rgba(8, 12, 18, 0.86);
-    border: 1px solid rgba(122, 181, 255, 0.16);
-    color: var(--epic-text);
+    justify-content: center;
+    background: rgba(6, 10, 16, 0.9);
+    border: 1px solid rgba(122, 181, 255, 0.24);
+    color: #f4f8ff;
     font-weight: 700;
+    line-height: 1.2;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
 }
@@ -5665,7 +5684,7 @@ h1:focus {
     }
 
     .enigma-room-stage {
-        aspect-ratio: 1 / 1;
+        aspect-ratio: 16 / 9;
         min-height: 0;
     }
 

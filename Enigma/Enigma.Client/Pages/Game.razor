@@ -28,7 +28,7 @@ else
     <div class="enigma-game-page content">
         <NavigationLock OnBeforeInternalNavigation="HandleBeforeInternalNavigation" ConfirmExternalNavigation="true" />
         <section class="enigma-game-shell">
-            <div class="enigma-room-shell card">
+            <div class="enigma-room-shell">
                 <div class="enigma-room-meta">
                     <div class="enigma-room-meta-copy">
                         <h1>@CurrentMapLabel</h1>
@@ -180,13 +180,13 @@ else
                                 @for (var index = 0; index < knotPuzzle.LeftPoints.Length; index++)
                                 {
                                     var point = knotPuzzle.LeftPoints[index];
-                                    <div class="enigma-node-anchor left" style="left: @($"{ToPercent(point.X)}%"); top: @($"{ToPercent(point.Y)}%");">@knotPuzzle.Strands[index]</div>
+                                    <div class="enigma-node-anchor left" style="left: @($"{ToPointPercentX(point.X)}%"); top: @($"{ToPercentY(point.Y)}%");">@knotPuzzle.Strands[index]</div>
                                 }
 
                                 @for (var index = 0; index < knotPuzzle.RightPoints.Length; index++)
                                 {
                                     var point = knotPuzzle.RightPoints[index];
-                                    <div class="enigma-node-anchor right" style="left: @($"{ToPercent(point.X)}%"); top: @($"{ToPercent(point.Y)}%");">@knotPuzzle.Strands[knotPuzzle.Order[index]]</div>
+                                    <div class="enigma-node-anchor right" style="left: @($"{ToPointPercentX(point.X)}%"); top: @($"{ToPercentY(point.Y)}%");">@knotPuzzle.Strands[knotPuzzle.Order[index]]</div>
                                 }
                             }
                         }

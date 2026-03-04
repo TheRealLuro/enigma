@@ -5,7 +5,7 @@
     @if (!string.IsNullOrWhiteSpace(Image?.ImageUrl))
     {
         <div class="profile-avatar-crop-shell">
-            <div class="profile-avatar-image" role="img" aria-label="@AltText" style="@BuildImageStyle()"></div>
+            <img src="@Image!.ImageUrl" alt="@AltText" class="profile-avatar-image" style="@BuildImageStyle()" />
         </div>
     }
     else
@@ -33,8 +33,7 @@
         var scaleText = scale.ToString("F4", CultureInfo.InvariantCulture);
         var leftText = left.ToString("F4", CultureInfo.InvariantCulture);
         var topText = top.ToString("F4", CultureInfo.InvariantCulture);
-        var imageUrl = (Image?.ImageUrl ?? string.Empty).Replace("'", "\\'", StringComparison.Ordinal);
 
-        return $"position:absolute;width:{scaleText}%;height:{scaleText}%;left:{leftText}%;top:{topText}%;background-image:url('{imageUrl}');background-repeat:no-repeat;background-size:cover;background-position:center center;";
+        return $"position:absolute;width:{scaleText}%;height:{scaleText}%;max-width:none;max-height:none;left:{leftText}%;top:{topText}%;object-fit:cover;";
     }
 }

@@ -13,6 +13,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private sealed record PuzzleGuide(string Goal, string Controls, string Success);
     private sealed record RoomInteractionProgressState(PlayAreaRect AnchorRect, double Progress, string Label);
     private const double RoomSize = 1080d;
+    private const double StageAspectRatio = 16d / 9d;
+    private const double RenderWidth = RoomSize * StageAspectRatio;
     private const double PlayerSize = 60d;
     private const double PlayerSpeed = 380d;
     private const double DoorWidth = 240d;
@@ -359,7 +361,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             ? consoleBounds.Y - promptHeight - 16d
             : consoleBounds.Bottom + 16d;
         top = Math.Clamp(top, 22d, RoomSize - promptHeight - 22d);
-        return $"left: {ToPercent(left)}%; top: {ToPercent(top)}%;";
+        return $"left: {ToPositionPercentX(left, promptWidth)}%; top: {ToPercentY(top)}%;";
     }
 
     protected bool IsNearPuzzleConsole()
@@ -394,7 +396,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             ? progressState.AnchorRect.Y - height - 18d
             : progressState.AnchorRect.Bottom + 18d;
         top = Math.Clamp(top, 22d, RoomSize - height - 22d);
-        return $"left: {ToPercent(left)}%; top: {ToPercent(top)}%; width: {ToPercent(width)}%;";
+        return $"left: {ToPositionPercentX(left, width)}%; top: {ToPercentY(top)}%; width: {ToLengthPercentX(width)}%;";
     }
 
     protected string GetRoomInteractionProgressFillStyle()
@@ -465,13 +467,13 @@ public partial class Game : ComponentBase, IAsyncDisposable
     }
 
     protected string GetPlayerStyle() =>
-        $"left: {ToPercent(PlayerX)}%; top: {ToPercent(PlayerY)}%; width: {ToPercent(PlayerSize)}%; height: {ToPercent(PlayerSize)}%;";
+        $"left: {ToPositionPercentX(PlayerX, PlayerSize)}%; top: {ToPercentY(PlayerY)}%; width: {ToLengthPercentX(PlayerSize)}%; height: {ToPercentY(PlayerSize)}%;";
 
     protected string GetPlayerClass() =>
         $"facing-{PlayerAnimationDirections[PlayerFacing]} {PlayerSpriteStates[PlayerFacing]} {(IsMoving ? "is-moving" : string.Empty)}";
 
     protected string GetRectStyle(PlayAreaRect rect) =>
-        $"left: {ToPercent(rect.X)}%; top: {ToPercent(rect.Y)}%; width: {ToPercent(rect.Width)}%; height: {ToPercent(rect.Height)}%;";
+        $"left: {ToPositionPercentX(rect.X, rect.Width)}%; top: {ToPercentY(rect.Y)}%; width: {ToLengthPercentX(rect.Width)}%; height: {ToPercentY(rect.Height)}%;";
 
     protected IEnumerable<(double X1, double Y1, double X2, double Y2)> GetYarnLineSegments(YarnUntanglePuzzle puzzle)
     {
@@ -1237,14 +1239,14 @@ public partial class Game : ComponentBase, IAsyncDisposable
         yield return CreateWallSegment(isHorizontal, fixedAxisValue, 0d, doorStart, side);
         yield return CreateWallSegment(isHorizontal, fixedAxisValue, doorEnd, RoomSize - doorEnd, side);
         yield return new WallSegment($"door-glow {side}", isHorizontal
-            ? $"left: {ToPercent(doorStart)}%; top: {ToPercent(edge)}%; width: {ToPercent(DoorWidth)}%; height: {ToPercent(WallThickness)}%;"
-            : $"left: {ToPercent(edge)}%; top: {ToPercent(doorStart)}%; width: {ToPercent(WallThickness)}%; height: {ToPercent(DoorWidth)}%;");
+            ? $"left: {ToPositionPercentX(doorStart, DoorWidth)}%; top: {ToPercentY(edge)}%; width: {ToLengthPercentX(DoorWidth)}%; height: {ToPercentY(WallThickness)}%;"
+            : $"left: {ToPositionPercentX(edge, WallThickness)}%; top: {ToPercentY(doorStart)}%; width: {ToLengthPercentX(WallThickness)}%; height: {ToPercentY(DoorWidth)}%;");
     }
 
     private static WallSegment CreateWallSegment(bool isHorizontal, double fixedAxisValue, double start, double length, string side) =>
         isHorizontal
-            ? new WallSegment(side, $"left: {ToPercent(start)}%; top: {ToPercent(fixedAxisValue)}%; width: {ToPercent(length)}%; height: {ToPercent(WallThickness)}%;")
-            : new WallSegment(side, $"left: {ToPercent(fixedAxisValue)}%; top: {ToPercent(start)}%; width: {ToPercent(WallThickness)}%; height: {ToPercent(length)}%;");
+            ? new WallSegment(side, $"left: {ToPositionPercentX(start, length)}%; top: {ToPercentY(fixedAxisValue)}%; width: {ToLengthPercentX(length)}%; height: {ToPercentY(WallThickness)}%;")
+            : new WallSegment(side, $"left: {ToPositionPercentX(fixedAxisValue, WallThickness)}%; top: {ToPercentY(start)}%; width: {ToLengthPercentX(WallThickness)}%; height: {ToPercentY(length)}%;");
 
     private bool IsWithinDoorway(PlayerDirection direction)
     {
@@ -1349,7 +1351,20 @@ public partial class Game : ComponentBase, IAsyncDisposable
         return keyCode is "ArrowUp" or "ArrowRight" or "ArrowDown" or "ArrowLeft";
     }
 
-    private static double ToPercent(double value) => Math.Round((value / RoomSize) * 100d, 4);
+    protected static double ToPointPercentX(double value) => Math.Round((Math.Clamp(value, 0d, RoomSize) / RoomSize) * 100d, 4);
+
+    protected static double ToPositionPercentX(double value, double width)
+    {
+        var clampedWidth = Math.Clamp(width, 0d, RenderWidth);
+        var sourceRange = Math.Max(1d, RoomSize - clampedWidth);
+        var targetRange = Math.Max(0d, RenderWidth - clampedWidth);
+        var scaled = (Math.Clamp(value, 0d, Math.Max(0d, RoomSize - clampedWidth)) / sourceRange) * targetRange;
+        return Math.Round((scaled / RenderWidth) * 100d, 4);
+    }
+
+    protected static double ToLengthPercentX(double value) => Math.Round((value / RenderWidth) * 100d, 4);
+
+    protected static double ToPercentY(double value) => Math.Round((value / RoomSize) * 100d, 4);
 
     private bool TryGetRoomInteractionProgressState(out RoomInteractionProgressState progressState)
     {
@@ -1499,11 +1514,13 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
 
     protected string GetConnectionLineStyle(PlayAreaPoint start, PlayAreaPoint end)
     {
-        var deltaX = end.X - start.X;
+        var scaledStartX = (Math.Clamp(start.X, 0d, RoomSize) / RoomSize) * RenderWidth;
+        var scaledEndX = (Math.Clamp(end.X, 0d, RoomSize) / RoomSize) * RenderWidth;
+        var deltaX = scaledEndX - scaledStartX;
         var deltaY = end.Y - start.Y;
         var length = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
         var angle = Math.Atan2(deltaY, deltaX) * (180d / Math.PI);
-        return $"left: {ToPercent(start.X)}%; top: {ToPercent(start.Y)}%; width: {ToPercent(length)}%; transform: rotate({Math.Round(angle, 2)}deg);";
+        return $"left: {Math.Round((scaledStartX / RenderWidth) * 100d, 4)}%; top: {ToPercentY(start.Y)}%; width: {ToLengthPercentX(length)}%; transform: rotate({Math.Round(angle, 2)}deg);";
     }
 
     protected static string GetModifierLabel(RecursiveZoneModifier modifier) => modifier switch
@@ -1697,8 +1714,8 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
             {
                 X = Math.Round(PlayerX, 3),
                 Y = Math.Round(PlayerY, 3),
-                XPercent = ToPercent(PlayerX),
-                YPercent = ToPercent(PlayerY),
+                XPercent = ToPositionPercentX(PlayerX, PlayerSize),
+                YPercent = ToPercentY(PlayerY),
                 Width = Math.Round(PlayerSize, 3),
                 Height = Math.Round(PlayerSize, 3),
             },

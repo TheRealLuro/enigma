@@ -54,7 +54,7 @@ public partial class Game
 
         var x = Math.Clamp(CoopOtherPlayer.Position.X, 0d, RoomSize - PlayerSize);
         var y = Math.Clamp(CoopOtherPlayer.Position.Y, 0d, RoomSize - PlayerSize);
-        return $"left: {ToPercent(x)}%; top: {ToPercent(y)}%; width: {ToPercent(PlayerSize)}%; height: {ToPercent(PlayerSize)}%;";
+        return $"left: {ToPositionPercentX(x, PlayerSize)}%; top: {ToPercentY(y)}%; width: {ToLengthPercentX(PlayerSize)}%; height: {ToPercentY(PlayerSize)}%;";
     }
 
     protected string GetOtherPlayerTagStyle()
@@ -66,7 +66,7 @@ public partial class Game
 
         var x = Math.Clamp(CoopOtherPlayer.Position.X, 0d, RoomSize - PlayerSize);
         var y = Math.Clamp(CoopOtherPlayer.Position.Y - 42d, 0d, RoomSize - PlayerSize);
-        return $"left: {ToPercent(x)}%; top: {ToPercent(y)}%;";
+        return $"left: {ToPositionPercentX(x, PlayerSize)}%; top: {ToPercentY(y)}%;";
     }
 
     protected string GetOtherPlayerClass()
@@ -257,8 +257,8 @@ public partial class Game
                 y = Math.Round(PlayerY, 3),
                 width = Math.Round(PlayerSize, 3),
                 height = Math.Round(PlayerSize, 3),
-                x_percent = ToPercent(PlayerX),
-                y_percent = ToPercent(PlayerY),
+                x_percent = ToPositionPercentX(PlayerX, PlayerSize),
+                y_percent = ToPercentY(PlayerY),
             },
             facing = PlayerFacing.ToString(),
             is_on_black_hole = _isOnBlackHole,
@@ -296,8 +296,8 @@ public partial class Game
                     y = Math.Round(PlayerY, 3),
                     width = Math.Round(PlayerSize, 3),
                     height = Math.Round(PlayerSize, 3),
-                    xPercent = ToPercent(PlayerX),
-                    yPercent = ToPercent(PlayerY),
+                    xPercent = ToPositionPercentX(PlayerX, PlayerSize),
+                    yPercent = ToPercentY(PlayerY),
                 },
                 facing = PlayerFacing.ToString(),
                 isOnBlackHole = _isOnBlackHole,

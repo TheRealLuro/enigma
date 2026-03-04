@@ -32,7 +32,6 @@ else
             <div class="players-banner-copy">
                 <span class="profile-kicker">Explorer Index</span>
                 <h1>Find Players</h1>
-                <p>Search exact usernames, browse high-performing explorers, and jump straight into their profiles.</p>
             </div>
         </section>
 
@@ -114,11 +113,11 @@ else
         </section>
 
         <section class="panel players-top-panel">
-            <div class="panel-heading">
-                <div>
-                    <span class="profile-eyebrow">Discovery</span>
-                    <h2>Top Explorers</h2>
-                </div>
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Discovery</span>
+                        <h2>Top Explorers</h2>
+                    </div>
                 <span class="section-count">@TopPlayers.Count</span>
             </div>
 
@@ -152,12 +151,12 @@ else
 
                             <div class="top-player-metrics">
                                 <div>
-                                    <span>Owned</span>
-                                    <strong>@entry.Player.OwnedMapsCount</strong>
-                                </div>
-                                <div>
                                     <span>Discovered</span>
                                     <strong>@entry.Player.DiscoveredMapsCount</strong>
+                                </div>
+                                <div>
+                                    <span>Owned</span>
+                                    <strong>@entry.Player.OwnedMapsCount</strong>
                                 </div>
                                 <div>
                                     <span>Wins</span>
@@ -219,7 +218,7 @@ else
 
         try
         {
-            using var response = await Api.GetAsync("api/auth/leaderboard/players?sortBy=maze_nuggets&order=desc");
+            using var response = await Api.GetAsync("api/auth/leaderboard/players?sortBy=discovered_maps&order=desc");
 
             if (!response.IsSuccessStatusCode)
             {
@@ -232,7 +231,7 @@ else
             var payload = await Api.ReadJsonAsync<PlayerLeaderboardResponse>(response);
             TopPlayers = payload?.Players
                 .Where(player => !string.IsNullOrWhiteSpace(player.Username))
-                .Take(8)
+                .Take(3)
                 .ToList() ?? [];
         }
         catch (Exception ex)
