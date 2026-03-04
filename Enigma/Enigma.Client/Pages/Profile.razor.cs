@@ -61,7 +61,6 @@ public partial class Profile
     private bool ShowDeletePassword { get; set; }
 
     private string AvatarMapName { get; set; } = string.Empty;
-    private ImageCropState AvatarCrop { get; set; } = new() { X = 0, Y = 0, Size = 100 };
 
     private bool IsOwnProfile =>
         Session is not null
@@ -88,12 +87,6 @@ public partial class Profile
             {
                 MapName = AvatarMapName,
                 ImageUrl = AvatarSourceOptions.FirstOrDefault(map => EqualsIgnoreCase(map.MapName, AvatarMapName))?.MapImage,
-                Crop = new ImageCropState
-                {
-                    X = Clamp(AvatarCrop.X, 0, 90),
-                    Y = Clamp(AvatarCrop.Y, 0, 90),
-                    Size = Clamp(AvatarCrop.Size, 10, 100),
-                },
             };
 
     protected override async Task OnParametersSetAsync()
@@ -191,9 +184,6 @@ public partial class Profile
             && AvatarSourceOptions.Any(map => EqualsIgnoreCase(map.MapName, currentMapName))
                 ? currentMapName
                 : AvatarSourceOptions.FirstOrDefault()?.MapName ?? string.Empty;
-        AvatarCrop = profileImage?.Crop is not null
-            ? new ImageCropState { X = profileImage.Crop.X, Y = profileImage.Crop.Y, Size = profileImage.Crop.Size }
-            : new ImageCropState { X = 0, Y = 0, Size = 100 };
     }
 
     private void ApplyRequestedTab()
@@ -317,12 +307,6 @@ public partial class Profile
             () => Api.PutJsonAsync("api/auth/account/avatar", new
             {
                 mapName = AvatarMapName,
-                crop = new
-                {
-                    x = Clamp(AvatarCrop.X, 0, 90),
-                    y = Clamp(AvatarCrop.Y, 0, 90),
-                    size = Clamp(AvatarCrop.Size, 10, 100),
-                },
             }),
             async response => await RefreshSessionFromUserResponseAsync(response, "Profile picture updated."));
     }
@@ -405,9 +389,8 @@ public partial class Profile
         }
     }
 
-    private void SelectAvatarMap(MapSummary map)
+    private async Task UseMapForPictureAsync(MapSummary map)
     {
-        SetActiveTab(SettingsTab);
         if (string.IsNullOrWhiteSpace(map.MapImage))
         {
             HasError = true;
@@ -416,9 +399,7 @@ public partial class Profile
         }
 
         AvatarMapName = map.MapName;
-        AvatarCrop = new ImageCropState { X = 0, Y = 0, Size = 100 };
-        StatusMessage = $"{map.MapName} selected for your profile picture.";
-        HasError = false;
+        await UpdateAvatarAsync();
     }
 
     private bool CanRecycleMap(MapSummary map)
@@ -668,11 +649,6 @@ public partial class Profile
     private static bool EqualsIgnoreCase(string? left, string? right)
     {
         return string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static double Clamp(double value, double min, double max)
-    {
-        return Math.Min(max, Math.Max(min, value));
     }
 
     private async Task ClearLocalSessionAsync()

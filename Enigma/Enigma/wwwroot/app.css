@@ -956,7 +956,7 @@ h1:focus {
 
 .enigma-game-page.content {
     max-width: 2500px;
-    padding-inline: clamp(16px, 1.8vw, 32px);
+    padding-inline: clamp(8px, 1vw, 18px);
 }
 
 .enigma-game-shell {
@@ -968,16 +968,16 @@ h1:focus {
 
 .enigma-room-shell {
     display: grid;
-    gap: 20px;
-    padding: clamp(18px, 1.6vw, 26px);
+    gap: 14px;
+    padding: clamp(12px, 1.2vw, 18px);
     margin: 0;
 }
 
 .enigma-room-meta {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+    grid-template-columns: 1fr;
     align-items: start;
-    gap: 18px;
+    gap: 8px;
     margin-bottom: 0;
 }
 
@@ -1053,21 +1053,21 @@ h1:focus {
 .enigma-room-stage-wrap {
     width: 100%;
     overflow: auto;
-    border-radius: 22px;
+    border-radius: 18px;
     border: 1px solid var(--epic-border);
     background:
         radial-gradient(circle at top, rgba(118, 184, 255, 0.08), transparent 38%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
         #111822;
-    padding: 12px;
+    padding: 8px;
 }
 
 .enigma-room-stage {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 10;
-    min-height: clamp(760px, 76vh, 1180px);
-    border-radius: 16px;
+    aspect-ratio: 1 / 1;
+    min-height: 0;
+    border-radius: 14px;
     overflow: hidden;
     outline: none;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 30px 60px rgba(0, 0, 0, 0.35);
@@ -1163,7 +1163,7 @@ h1:focus {
 
 .enigma-player {
     z-index: 5;
-    border-radius: 14px;
+    border-radius: 12px;
     background: linear-gradient(180deg, #ffffff, #d4e0f0);
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
     transition: box-shadow 0.12s ease, transform 0.12s ease;
@@ -1211,28 +1211,28 @@ h1:focus {
 .enigma-room-banner {
     position: absolute;
     z-index: 6;
-    padding: 10px 14px;
+    padding: 8px 12px;
     border-radius: 999px;
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     background: rgba(8, 12, 18, 0.66);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
 }
 
 .enigma-room-hud-right {
-    top: 18px;
-    right: 18px;
+    top: 14px;
+    right: 14px;
 }
 
 .enigma-room-hud-left {
-    top: 18px;
-    left: 18px;
+    top: 14px;
+    left: 14px;
 }
 
 .enigma-room-banner {
     left: 50%;
-    bottom: 18px;
+    bottom: 14px;
     transform: translateX(-50%);
     min-width: min(70%, 460px);
     text-align: center;
@@ -2692,8 +2692,8 @@ h1:focus {
     }
 
     .enigma-room-stage {
-        aspect-ratio: 5 / 4;
-        min-height: clamp(600px, 68vh, 860px);
+        aspect-ratio: 1 / 1;
+        min-height: 0;
     }
 
     .enigma-sidebar {
@@ -4374,15 +4374,22 @@ h1:focus {
 }
 
 .profile-avatar-crop-shell {
-    position: relative;
     width: 100%;
+    height: 100%;
     aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.03);
 }
 
-.profile-avatar-crop-shell img {
-    position: absolute;
-    object-fit: cover;
+.profile-avatar-crop-shell img,
+.profile-avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 
 .profile-avatar-fallback {
@@ -4731,8 +4738,7 @@ h1:focus {
 .coop-banner,
 .coop-session-panel,
 .coop-create-panel,
-.coop-join-panel,
-.coop-puzzle-panel {
+.coop-join-panel {
     border-radius: 24px;
     padding: 24px;
     border: 1px solid rgba(255, 255, 255, 0.06);
@@ -4743,7 +4749,6 @@ h1:focus {
 }
 
 .coop-banner,
-.coop-banner-metrics,
 .coop-form-stack,
 .coop-grid,
 .coop-session-meta,
@@ -4760,19 +4765,13 @@ h1:focus {
 
 .coop-banner {
     grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-}
-
-.coop-banner-metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    min-width: 360px;
+    align-items: start;
 }
 
 .coop-banner > .play-header-actions {
     align-self: start;
 }
 
-.coop-banner-metrics div,
 .coop-session-meta div {
     display: grid;
     gap: 6px;
@@ -4788,7 +4787,9 @@ h1:focus {
 }
 
 .coop-active-grid {
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+    max-width: 1040px;
 }
 
 .coop-setup-grid {
@@ -4885,145 +4886,6 @@ h1:focus {
     margin: 0;
 }
 
-.coop-catalog-toggle {
-    justify-self: start;
-}
-
-.coop-catalog-modal-card {
-    width: min(960px, calc(100vw - 40px));
-    max-height: min(80vh, calc(100vh - 64px));
-    align-content: start;
-}
-
-.coop-puzzle-summary {
-    display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
-    gap: 18px;
-    padding: 18px 20px;
-    border-radius: 20px;
-    background:
-        radial-gradient(circle at top left, rgba(95, 166, 255, 0.12), transparent 42%),
-        rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.coop-puzzle-summary h3,
-.coop-catalog-tier-compact h3 {
-    margin: 0;
-}
-
-.coop-puzzle-summary p {
-    margin: 10px 0 0;
-    color: var(--epic-text);
-    line-height: 1.65;
-}
-
-.coop-puzzle-summary-metrics {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-}
-
-.coop-puzzle-summary-metrics div {
-    display: grid;
-    gap: 6px;
-    padding: 14px 16px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.coop-puzzle-compact-note {
-    display: grid;
-    gap: 6px;
-    padding: 14px 16px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    color: var(--epic-text);
-}
-
-.coop-puzzle-compact-note strong {
-    color: #ffffff;
-}
-
-.coop-puzzle-key-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 12px;
-}
-
-.coop-puzzle-key-card {
-    display: grid;
-    gap: 8px;
-    padding: 14px 16px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.coop-puzzle-key-card strong {
-    font-size: 0.98rem;
-    line-height: 1.35;
-}
-
-.coop-puzzle-key-card small {
-    color: var(--epic-text-secondary);
-    line-height: 1.45;
-}
-
-.coop-puzzle-key {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    width: fit-content;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: rgba(59, 130, 246, 0.16);
-    color: #b9d8ff;
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-}
-
-.coop-catalog-stack-compact {
-    gap: 14px;
-}
-
-.coop-catalog-tier-compact {
-    gap: 12px;
-    padding: 16px 18px;
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.coop-catalog-list {
-    display: grid;
-    gap: 10px;
-}
-
-.coop-catalog-list-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    padding: 12px 14px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.coop-catalog-list-item > div {
-    display: grid;
-    gap: 4px;
-}
-
-.coop-catalog-list-item strong {
-    line-height: 1.35;
-}
-
 .enigma-coop-card .enigma-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -5031,6 +4893,7 @@ h1:focus {
 .enigma-player.co-op-peer {
     filter: hue-rotate(140deg) saturate(1.15);
     opacity: 0.82;
+    transition: left 0.045s linear, top 0.045s linear, box-shadow 0.12s ease, transform 0.12s ease;
 }
 
 .enigma-player-tag {
@@ -5048,6 +4911,7 @@ h1:focus {
     pointer-events: none;
     transform: translateY(-100%);
     white-space: nowrap;
+    transition: left 0.045s linear, top 0.045s linear, opacity 0.12s ease;
 }
 
 .play-page-shell {
@@ -5163,6 +5027,10 @@ h1:focus {
     justify-content: center;
 }
 
+.home-page-shell {
+    padding-bottom: 92px;
+}
+
 .home-hero-copy {
     width: min(100%, 960px);
     margin: 0 auto;
@@ -5176,6 +5044,55 @@ h1:focus {
 .home-hero-copy p,
 .home-hero-copy .profile-kicker {
     text-align: center;
+}
+
+.home-energy-pill {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 0 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(112, 171, 255, 0.26);
+    background:
+        radial-gradient(circle at top, rgba(72, 132, 255, 0.18), transparent 68%),
+        rgba(11, 16, 26, 0.88);
+    box-shadow:
+        0 16px 34px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    color: #f6f9ff;
+    font-size: 0.96rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition:
+        transform 0.16s ease,
+        border-color 0.16s ease,
+        background-color 0.16s ease,
+        box-shadow 0.16s ease;
+}
+
+.home-energy-pill:hover,
+.home-energy-pill:focus-visible {
+    color: #ffffff;
+    border-color: rgba(138, 190, 255, 0.4);
+    box-shadow:
+        0 20px 38px rgba(0, 0, 0, 0.38),
+        0 0 0 1px rgba(138, 190, 255, 0.16),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transform: translateX(-50%) translateY(-2px);
+}
+
+.home-energy-pill:active {
+    transform: translateX(-50%);
 }
 
 .play-forms-column {
@@ -5309,7 +5226,6 @@ h1:focus {
         grid-template-columns: 1fr;
     }
 
-    .coop-banner-metrics,
     .coop-session-meta,
     .coop-form-grid,
     .coop-inline-form {
@@ -5324,12 +5240,12 @@ h1:focus {
 
 .enigma-room-shell {
     width: 100%;
-    gap: 18px;
+    gap: 14px;
 }
 
 .enigma-room-meta {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 8px;
 }
 
 .enigma-room-meta-copy {
@@ -5337,22 +5253,22 @@ h1:focus {
 }
 
 .enigma-room-stage-wrap {
-    padding: 14px;
+    padding: 8px;
 }
 
 .enigma-room-stage {
-    aspect-ratio: 16 / 9;
-    min-height: clamp(860px, 84vh, 1320px);
+    aspect-ratio: 1 / 1;
+    min-height: 0;
 }
 
 .enigma-stage-run-status {
     position: absolute;
-    right: 22px;
-    bottom: 22px;
+    right: 14px;
+    bottom: 14px;
     z-index: 7;
-    width: min(360px, calc(100% - 44px));
-    padding: 16px;
-    border-radius: 22px;
+    width: min(300px, calc(100% - 28px));
+    padding: 12px;
+    border-radius: 18px;
     background: linear-gradient(180deg, rgba(12, 18, 28, 0.90), rgba(8, 12, 18, 0.94));
     border: 1px solid rgba(122, 181, 255, 0.16);
     box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
@@ -5365,7 +5281,7 @@ h1:focus {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .enigma-stage-goal {
@@ -5385,35 +5301,35 @@ h1:focus {
 .enigma-stage-run-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px;
 }
 
 .enigma-stage-run-grid div {
-    min-height: 86px;
-    padding: 12px;
-    border-radius: 16px;
+    min-height: 68px;
+    padding: 10px;
+    border-radius: 14px;
     background: rgba(255, 255, 255, 0.035);
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .enigma-stage-run-grid span {
     display: block;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     color: var(--epic-text-dim);
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     letter-spacing: 0.05em;
     text-transform: uppercase;
 }
 
 .enigma-stage-run-grid strong {
     color: var(--epic-text);
-    font-size: 1.05rem;
+    font-size: 0.95rem;
 }
 
 .enigma-stage-run-items {
     display: grid;
-    gap: 10px;
-    margin-top: 14px;
+    gap: 8px;
+    margin-top: 10px;
 }
 
 .enigma-stage-run-items-label {
@@ -5547,9 +5463,9 @@ h1:focus {
     display: grid;
     place-items: center;
     padding: 32px;
-    background: rgba(3, 7, 14, 0.72);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    background: rgba(3, 7, 14, 0.36);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
 }
 
 .enigma-puzzle-overlay-shell {
@@ -5570,13 +5486,19 @@ h1:focus {
     max-height: min(86vh, 1120px);
     overflow: auto;
     border-radius: 24px;
+    background:
+        radial-gradient(circle at top left, rgba(60, 118, 255, 0.12), transparent 34%),
+        linear-gradient(180deg, rgba(20, 26, 38, 0.78), rgba(12, 16, 24, 0.68));
+    border: 1px solid rgba(122, 181, 255, 0.18);
     box-shadow: 0 34px 90px rgba(0, 0, 0, 0.4);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
 }
 
 .enigma-puzzle-overlay-shell .enigma-puzzle-guide,
 .enigma-puzzle-overlay-shell .enigma-puzzle-status {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.024);
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .enigma-overlay-close {
@@ -5599,11 +5521,11 @@ h1:focus {
 
 @media (max-width: 1280px) {
     .enigma-room-stage {
-        min-height: clamp(720px, 74vh, 1120px);
+        min-height: 0;
     }
 
     .enigma-stage-run-status {
-        width: min(330px, calc(100% - 40px));
+        width: min(280px, calc(100% - 28px));
     }
 
     .enigma-coop-inline-strip {
@@ -5613,8 +5535,8 @@ h1:focus {
 
 @media (max-width: 900px) {
     .enigma-room-stage {
-        aspect-ratio: auto;
-        min-height: 760px;
+        aspect-ratio: 1 / 1;
+        min-height: 0;
     }
 
     .enigma-stage-run-status {

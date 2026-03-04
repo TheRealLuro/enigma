@@ -365,12 +365,6 @@ public class APIController : ControllerBase
         {
             username,
             map_name = request.MapName,
-            crop = new
-            {
-                x = request.Crop.X,
-                y = request.Crop.Y,
-                size = request.Crop.Size,
-            },
         });
         return await RelayAsync(response);
     }
@@ -748,17 +742,9 @@ public sealed class UpdatePasswordRequest
     public string NewPassword { get; set; } = string.Empty;
 }
 
-public sealed class AvatarCropRequest
-{
-    public double X { get; set; }
-    public double Y { get; set; }
-    public double Size { get; set; } = 100;
-}
-
 public sealed class UpdateAvatarRequest
 {
     public string MapName { get; set; } = string.Empty;
-    public AvatarCropRequest Crop { get; set; } = new();
 }
 
 public sealed class DeleteAccountRequest

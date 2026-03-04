@@ -38,16 +38,9 @@ class UpdatePasswordPayload(BaseModel):
     new_password: str = Field(min_length=8)
 
 
-class AvatarCropPayload(BaseModel):
-    x: float = Field(ge=0, le=100)
-    y: float = Field(ge=0, le=100)
-    size: float = Field(ge=10, le=100)
-
-
 class UpdateAvatarPayload(BaseModel):
     username: str
     map_name: str
-    crop: AvatarCropPayload
 
 
 class DeleteAccountPayload(BaseModel):
@@ -197,7 +190,6 @@ def update_avatar(request: Request, payload: UpdateAvatarPayload):
     profile_image = {
         "map_name": payload.map_name,
         "image_url": owned_map.get("map_image"),
-        "crop": payload.crop.model_dump(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 

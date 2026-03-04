@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -39,6 +40,8 @@ from .redis_store import (
 
 router = APIRouter(prefix="/database/multiplayer")
 _SESSION_SOCKETS: dict[str, list[tuple[str, WebSocket]]] = {}
+_PENDING_SOCKET_ABANDON_TASKS: dict[tuple[str, str], asyncio.Task[None]] = {}
+SOCKET_ABANDON_GRACE_SECONDS = 4.0
 
 
 class MultiplayerCreatePayload(BaseModel):
@@ -310,20 +313,73 @@ def _clear_pending_invites(session: dict[str, Any], *usernames: str) -> None:
 
 
 def _register_session_socket(session_id: str, username: str, websocket: WebSocket) -> None:
+    _cancel_pending_socket_abandon(session_id, username)
     sockets = _SESSION_SOCKETS.setdefault(session_id, [])
     sockets.append((username, websocket))
 
 
-def _unregister_session_socket(session_id: str, websocket: WebSocket) -> None:
+def _unregister_session_socket(session_id: str, websocket: WebSocket) -> list[str]:
     sockets = _SESSION_SOCKETS.get(session_id)
     if not sockets:
-        return
+        return []
 
+    disconnected_usernames = [
+        username
+        for username, entry in sockets
+        if entry is websocket
+    ]
     remaining = [(username, entry) for username, entry in sockets if entry is not websocket]
     if remaining:
         _SESSION_SOCKETS[session_id] = remaining
     else:
         _SESSION_SOCKETS.pop(session_id, None)
+
+    return disconnected_usernames
+
+
+def _cancel_pending_socket_abandon(session_id: str, username: str) -> None:
+    task_key = (session_id, _normalize_username(username))
+    task = _PENDING_SOCKET_ABANDON_TASKS.pop(task_key, None)
+    if task is not None and not task.done():
+        task.cancel()
+
+
+async def _abandon_session_after_socket_disconnect(session_id: str, username: str) -> None:
+    task_key = (session_id, _normalize_username(username))
+
+    try:
+        await asyncio.sleep(SOCKET_ABANDON_GRACE_SECONDS)
+
+        with session_lock(session_id):
+            session = load_json(session_key(session_id))
+            if not session or str(session.get("status") or "").strip().lower() != "active":
+                return
+
+            if not _session_has_member(session, username):
+                _clear_user_session(username)
+                return
+
+            if _session_has_live_socket(session_id, username):
+                return
+
+            _leave_multiplayer_session_locked(session_id, session, _normalize_username(username), "socket_disconnect")
+
+        _broadcast_ws_session_from_thread(session)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        _PENDING_SOCKET_ABANDON_TASKS.pop(task_key, None)
+
+
+def _schedule_socket_abandon(session_id: str, username: str) -> None:
+    normalized_username = _normalize_username(username)
+    if not session_id or not normalized_username:
+        return
+
+    _cancel_pending_socket_abandon(session_id, normalized_username)
+    _PENDING_SOCKET_ABANDON_TASKS[(session_id, normalized_username)] = asyncio.create_task(
+        _abandon_session_after_socket_disconnect(session_id, normalized_username)
+    )
 
 
 async def _send_ws_payload(websocket: WebSocket, payload: dict[str, Any]) -> bool:
@@ -372,7 +428,8 @@ async def _broadcast_ws_session(
             dead_sockets.append(websocket)
 
     for websocket in dead_sockets:
-        _unregister_session_socket(session_id, websocket)
+        for username in _unregister_session_socket(session_id, websocket):
+            _schedule_socket_abandon(session_id, username)
 
 
 def _broadcast_ws_session_from_thread(
@@ -1274,4 +1331,5 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
     except WebSocketDisconnect:
         pass
     finally:
-        _unregister_session_socket(session_id, websocket)
+        for username in _unregister_session_socket(session_id, websocket):
+            _schedule_socket_abandon(session_id, username)

@@ -4,7 +4,7 @@
     @if (!string.IsNullOrWhiteSpace(Image?.ImageUrl))
     {
         <div class="profile-avatar-crop-shell">
-            <img src="@Image!.ImageUrl" alt="@AltText" style="@GetImageStyle()" />
+            <img src="@Image!.ImageUrl" alt="@AltText" class="profile-avatar-image" />
         </div>
     }
     else
@@ -18,16 +18,4 @@
     [Parameter] public string AltText { get; set; } = "Profile picture";
     [Parameter] public string FallbackText { get; set; } = "??";
     [Parameter] public string Class { get; set; } = string.Empty;
-
-    private string GetImageStyle()
-    {
-        var crop = Image?.Crop ?? new ImageCropState { X = 0, Y = 0, Size = 100 };
-        var cropSize = Math.Clamp(crop.Size, 10d, 100d);
-        var widthPercent = (100d / cropSize) * 100d;
-        var xPercent = Math.Clamp(crop.X, 0d, Math.Max(0d, 100d - cropSize));
-        var yPercent = Math.Clamp(crop.Y, 0d, Math.Max(0d, 100d - cropSize));
-        var leftPercent = -xPercent * (widthPercent / 100d);
-        var topPercent = -yPercent * (widthPercent / 100d);
-        return $"width: {widthPercent:F3}%; height: {widthPercent:F3}%; left: {leftPercent:F3}%; top: {topPercent:F3}%;";
-    }
 }

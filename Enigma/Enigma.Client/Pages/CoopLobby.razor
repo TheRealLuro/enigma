@@ -41,20 +41,6 @@ else
                 <h1>Dual Explorer Sessions</h1>
                 <p>Create a shared maze session, invite one friend, ready up together, and enter the maze once both players lock in.</p>
             </div>
-            <div class="coop-banner-metrics">
-                <div>
-                    <span>Signed In</span>
-                    <strong>@Session.Username</strong>
-                </div>
-                <div>
-                    <span>Friends</span>
-                    <strong>@Session.Friends.Count</strong>
-                </div>
-                <div>
-                    <span>Puzzle Sets</span>
-                    <strong>@PuzzleDefinitionCount</strong>
-                </div>
-            </div>
             <div class="play-header-actions">
                 <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="RefreshSessionSummaryAsync">Refresh Lobby</button>
             </div>
@@ -293,97 +279,9 @@ else
                     <div class="empty-state-inline">The maze starts once both players are present and ready. Movement and room changes stay synchronized after entry.</div>
                 </section>
 
-                <section class="panel coop-puzzle-panel">
-                    <div class="panel-heading">
-                        <div>
-                            <span class="profile-eyebrow">Co-op Puzzles</span>
-                            <h2>Active Puzzle Set</h2>
-                        </div>
-                        @if (PuzzleCatalog.Count > 0)
-                        {
-                            <button class="btn btn-secondary coop-catalog-toggle" type="button" @onclick="TogglePuzzleCatalog">
-                                View Full Set
-                            </button>
-                        }
-                    </div>
-
-                    @if (PuzzleCatalog.Count == 0)
-                    {
-                        <div class="empty-state-inline">Puzzle catalog unavailable.</div>
-                    }
-                    else
-                    {
-                        <div class="coop-puzzle-summary">
-                            <div>
-                                <span class="profile-eyebrow">@ActivePuzzleTierKey.ToUpperInvariant()</span>
-                                <h3>@FormatTierLabel(ActivePuzzleTierKey)</h3>
-                                <p>This run pulls from the @FormatTierLabel(ActivePuzzleTierKey).ToLowerInvariant() set. The maze explains the active room puzzle in context, so the lobby only keeps the short session summary.</p>
-                            </div>
-                            <div class="coop-puzzle-summary-metrics">
-                                <div>
-                                    <span>Keys</span>
-                                    <strong>P-Z</strong>
-                                </div>
-                                <div>
-                                    <span>Count</span>
-                                    <strong>@ActivePuzzleTier.Count</strong>
-                                </div>
-                                <div>
-                                    <span>Focus</span>
-                                    <strong>@GetActivePuzzleFocus()</strong>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="coop-puzzle-compact-note">
-                            <strong>Compact reference only.</strong>
-                            <span>Open the full set if you need the complete co-op puzzle list before starting.</span>
-                        </div>
-
-                    }
-                </section>
             </div>
         }
     </div>
-
-    @if (ShowPuzzleCatalogDetails && PuzzleCatalog.Count > 0)
-    {
-        <div class="enigma-modal-backdrop" @onclick="ClosePuzzleCatalog">
-            <div class="enigma-modal-card coop-catalog-modal-card" @onclick:stopPropagation="true">
-                <div class="panel-heading">
-                    <div>
-                        <span class="profile-eyebrow">Co-op Puzzles</span>
-                        <h2>Shared Puzzle Catalog</h2>
-                    </div>
-                    <button class="btn btn-secondary" type="button" @onclick="ClosePuzzleCatalog">Close</button>
-                </div>
-                <div class="coop-catalog-stack coop-catalog-stack-compact">
-                    @foreach (var tier in PuzzleCatalog.OrderBy(static tier => tier.Key, StringComparer.OrdinalIgnoreCase))
-                    {
-                        <section class="coop-catalog-tier coop-catalog-tier-compact">
-                            <div class="panel-heading compact">
-                                <div>
-                                    <span class="profile-eyebrow">@tier.Key</span>
-                                    <h3>@FormatTierLabel(tier.Key)</h3>
-                                </div>
-                            </div>
-                            <div class="coop-catalog-list">
-                                @foreach (var entry in tier.Value.OrderBy(static item => item.Key))
-                                {
-                                    <article class="coop-catalog-list-item">
-                                        <div>
-                                            <span class="catalog-card-kicker">Key @entry.Key.ToUpperInvariant()</span>
-                                            <strong>@entry.Value.Name</strong>
-                                        </div>
-                                        <span class="catalog-card-meta-pill">@entry.Value.CoreMechanic</span>
-                                    </article>
-                                }
-                            </div>
-                        </section>
-                    }
-                </div>
-            </div>
-        </div>
-    }
 }
 
 @code {
@@ -416,7 +314,6 @@ else
     private bool IsActionBusy { get; set; }
     private bool HasError { get; set; }
     private string? StatusMessage { get; set; }
-    private bool ShowPuzzleCatalogDetails { get; set; }
     private string? LoadedSessionId { get; set; }
     private string JoinSessionId { get; set; } = string.Empty;
     private string SelectedInviteFriend { get; set; } = string.Empty;
@@ -424,7 +321,6 @@ else
     private GenerateSessionForm CreateRequest { get; set; } = new();
     private LoadSessionForm LoadRequest { get; set; } = new();
     private MultiplayerSessionState? CurrentSession { get; set; }
-    private Dictionary<string, Dictionary<string, MultiplayerPuzzleDefinition>> PuzzleCatalog { get; set; } = [];
     private CancellationTokenSource? PollCancellation { get; set; }
     private Task? PollTask { get; set; }
     private bool HasEnteredActiveSession { get; set; }
@@ -432,12 +328,6 @@ else
     private bool CoopSocketOpen { get; set; }
     private DotNetObjectReference<CoopLobby>? LobbySocketRef { get; set; }
 
-    private int PuzzleDefinitionCount => PuzzleCatalog.Values.Sum(static tier => tier.Count);
-    private string ActivePuzzleTierKey => GetActivePuzzleTierKey();
-    private IReadOnlyList<KeyValuePair<string, MultiplayerPuzzleDefinition>> ActivePuzzleTier =>
-        PuzzleCatalog.TryGetValue(ActivePuzzleTierKey, out var tier)
-            ? tier.OrderBy(static item => item.Key, StringComparer.OrdinalIgnoreCase).ToList()
-            : [];
     private IReadOnlyList<string> AvailableFriends => Session?.Friends.OrderBy(static friend => friend, StringComparer.OrdinalIgnoreCase).ToList() ?? [];
     private bool IsOwner => CurrentSession is not null && string.Equals(CurrentSession.OwnerUsername, Session?.Username, StringComparison.OrdinalIgnoreCase);
     private bool HasGuest => !string.IsNullOrWhiteSpace(CurrentSession?.GuestUsername);
@@ -473,8 +363,6 @@ else
 
             await JS.InvokeVoidAsync("enigmaGame.clearCoopLeaveUnload");
             LobbySocketRef = DotNetObjectReference.Create(this);
-            var catalog = await Api.GetFromJsonAsync<MultiplayerPuzzleCatalogResponse>("api/auth/multiplayer/puzzles");
-            PuzzleCatalog = catalog?.Catalog ?? [];
             HasLoadedOnce = true;
             IsLoading = false;
 
@@ -901,53 +789,6 @@ else
         "abandoned" => "Abandoned",
         _ => string.IsNullOrWhiteSpace(value) ? "Unknown" : value.Replace('_', ' '),
     };
-
-    private static string FormatTierLabel(string key) => key.ToLowerInvariant() switch
-    {
-        "easy" => "Easy Co-op",
-        "medium" => "Medium Co-op",
-        "hard" => "Hard Co-op",
-        _ => key,
-    };
-
-    private string GetActivePuzzleTierKey()
-    {
-        var preferred = CurrentSession?.Difficulty?.Trim().ToLowerInvariant();
-        if (!string.IsNullOrWhiteSpace(preferred) && PuzzleCatalog.ContainsKey(preferred))
-        {
-            return preferred;
-        }
-
-        return PuzzleCatalog.Keys.OrderBy(static key => key, StringComparer.OrdinalIgnoreCase).FirstOrDefault() ?? "easy";
-    }
-
-    private string GetActivePuzzleFocus()
-    {
-        var tier = ActivePuzzleTier;
-        if (tier.Count == 0)
-        {
-            return "Unavailable";
-        }
-
-        var mechanics = tier
-            .Select(static entry => entry.Value.CoreMechanic)
-            .Where(static value => !string.IsNullOrWhiteSpace(value))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(2)
-            .ToArray();
-
-        return mechanics.Length == 0 ? "Shared logic" : string.Join(" + ", mechanics);
-    }
-
-    private void TogglePuzzleCatalog()
-    {
-        ShowPuzzleCatalogDetails = !ShowPuzzleCatalogDetails;
-    }
-
-    private void ClosePuzzleCatalog()
-    {
-        ShowPuzzleCatalogDetails = false;
-    }
 
     private static string FormatDifficulty(string? value)
     {

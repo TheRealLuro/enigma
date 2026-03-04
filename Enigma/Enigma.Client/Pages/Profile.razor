@@ -188,7 +188,7 @@ else
                                         @if (IsOwnProfile)
                                         {
                                             <div class="profile-map-actions">
-                                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(map.MapImage)" @onclick="() => SelectAvatarMap(map)">Use for Picture</button>
+                                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(map.MapImage)" @onclick="() => UseMapForPictureAsync(map)">Use for Picture</button>
                                                 @if (CanRecycleMap(map))
                                                 {
                                                     <button class="btn btn-danger" type="button" disabled="@IsActionBusy" @onclick="() => RecycleMapAsync(map)">Recycle</button>
@@ -283,7 +283,7 @@ else
                             @if (!string.IsNullOrWhiteSpace(AvatarMapName))
                             {
                                 <strong>@AvatarMapName</strong>
-                                <small>@(AvatarPreview?.ImageUrl is null ? "Image required" : "Crop updates live")</small>
+                                <small>@(AvatarPreview?.ImageUrl is null ? "Image required" : "Using the full map image")</small>
                             }
                         </div>
                         <div class="profile-avatar-controls">
@@ -294,16 +294,7 @@ else
                             else
                             {
                                 <div><label class="form-label">Source Map</label><InputSelect class="form-control" @bind-Value="AvatarMapName">@foreach (var map in AvatarSourceOptions){<option value="@map.MapName">@map.MapName</option>}</InputSelect></div>
-                                <div class="profile-crop-grid">
-                                    <label><span>X</span><InputNumber class="form-control" @bind-Value="AvatarCrop.X" min="0" max="100" step="1" /></label>
-                                    <label><span>Y</span><InputNumber class="form-control" @bind-Value="AvatarCrop.Y" min="0" max="100" step="1" /></label>
-                                    <label><span>Size</span><InputNumber class="form-control" @bind-Value="AvatarCrop.Size" min="10" max="100" step="1" /></label>
-                                </div>
-                                <div class="profile-avatar-slider-block">
-                                    <label class="form-label">Crop X</label><input class="form-range" type="range" min="0" max="90" step="1" @bind="AvatarCrop.X" />
-                                    <label class="form-label">Crop Y</label><input class="form-range" type="range" min="0" max="90" step="1" @bind="AvatarCrop.Y" />
-                                    <label class="form-label">Crop Size</label><input class="form-range" type="range" min="10" max="100" step="1" @bind="AvatarCrop.Size" />
-                                </div>
+                                <p class="profile-settings-copy">Profile pictures now use the full selected map image directly. No crop step is required.</p>
                                 <button class="btn btn-primary" type="button" disabled="@IsActionBusy || !CanSaveAvatar" @onclick="UpdateAvatarAsync">@(IsActionBusy ? "Saving..." : "Save Profile Picture")</button>
                             }
                         </div>

@@ -7,8 +7,8 @@ namespace Enigma.Client.Pages;
 
 public partial class Game
 {
-    private static readonly TimeSpan CoopStateSyncInterval = TimeSpan.FromMilliseconds(90);
-    private static readonly TimeSpan CoopPollInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan CoopStateSyncInterval = TimeSpan.FromMilliseconds(33);
+    private static readonly TimeSpan CoopPollInterval = TimeSpan.FromMilliseconds(150);
 
     private DateTime _lastCoopStateSyncUtc = DateTime.MinValue;
     private DateTime _lastCoopPollUtc = DateTime.MinValue;

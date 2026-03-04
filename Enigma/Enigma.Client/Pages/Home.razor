@@ -1,65 +1,71 @@
 @page "/home"
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
-<div class="hero hero-panel home-hero-panel">
-    <div class="home-hero-copy">
-        <span class="profile-kicker">Main Menu</span>
-        <h1>@($"Welcome to Enigma, {Username}")</h1>
-        <p class="hero-subcopy">Pick a destination. Every maze run is now one-way: once you leave, it is lost.</p>
+<div class="home-page-shell">
+    <div class="hero hero-panel home-hero-panel">
+        <div class="home-hero-copy">
+            <span class="profile-kicker">Main Menu</span>
+            <h1>@($"Welcome to Enigma, {Username}")</h1>
+            <p class="hero-subcopy">Pick a destination. Every maze run is now one-way: once you leave, it is lost.</p>
+        </div>
+    </div>
+
+    <div class="grid grid-auto home-tab-grid">
+        <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayClick">
+            <div class="menu-card-media">
+                <img class="menu-card-image" src="/images/mainmenu-tabs/PlayTab.png" alt="Play" />
+            </div>
+            <div class="game-card-content">
+                <div class="game-card-title">Play</div>
+                <div class="game-card-meta">Generate or load a maze</div>
+            </div>
+        </button>
+
+        <button class="game-card clickable menu-image-card" type="button" @onclick="OnLeaderboardsClick">
+            <div class="menu-card-media">
+                <img class="menu-card-image" src="/images/mainmenu-tabs/LeaderboardTab.png" alt="Leaderboard" />
+            </div>
+            <div class="game-card-content">
+                <div class="game-card-title">Leaderboard</div>
+                <div class="game-card-meta">See top players and maps</div>
+            </div>
+        </button>
+
+        <button class="game-card clickable menu-image-card" type="button" @onclick="OnProfileClick">
+            <div class="menu-card-media">
+                <img class="menu-card-image" src="/images/mainmenu-tabs/ProfileTab.png" alt="Profile" />
+            </div>
+            <div class="game-card-content">
+                <div class="game-card-title">Profile</div>
+                <div class="game-card-meta">Inventory, settings, maps, and stats</div>
+            </div>
+        </button>
+
+        <button class="game-card clickable menu-image-card" type="button" @onclick="OnMarketplaceClick">
+            <div class="menu-card-media">
+                <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Marketplace" />
+            </div>
+            <div class="game-card-content">
+                <div class="game-card-title">Marketplace</div>
+                <div class="game-card-meta">Trade maps and buy items</div>
+            </div>
+        </button>
+
+        <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayersClick">
+            <div class="menu-card-media">
+                <img class="menu-card-image" src="/images/mainmenu-tabs/PlayersTab.png" alt="Players" />
+            </div>
+            <div class="game-card-content">
+                <div class="game-card-title">Players</div>
+                <div class="game-card-meta">Find explorers and view profiles</div>
+            </div>
+        </button>
     </div>
 </div>
 
-<div class="grid grid-auto home-tab-grid">
-    <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayClick">
-        <div class="menu-card-media">
-            <img class="menu-card-image" src="/images/mainmenu-tabs/PlayTab.png" alt="Play" />
-        </div>
-        <div class="game-card-content">
-            <div class="game-card-title">Play</div>
-            <div class="game-card-meta">Generate or load a maze</div>
-        </div>
-    </button>
-
-    <button class="game-card clickable menu-image-card" type="button" @onclick="OnLeaderboardsClick">
-        <div class="menu-card-media">
-            <img class="menu-card-image" src="/images/mainmenu-tabs/LeaderboardTab.png" alt="Leaderboard" />
-        </div>
-        <div class="game-card-content">
-            <div class="game-card-title">Leaderboard</div>
-            <div class="game-card-meta">See top players and maps</div>
-        </div>
-    </button>
-
-    <button class="game-card clickable menu-image-card" type="button" @onclick="OnProfileClick">
-        <div class="menu-card-media">
-            <img class="menu-card-image" src="/images/mainmenu-tabs/ProfileTab.png" alt="Profile" />
-        </div>
-        <div class="game-card-content">
-            <div class="game-card-title">Profile</div>
-            <div class="game-card-meta">Inventory, settings, maps, and stats</div>
-        </div>
-    </button>
-
-    <button class="game-card clickable menu-image-card" type="button" @onclick="OnMarketplaceClick">
-        <div class="menu-card-media">
-            <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Marketplace" />
-        </div>
-        <div class="game-card-content">
-            <div class="game-card-title">Marketplace</div>
-            <div class="game-card-meta">Trade maps and buy items</div>
-        </div>
-    </button>
-
-    <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayersClick">
-        <div class="menu-card-media">
-            <img class="menu-card-image" src="/images/mainmenu-tabs/PlayersTab.png" alt="Players" />
-        </div>
-        <div class="game-card-content">
-            <div class="game-card-title">Players</div>
-            <div class="game-card-meta">Find explorers and view profiles</div>
-        </div>
-    </button>
-</div>
+<a class="home-energy-pill" href="https://buymeacoffee.com/enigmamaze" target="_blank" rel="noopener noreferrer">
+    😴Buy us an Energy Drink
+</a>
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; } = default!;
