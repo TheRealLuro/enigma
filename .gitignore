@@ -18,6 +18,5 @@ node_modules/
 TestResults/
 .png
 .env
-Dockerfile
 *.png
 *.PNG
