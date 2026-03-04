@@ -1,4 +1,4 @@
-# 🧩 Enigma
+# Enigma
 
 ![Status](https://img.shields.io/badge/status-active-success)
 ![Built With](https://img.shields.io/badge/built%20with-Python%20%7C%20Blazor-blue)
@@ -10,229 +10,268 @@
 
 > Seeds. Mazes. Diffusion. Mystery.
 
-## 👨‍💻 Creators
+## Creators
 
 **Jason K.**  
 **Colton C.**
 
-**Enigma** is a next-generation procedural maze platform where every maze is **unique, ownable, and alive**.
+**Enigma** is a procedural maze platform where every maze has a deterministic seed, a collectible identity, and an explorable game space.
 
-Built with deterministic seed generation, AI diffusion pipelines, and scalable backend architecture, Enigma turns maze discovery into a collectible experience.
-
----
-
-## ✨ What is Enigma?
-
-Enigma is a full-stack procedural maze ecosystem built around one rule:
-
-> No two mazes can ever be the same.
-
-Each maze is generated from a **one-of-a-kind seed**, producing:
-- Unique layouts
-- Embedded puzzles
-- AI-diffused visual identity
-- Persistent discovery and ownership
-
-Enigma blends **procedural generation, AI art, and multiplayer-ready systems** into one platform.
+Built with seeded maze generation, AI diffusion pipelines, Blazor gameplay, and a Python backend, Enigma is moving toward a collectible maze ecosystem instead of a one-off maze generator.
 
 ---
 
-## 🔑 Core Concepts
+## What Is Enigma?
 
-### 🌱 Seed-Based Generation
-- Deterministic maze creation
-- Infinite unique maps
-- Permanent identity per seed
+Enigma is a full-stack procedural maze project built around one rule:
 
-### 🧩 Puzzle-Embedded Exploration
-- Interactive puzzles within mazes
-- Discovery-driven gameplay
-- Progressive difficulty potential
+> No two valid maze seeds should resolve into the same maze identity.
 
-### 🎨 Diffusion-Based Visual Identity
-Instead of generic grid maps, Enigma generates **AI-stylized maze artwork**.
+Each maze can carry:
+- A deterministic layout
+- A puzzle set embedded into rooms
+- A generated visual theme
+- Ownership and discovery history
+- Marketplace and leaderboard data
 
-**Pipeline:**
-Seed → Noise Generation → Diffusion → Theme Refinement → Map Artwork
-
-
-Every maze gets a **visual fingerprint**.
+Enigma mixes procedural generation, AI-assisted art direction, social systems, and real-time co-op into one project.
 
 ---
 
-## 🚀 Features
+## Core Concepts
 
-### ✅ Implemented
-- Seed-based maze generation
-- Map auditing + validation
-- User authentication (signup/login)
-- Profile + discovered maps tracking
-- Leaderboard API
-- Containerized backend
-- Azure web deployment
+### Seed-Based Generation
+- Deterministic maze creation from a seed
+- Layout validation and auditing
+- Stable maze identity tied to the seed
 
-### 🧪 Frontend Progress
-- Login & signup UI
-- Leaderboard page
-- Profile page
-- Gameplay framework
-- Website navigation flow
+### Puzzle-Embedded Exploration
+- Room-gated progression
+- Difficulty-based puzzle sets
+- In-room interaction flow with puzzle overlays
+
+### Diffusion-Based Visual Identity
+Instead of showing plain maze diagrams, Enigma generates themed map artwork through an image pipeline.
+
+Pipeline:
+
+`Seed -> Noise Generation -> Diffusion -> Theme Refinement -> Map Artwork`
+
+Every maze is meant to feel identifiable, not disposable.
 
 ---
 
-## 🏗️ Architecture
+## Features
 
-### 🎨 Frontend
-- **Blazor (C#)**
-- Modular UI components
-- Maze gameplay engine
-- API abstraction layer
+### Implemented
+- Seed-based maze generation and validation
+- Single-player maze runs
+- Co-op session creation, invites, join, ready flow, and shared room progression
+- WebSocket-backed multiplayer session sync
+- Puzzle systems across easy, medium, and hard tiers
+- AI-generated themed map artwork
+- User signup, login, secure session flow, and protected routes
+- Profile pages, friends, friend requests, and player search
+- Map ownership, discovery tracking, and profile avatars from owned map art
+- Marketplace map buying and selling
+- Item shop, inventory, and run loadout selection
+- Leaderboards for maps and players
+- Loss handling for abandoned runs
+- Dockerized backend with MongoDB and Redis support
 
-### ⚙️ Backend
-- **Python**
-- Dockerized microservices
-- REST APIs for:
-  - Users
-  - Mazes
-  - Discoveries
-  - Leaderboards
+### In Active Development
+- Room-native puzzle interactions and more diegetic puzzle stations
+- More co-op polish around movement feel and session lifecycle
+- More theme and puzzle variety
+- Economy balancing and progression tuning
+- Production hosting hardening
 
-### 🗄️ Databases
+---
+
+## Architecture
+
+### Frontend
+- **Blazor / ASP.NET Core (C#)**
+- Shared app shell, protected routes, and session-aware navigation
+- Gameplay renderer for single-player and co-op rooms
+- API proxy layer for backend communication
+
+### Backend
+- **Python / FastAPI**
+- REST APIs for users, mazes, economy, marketplace, and multiplayer
+- Redis-backed co-op session state
+- Image generation and diffusion orchestration
+
+### Datastores
 - **MongoDB**
   - Users
   - Maps
-  - Discoveries
-  - Marketplace
-  - Item shop
-- **Redis (Planned)**
-  - Multiplayer state
-  - Real-time sync
+  - Marketplace listings
+  - Inventory and economy state
+- **Redis**
+  - Multiplayer sessions
+  - Invites
+  - Real-time room sync
 
-### ☁️ Hosting
-- Backend: Self-hosted container infrastructure  
-- Frontend: Microsoft Azure deployment
-
----
-
-## 🎨 Maze Themes
-
-Each maze is diffused into a themed visual world.
-
-### Discovered Themes
-- 🧠 Neural Membrane  
-- 🧸 Toy Tunnel  
-- 🏰 Dungeon  
-- 🌿 Hedge Maze  
-- 🚇 Sewer  
-- 🏚️ Haunted  
-- ❓ ???
-
-Some themes remain undiscovered or uncreated — adding mystery to the ecosystem. Community can vote on more in the future...
+### Hosting
+- Frontend host: Render
+- Backend: Dockerized Python service
+- Realtime: Redis
+- Current development flow supports local Docker and public backend tunneling
 
 ---
 
-## 🧪 Diffusion System
-- Yes, we use a diffusion model, but every image is engineered with actual psychology research. (we spent days doing it)
-- Each theme follows guidlines and science to achieve captivation and neural activity in the human brain.
+## Maze Themes
 
+Current curated theme labels:
+- Neural Membrane
+- Cartoon
+- Dungeon
+- Sewer
+- Hedge
+- Haunted House
+- ??? 
 
-The Enigma visual pipeline evolved through multiple stages:
+Themes are selected by the backend image pipeline and used throughout the UI for maps, profiles, and leaderboards.
+
+---
+
+## Diffusion System
+
+The map-art pipeline is not just a screenshot pass over maze data.
+
+Current image generation work includes:
+- Seed-derived structural noise generation
+- Theme-specific prompt packs
+- Theme-specific diffusion refinement pipelines
+- CPU/GPU-aware execution
+- Map image persistence and maintenance tooling
+
+The visual pipeline has evolved through several stages:
 
 | Stage | Result |
 |------|--------|
-| Grid rendering | Functional but boring |
-| Static noise | Unique but ugly |
-| Diffusion pipeline | Stylized procedural art |
-
-The diffusion engine transforms raw procedural noise into **compressible collectible art**.
+| Grid rendering | Functional but flat |
+| Static noise | Unique but visually weak |
+| Diffusion pipeline | Themed collectible map artwork |
 
 ---
 
-## 📊 Marketplace Vision
+## Marketplace And Economy
 
-Enigma introduces the concept of **maze value**.
+Enigma treats mazes as player-facing assets, not only levels.
 
-Planned systems:
-- Maze rarity tiers
-- Map trading
+Current economy systems include:
+- Map buying and selling
+- Map ownership transfer
+- Item shop and inventory
+- Maze Nuggets as the in-game currency
+- Bank dividend rules
+- Recycling flow for owned maps
 
-
-Each maze becomes a **digital artifact**.
-
----
-
-## 🛣️ Roadmap
-
-### 🎮 Gameplay
-- Real-time multiplayer (Redis co-op)
-- GPU acceleration for smoother rendering
-- Puzzle expansions
-- Difficulty tiers
-
-### 🧑‍🤝‍🧑 Social
-- Friends system
-- Expanded player profiles
-- Shared discoveries
-
-### 💰 Economy
-- Cosmetic skins
-
-### 🎨 Personalization
-- UI customization
-- Character skins
-- Theme unlocks
-
-### 🤖 AI Features
-- Humorous in-game narration (LLMs)
-- Dynamic storytelling
-- Procedural theme generation
+This is still being balanced. The current goal is to make the economy understandable first, then tune scarcity and pricing.
 
 ---
 
-## ⚡ Performance Goals
+## Roadmap
 
-- GPU-accelerated rendering (when available)
-- Optimized CPU fallback
-- Smooth cross-hardware experience
+### Gameplay
+- More room-native puzzles that use the full game screen
+- Stronger puzzle interaction points in-room
+- Better puzzle readability and less UI clutter
+- Additional difficulty tuning and puzzle expansion
+
+### Multiplayer
+- Smoother remote player interpolation
+- More robust session recovery and abandon detection
+- More co-op-specific puzzle content
+- Better live feedback in co-op rooms
+
+### Social
+- More profile polish
+- Better friend and activity visibility
+- More discoverability around player-created value
+
+### Economy
+- Better balance for map value, rewards, and item usefulness
+- More item variety with clearer in-run purpose
+- Continued marketplace polish
+
+### AI And Content
+- More theme coverage
+- Better image-generation consistency
+- More authored prompt-pack control and curation
 
 ---
 
-## 🌐 Tech Stack
+## Performance Goals
+
+- Fast room rendering on normal desktop hardware
+- GPU acceleration for image generation when available
+- Stable CPU fallback when GPU is unavailable
+- Responsive co-op state updates without destroying play feel
+
+---
+
+## Tech Stack
 
 | Layer | Technology |
 |------|------------|
-| Frontend | Blazor (C#) |
-| Backend | Python |
+| Frontend | Blazor / ASP.NET Core |
+| Backend | Python / FastAPI |
 | Containers | Docker |
 | Database | MongoDB |
-| Realtime | Redis (planned) |
-| Hosting | Azure |
+| Realtime | Redis |
+| Image Generation | Diffusion pipeline |
+| Hosting | Self-hosted / container-based development flow |
 
 ---
 
-## 🎯 Vision
+## Current Focus
 
-Enigma aims to build:
+The project is currently centered on:
+- Making the game screen feel better to actually play
+- Moving more puzzle logic into room interaction instead of side-panel UI
+- Making more engaging puzzles and gameplay
+- Tightening co-op synchronization and abandon handling
+- Keeping profile, marketplace, and economy systems coherent as features expand
+- Actual value for assets...
 
-- A universe of infinite unique mazes  
-- AI-generated collectible worlds  
-- A hybrid of gaming, generative art, and ownership  
-
-Every maze is:
-- Discoverable  
-- Ownable  
-- Remembered  
-
+This is no longer just a login-and-leaderboard prototype. The project already has a playable loop, persistent accounts, map ownership, economy systems, and live co-op, but it still needs refinement in the play experience.
 
 ---
 
-## 🔮 Philosophy
+## Vision
 
-Enigma isn’t just a maze generator.
+Enigma is aiming at:
+- Infinite unique maze identities
+- Collectible AI-themed worlds
+- Social discovery and ownership
+- A maze game that feels authored even when it is generated
 
-It’s a platform where:
-- Algorithms create mystery  
-- AI creates identity  
-- Players create value  
+Every maze should be:
+- Discoverable
+- Ownable
+- Remembered
 
-> Every maze is an enigma...
+---
+
+## Philosophy
+
+Enigma is not just a maze generator.
+
+It is a project where:
+- Algorithms create structure
+- AI creates identity
+- Players create value
+
+> Every maze is an enigma.
+
+---
+
+## Support
+
+If you want to support development:
+
+**Buy us an Energy Drink:**  
+https://buymeacoffee.com/enigmamaze
