@@ -200,7 +200,8 @@
             }
 
             await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
-            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session!.Username }, false);
+            var rememberSession = await JS.InvokeAsync<bool>("enigmaGame.isUserSessionRemembered");
+            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session!.Username }, rememberSession);
             await EnsureTutorialStateAsync(session);
             await InvokeAsync(StateHasChanged);
         }

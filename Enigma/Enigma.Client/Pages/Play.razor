@@ -144,6 +144,7 @@
     private bool HasError { get; set; }
     private bool IsFullscreenPromptOpen { get; set; }
     private bool DoNotAskFullscreenAgain { get; set; }
+    private string FullscreenPreference { get; set; } = string.Empty;
     private string StatusMessage { get; set; } = string.Empty;
     private string? PendingGameNavigationUrl { get; set; }
     private LoginUserSummary? Session { get; set; }
@@ -164,7 +165,8 @@
             return;
         }
 
-        DoNotAskFullscreenAgain = await JS.InvokeAsync<bool>("enigmaGame.getFullscreenOptOut");
+        FullscreenPreference = await JS.InvokeAsync<string>("enigmaGame.getFullscreenPreference");
+        DoNotAskFullscreenAgain = !string.IsNullOrWhiteSpace(FullscreenPreference);
         await LoadInventoryAsync();
         await InvokeAsync(StateHasChanged);
     }
@@ -271,12 +273,21 @@
 
         await JS.InvokeVoidAsync("enigmaGame.setRunLoadout", loadout);
 
-        if (DoNotAskFullscreenAgain)
+        FullscreenPreference = await JS.InvokeAsync<string>("enigmaGame.getFullscreenPreference");
+        if (string.Equals(FullscreenPreference, "fullscreen", StringComparison.OrdinalIgnoreCase))
         {
-            NavigationManager.NavigateTo(PendingGameNavigationUrl);
+            await JS.InvokeAsync<bool>("enigmaGame.requestFullscreen", string.Empty);
+            await StartRunNavigationAsync();
             return;
         }
 
+        if (string.Equals(FullscreenPreference, "windowed", StringComparison.OrdinalIgnoreCase))
+        {
+            await StartRunNavigationAsync();
+            return;
+        }
+
+        DoNotAskFullscreenAgain = false;
         IsFullscreenPromptOpen = true;
         await InvokeAsync(StateHasChanged);
     }
@@ -285,10 +296,15 @@
     {
         if (DoNotAskFullscreenAgain)
         {
-            await JS.InvokeVoidAsync("enigmaGame.setFullscreenOptOut", true);
+            FullscreenPreference = "fullscreen";
+            await JS.InvokeVoidAsync("enigmaGame.setFullscreenPreference", FullscreenPreference);
+        }
+        else
+        {
+            FullscreenPreference = string.Empty;
         }
 
-        await JS.InvokeVoidAsync("enigmaGame.requestFullscreen", string.Empty);
+        await JS.InvokeAsync<bool>("enigmaGame.requestFullscreen", string.Empty);
         await StartRunNavigationAsync();
     }
 
@@ -296,7 +312,12 @@
     {
         if (DoNotAskFullscreenAgain)
         {
-            await JS.InvokeVoidAsync("enigmaGame.setFullscreenOptOut", true);
+            FullscreenPreference = "windowed";
+            await JS.InvokeVoidAsync("enigmaGame.setFullscreenPreference", FullscreenPreference);
+        }
+        else
+        {
+            FullscreenPreference = string.Empty;
         }
 
         await StartRunNavigationAsync();

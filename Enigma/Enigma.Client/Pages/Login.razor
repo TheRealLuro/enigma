@@ -1,5 +1,6 @@
 @page "/"
 @rendermode InteractiveWebAssembly
+@using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
@@ -85,11 +86,19 @@
             return;
         }
 
+        rememberMe = await JS.InvokeAsync<bool>("enigmaGame.isUserSessionRemembered");
+        var rememberedSession = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        if (!string.IsNullOrWhiteSpace(rememberedSession?.Username))
+        {
+            user.Username = rememberedSession.Username;
+            await InvokeAsync(StateHasChanged);
+        }
+
         var session = await Api.GetSessionAsync();
         if (session is not null && !string.IsNullOrWhiteSpace(session.Username))
         {
             await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
-            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = session.Username }, false);
+            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = session.Username }, rememberMe);
             NavigationManager.NavigateTo("/home", replace: true);
         }
     }

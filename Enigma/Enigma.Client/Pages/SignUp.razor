@@ -1,4 +1,5 @@
 @page "/register"
+@using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
@@ -90,6 +91,26 @@
     bool ShowPassword;
 
     string? errorMessage;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        rememberMe = await JS.InvokeAsync<bool>("enigmaGame.isUserSessionRemembered");
+        var session = await Api.GetSessionAsync();
+        if (session is not null && !string.IsNullOrWhiteSpace(session.Username))
+        {
+            await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
+            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = session.Username }, rememberMe);
+            NavigationManager.NavigateTo("/home", replace: true);
+            return;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
 
     async Task OnRegisterClick()
     {

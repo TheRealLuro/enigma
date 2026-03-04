@@ -4459,9 +4459,13 @@ h1:focus {
     padding: 0;
 }
 
-.profile-avatar-crop-shell img,
 .profile-avatar-image {
     display: block;
+    position: absolute;
+    inset: 0;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center center;
 }
 
 .profile-avatar-fallback {

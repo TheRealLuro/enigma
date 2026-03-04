@@ -7,6 +7,7 @@
     const pendingLossDraftKey = "enigma.game.pending-loss-draft";
     const runLoadoutKey = "enigma.game.run-loadout";
     const fullscreenOptOutKey = "enigma.game.fullscreen-opt-out";
+    const fullscreenPreferenceKey = "enigma.game.fullscreen-preference";
     const tutorialRequestKey = "enigma.tutorial.requested";
 
     let dotNetRef = null;
@@ -448,6 +449,10 @@
             return readStoredJson(userStorageKey);
         },
 
+        isUserSessionRemembered: function () {
+            return hasStorageItem("local", userStorageKey) || hasStorageItem("local", playerStorageKey);
+        },
+
         refreshUserSession: function (session) {
             refreshStoredJson(userStorageKey, session);
         },
@@ -598,11 +603,47 @@
         },
 
         setFullscreenOptOut: function (value) {
-            setStorageItem("local", fullscreenOptOutKey, value ? "true" : "false");
+            if (value) {
+                setStorageItem("local", fullscreenOptOutKey, "true");
+                return;
+            }
+
+            removeStorageItem("local", fullscreenOptOutKey);
+            removeStorageItem("local", fullscreenPreferenceKey);
         },
 
         getFullscreenOptOut: function () {
             return getStorageItem("local", fullscreenOptOutKey) === "true";
+        },
+
+        setFullscreenPreference: function (mode) {
+            const normalizedMode = String(mode || "").trim().toLowerCase();
+            if (normalizedMode !== "fullscreen" && normalizedMode !== "windowed") {
+                removeStorageItem("local", fullscreenPreferenceKey);
+                removeStorageItem("local", fullscreenOptOutKey);
+                return;
+            }
+
+            setStorageItem("local", fullscreenPreferenceKey, normalizedMode);
+            setStorageItem("local", fullscreenOptOutKey, "true");
+        },
+
+        getFullscreenPreference: function () {
+            const storedPreference = String(getStorageItem("local", fullscreenPreferenceKey) || "").trim().toLowerCase();
+            if (storedPreference === "fullscreen" || storedPreference === "windowed") {
+                return storedPreference;
+            }
+
+            if (getStorageItem("local", fullscreenOptOutKey) === "true") {
+                return "windowed";
+            }
+
+            return "";
+        },
+
+        clearFullscreenPreference: function () {
+            removeStorageItem("local", fullscreenPreferenceKey);
+            removeStorageItem("local", fullscreenOptOutKey);
         },
 
         startTutorial: function () {
