@@ -227,8 +227,18 @@ else
 
                             @if (IsNearPuzzleConsole())
                             {
-                                <div class="enigma-console-prompt">Press E to access the puzzle interface.</div>
+                                <div class="enigma-console-prompt" style="@GetPuzzleConsolePromptStyle()">Press E to access the puzzle interface.</div>
                             }
+                        }
+
+                        @if (ShowRoomInteractionProgress)
+                        {
+                            <div class="enigma-room-interaction-progress" style="@GetRoomInteractionProgressStyle()">
+                                <span class="enigma-room-interaction-progress-label">@GetRoomInteractionProgressLabel()</span>
+                                <div class="enigma-room-interaction-progress-track">
+                                    <div class="enigma-room-interaction-progress-fill" style="@GetRoomInteractionProgressFillStyle()"></div>
+                                </div>
+                            </div>
                         }
 
                         <div class="enigma-stage-run-status">
@@ -286,7 +296,7 @@ else
                 </div>
 
                 <div class="enigma-room-footer">
-                    <span>@(CanInteractWithPuzzleConsole ? "Move with WASD or the arrow keys. Walk to the console and press E to work the room puzzle." : (IsCoopRun ? "Move with WASD or the arrow keys. Both players must vote the same doorway to change rooms." : "Move with WASD or the arrow keys."))</span>
+                    <span>@MovementHintText</span>
                     <span>@((IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState.Puzzle.IsCompleted) ? (IsCoopRun ? "Room solved. Both players can now vote to leave." : "Room solved. Exit doors unlocked.") : "Room locked until this puzzle is solved.")</span>
                 </div>
 
@@ -1272,28 +1282,37 @@ else
                             </div>
                         </div>
                         <div class="enigma-yarn-board">
+                            <div class="enigma-yarn-column-label left">Fixed Anchors</div>
+                            <div class="enigma-yarn-column-label right">Swap Endpoints</div>
                             <svg viewBox="0 0 100 100" class="enigma-yarn-svg" aria-hidden="true">
-                                @foreach (var line in GetYarnLineSegments(yarn))
+                                @for (var leftIndex = 0; leftIndex < yarn.StrandOrder.Length; leftIndex++)
                                 {
-                                    <line x1="@line.X1" y1="@line.Y1" x2="@line.X2" y2="@line.Y2" class="enigma-yarn-line"></line>
+                                    var rightSlot = yarn.GetRightSlotForLeftIndex(leftIndex);
+                                    <path d="@GetYarnPathData(leftIndex, yarn.StrandOrder.Length, rightSlot)"
+                                          class="@GetYarnLineClass(yarn, leftIndex)"
+                                          style="@GetYarnLineStyle(yarn, leftIndex)"></path>
                                 }
                             </svg>
                             @for (var index = 0; index < yarn.StrandOrder.Length; index++)
                             {
                                 <div class="enigma-yarn-anchor left" style="top: @($"{GetYarnNodeTopPercent(index, yarn.StrandOrder.Length):F2}%");">@(index + 1)</div>
                             }
-                            @for (var index = 0; index < yarn.StrandOrder.Length; index++)
+                            @for (var slotIndex = 0; slotIndex < yarn.StrandOrder.Length; slotIndex++)
                             {
-                                var strandIndex = index;
-                                var isSelected = yarn.SelectedIndex == index;
+                                var strandIndex = GetLeftIndexForRightSlot(yarn, slotIndex);
+                                var isSelected = yarn.SelectedIndex == strandIndex;
+                                var isCrossed = HasYarnCrossing(yarn, strandIndex);
+                                <div class="enigma-yarn-slot" style="top: @($"{GetYarnNodeTopPercent(slotIndex, yarn.StrandOrder.Length):F2}%");">@(slotIndex + 1)</div>
                                 <button class="enigma-yarn-anchor right @(isSelected ? "selected" : string.Empty)"
-                                        style="top: @($"{GetYarnNodeTopPercent(index, yarn.StrandOrder.Length):F2}%");"
+                                        style="top: @($"{GetYarnNodeTopPercent(slotIndex, yarn.StrandOrder.Length):F2}%");"
+                                        data-crossed="@(isCrossed ? "true" : "false")"
                                         @onclick="(() => SelectYarnStrand(strandIndex))">
-                                    @yarn.StrandOrder[index]
+                                    <span class="enigma-yarn-anchor-main">@(strandIndex + 1)</span>
+                                    <span class="enigma-yarn-anchor-sub">to @(slotIndex + 1)</span>
                                 </button>
                             }
                         </div>
-                        <p class="enigma-helper">Swap the right-side endpoints until every strand runs straight without crossing.</p>
+                        <p class="enigma-helper">Select two right-side endpoint tags to swap their strand destinations until every path runs cleanly.</p>
                     }
                     else if (CurrentRoomState.Puzzle is CrossingPathPuzzle crossing)
                     {

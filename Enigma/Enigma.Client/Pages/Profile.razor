@@ -188,7 +188,7 @@ else
                                         @if (IsOwnProfile)
                                         {
                                             <div class="profile-map-actions">
-                                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(map.MapImage)" @onclick="() => UseMapForPictureAsync(map)">Use for Picture</button>
+                                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="() => UseMapForPictureAsync(map)">Use for Picture</button>
                                                 @if (CanRecycleMap(map))
                                                 {
                                                     <button class="btn btn-danger" type="button" disabled="@IsActionBusy" @onclick="() => RecycleMapAsync(map)">Recycle</button>
@@ -293,7 +293,7 @@ else
                             else
                             {
                                 <div><label class="form-label">Source Map</label><InputSelect class="form-control" @bind-Value="AvatarMapName">@foreach (var map in AvatarSourceOptions){<option value="@map.MapName">@map.MapName</option>}</InputSelect></div>
-                                <button class="btn btn-primary" type="button" disabled="@IsActionBusy || AvatarSourceOptions.Count == 0" @onclick="UpdateAvatarAsync">@(IsActionBusy ? "Saving..." : "Save Profile Picture")</button>
+                                <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="UpdateAvatarAsync">@(IsActionBusy ? "Saving..." : "Save Profile Picture")</button>
                             }
                         </div>
                     </div>

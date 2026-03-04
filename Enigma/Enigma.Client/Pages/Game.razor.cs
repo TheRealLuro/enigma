@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Enigma.Client.Models.Gameplay;
 using Enigma.Client.Services;
 using Microsoft.AspNetCore.Components;
@@ -10,14 +11,34 @@ namespace Enigma.Client.Pages;
 public partial class Game : ComponentBase, IAsyncDisposable
 {
     private sealed record PuzzleGuide(string Goal, string Controls, string Success);
+    private sealed record RoomInteractionProgressState(PlayAreaRect AnchorRect, double Progress, string Label);
     private const double RoomSize = 1080d;
     private const double PlayerSize = 60d;
     private const double PlayerSpeed = 380d;
     private const double DoorWidth = 240d;
     private const double WallThickness = 42d;
-    private static readonly PlayAreaRect PuzzleConsoleBounds = new(72d, 882d, 116d, 116d);
+    private const double PuzzleConsoleSize = 116d;
+    private static readonly PlayAreaRect[] PuzzleConsoleCandidates =
+    [
+        new(72d, 882d, PuzzleConsoleSize, PuzzleConsoleSize),
+        new(72d, 482d, PuzzleConsoleSize, PuzzleConsoleSize),
+        new(72d, 82d, PuzzleConsoleSize, PuzzleConsoleSize),
+        new(892d, 82d, PuzzleConsoleSize, PuzzleConsoleSize),
+        new(892d, 482d, PuzzleConsoleSize, PuzzleConsoleSize),
+    ];
     private const string CompletionSummaryStorageKey = "enigma.game.summary";
     private static readonly TimeSpan PlayerStateSyncInterval = TimeSpan.FromMilliseconds(120);
+    private static readonly string[] YarnStrandColors =
+    [
+        "#82c8ff",
+        "#91f0d8",
+        "#ffd173",
+        "#ff9dbe",
+        "#bca6ff",
+        "#88e5ff",
+        "#9cf28f",
+        "#ffb58b",
+    ];
 
     private readonly Stopwatch _sessionStopwatch = new();
     private readonly HashSet<string> _pressedKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -34,6 +55,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private bool _allowRouteExit;
     private bool _jsReady;
     private bool _playerStateDirty = true;
+    private bool _roomInteractionWasActive;
 
     [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
@@ -115,7 +137,15 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected bool CanShowRoom => ParsedSeed is not null && CurrentRoom is not null && CurrentRoomState is not null;
     protected bool HasPuzzleOverlayContent => IsCoopRun ? HasCoopPuzzle : CurrentRoomState?.Puzzle is not null;
     protected bool IsCurrentPuzzleSolved => IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState?.Puzzle.IsCompleted == true;
-    protected bool CanInteractWithPuzzleConsole => CanShowRoom && HasPuzzleOverlayContent && !IsCurrentPuzzleSolved;
+    protected bool UsesRoomNativePuzzleInteraction => !IsCoopRun && CurrentRoomState?.Puzzle is PressurePlatePuzzle
+        or PhaseRelayPuzzle
+        or HarmonicPhasePuzzle
+        or WeightGridPuzzleBase
+        or ZoneActivationPuzzle
+        or DelayedActivationSequencePuzzle
+        or RecursiveActivationSequencePuzzle
+        or CrossingPathPuzzle;
+    protected bool CanInteractWithPuzzleConsole => CanShowRoom && HasPuzzleOverlayContent && !IsCurrentPuzzleSolved && !UsesRoomNativePuzzleInteraction;
     protected bool PortalReady => IsCoopRun
         ? CurrentRoomState?.Definition.Kind == MazeRoomKind.Finish && IsCurrentCoopRoomSolved
         : CurrentRoomState?.FinishPortalVisible == true;
@@ -317,7 +347,20 @@ public partial class Game : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    protected string GetPuzzleConsoleStyle() => GetRectStyle(PuzzleConsoleBounds);
+    protected string GetPuzzleConsoleStyle() => GetRectStyle(GetCurrentPuzzleConsoleBounds());
+
+    protected string GetPuzzleConsolePromptStyle()
+    {
+        var consoleBounds = GetCurrentPuzzleConsoleBounds();
+        const double promptWidth = 344d;
+        const double promptHeight = 42d;
+        var left = Math.Clamp(consoleBounds.CenterX - (promptWidth / 2d), 22d, RoomSize - promptWidth - 22d);
+        var top = consoleBounds.Y >= RoomSize / 2d
+            ? consoleBounds.Y - promptHeight - 16d
+            : consoleBounds.Bottom + 16d;
+        top = Math.Clamp(top, 22d, RoomSize - promptHeight - 22d);
+        return $"left: {ToPercent(left)}%; top: {ToPercent(top)}%;";
+    }
 
     protected bool IsNearPuzzleConsole()
     {
@@ -328,11 +371,52 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         var playerCenterX = PlayerX + (PlayerSize / 2d);
         var playerCenterY = PlayerY + (PlayerSize / 2d);
-        var consoleCenterX = PuzzleConsoleBounds.X + (PuzzleConsoleBounds.Width / 2d);
-        var consoleCenterY = PuzzleConsoleBounds.Y + (PuzzleConsoleBounds.Height / 2d);
+        var consoleBounds = GetCurrentPuzzleConsoleBounds();
+        var consoleCenterX = consoleBounds.CenterX;
+        var consoleCenterY = consoleBounds.CenterY;
         var distance = Math.Sqrt(Math.Pow(playerCenterX - consoleCenterX, 2d) + Math.Pow(playerCenterY - consoleCenterY, 2d));
         return distance <= 165d;
     }
+
+    protected bool ShowRoomInteractionProgress => TryGetRoomInteractionProgressState(out _);
+
+    protected string GetRoomInteractionProgressStyle()
+    {
+        if (!TryGetRoomInteractionProgressState(out var progressState))
+        {
+            return string.Empty;
+        }
+
+        var width = Math.Clamp(Math.Max(progressState.AnchorRect.Width + 48d, 180d), 180d, 260d);
+        var left = Math.Clamp(progressState.AnchorRect.CenterX - (width / 2d), 22d, RoomSize - width - 22d);
+        var height = 56d;
+        var top = progressState.AnchorRect.Y >= RoomSize / 2d
+            ? progressState.AnchorRect.Y - height - 18d
+            : progressState.AnchorRect.Bottom + 18d;
+        top = Math.Clamp(top, 22d, RoomSize - height - 22d);
+        return $"left: {ToPercent(left)}%; top: {ToPercent(top)}%; width: {ToPercent(width)}%;";
+    }
+
+    protected string GetRoomInteractionProgressFillStyle()
+    {
+        if (!TryGetRoomInteractionProgressState(out var progressState))
+        {
+            return "width: 0%;";
+        }
+
+        return $"width: {Math.Round(Math.Clamp(progressState.Progress, 0d, 1d) * 100d, 2)}%;";
+    }
+
+    protected string GetRoomInteractionProgressLabel() =>
+        TryGetRoomInteractionProgressState(out var progressState) ? progressState.Label : string.Empty;
+
+    protected string MovementHintText => CanInteractWithPuzzleConsole
+        ? "Move with WASD or the arrow keys. Walk to the console and press E to work the room puzzle."
+        : UsesRoomNativePuzzleInteraction
+            ? "Move with WASD or the arrow keys. Solve this room by stepping onto or moving the active room elements."
+            : IsCoopRun
+                ? "Move with WASD or the arrow keys. Both players must vote the same doorway to change rooms."
+                : "Move with WASD or the arrow keys.";
 
     protected void TogglePuzzleOverlay()
     {
@@ -400,6 +484,81 @@ public partial class Game : ComponentBase, IAsyncDisposable
         {
             yield return (14d, GetYarnNodeCenter(index, puzzle.StrandOrder.Length), 86d, GetYarnNodeCenter(puzzle.GetRightSlotForLeftIndex(index), puzzle.StrandOrder.Length));
         }
+    }
+
+    protected string GetYarnPathData(int leftIndex, int totalCount, int rightSlotIndex)
+    {
+        var startX = 18d;
+        var endX = 82d;
+        var startY = GetYarnNodeCenter(leftIndex, totalCount);
+        var endY = GetYarnNodeCenter(rightSlotIndex, totalCount);
+        var controlLeftX = 38d;
+        var controlRightX = 62d;
+
+        return FormattableString.Invariant(
+            $"M {startX:F2} {startY:F2} C {controlLeftX:F2} {startY:F2}, {controlRightX:F2} {endY:F2}, {endX:F2} {endY:F2}");
+    }
+
+    protected string GetYarnLineClass(YarnUntanglePuzzle puzzle, int leftIndex)
+    {
+        var classes = new List<string> { "enigma-yarn-line" };
+        if (HasYarnCrossing(puzzle, leftIndex))
+        {
+            classes.Add("crossed");
+        }
+
+        if (puzzle.SelectedIndex == leftIndex)
+        {
+            classes.Add("selected");
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    protected string GetYarnLineStyle(YarnUntanglePuzzle puzzle, int leftIndex)
+    {
+        var color = YarnStrandColors[leftIndex % YarnStrandColors.Length];
+        var opacity = puzzle.SelectedIndex == leftIndex ? 1d : HasYarnCrossing(puzzle, leftIndex) ? 0.96d : 0.82d;
+        return FormattableString.Invariant($"stroke: {color}; opacity: {opacity:F2};");
+    }
+
+    protected int GetLeftIndexForRightSlot(YarnUntanglePuzzle puzzle, int rightSlotIndex)
+    {
+        for (var leftIndex = 0; leftIndex < puzzle.StrandOrder.Length; leftIndex++)
+        {
+            if (puzzle.GetRightSlotForLeftIndex(leftIndex) == rightSlotIndex)
+            {
+                return leftIndex;
+            }
+        }
+
+        return rightSlotIndex;
+    }
+
+    protected bool HasYarnCrossing(YarnUntanglePuzzle puzzle, int leftIndex)
+    {
+        if (leftIndex < 0 || leftIndex >= puzzle.StrandOrder.Length)
+        {
+            return false;
+        }
+
+        var targetOrder = puzzle.StrandOrder[leftIndex];
+        for (var otherIndex = 0; otherIndex < puzzle.StrandOrder.Length; otherIndex++)
+        {
+            if (otherIndex == leftIndex)
+            {
+                continue;
+            }
+
+            var otherOrder = puzzle.StrandOrder[otherIndex];
+            if ((leftIndex < otherIndex && targetOrder > otherOrder) ||
+                (leftIndex > otherIndex && targetOrder < otherOrder))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected double GetYarnNodeTopPercent(int index, int totalCount)
@@ -769,6 +928,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         if (!IsCoopRun)
         {
+            var wasCurrentPuzzleCompleted = CurrentRoomState.Puzzle.IsCompleted;
             CurrentRoomState.Puzzle.Update(new PuzzleUpdateContext
             {
                 PlayerBounds = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize),
@@ -793,6 +953,24 @@ public partial class Game : ComponentBase, IAsyncDisposable
                     _playerStateDirty = true;
                     ShowBanner($"Puzzle solved. +{reward} MN", 1.5d);
                 }
+            }
+
+            if (_jsReady && TryIsRoomInteractionActive())
+            {
+                if (!_roomInteractionWasActive)
+                {
+                    await JS.InvokeVoidAsync("enigmaGame.playDing", "engage");
+                    _roomInteractionWasActive = true;
+                }
+            }
+            else
+            {
+                _roomInteractionWasActive = false;
+            }
+
+            if (_jsReady && UsesRoomNativePuzzleInteraction && !wasCurrentPuzzleCompleted && CurrentRoomState.Puzzle.IsCompleted)
+            {
+                await JS.InvokeVoidAsync("enigmaGame.playDing", "success");
             }
         }
         else if (CurrentCoopPuzzle?.Completed == true && !IsCurrentCoopRoomSolved)
@@ -898,20 +1076,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return;
         }
 
-        if (!IsCoopRun &&
-            ((CurrentRoomState?.Puzzle is UnlockPatternPuzzle unlockPattern && !unlockPattern.IsCompleted) ||
-             (CurrentRoomState?.Puzzle is DirectionalEchoPuzzle directionalEcho && !directionalEcho.IsCompleted) ||
-             (CurrentRoomState?.Puzzle is DimensionalPatternShiftPuzzle dimensionalShift && !dimensionalShift.IsCompleted)))
-        {
-            IsMoving = false;
-            if (previousMoving)
-            {
-                _playerStateDirty = true;
-            }
-
-            return;
-        }
-
         var horizontal = (IsPressed("ArrowRight", "KeyD") ? 1 : 0) - (IsPressed("ArrowLeft", "KeyA") ? 1 : 0);
         var vertical = (IsPressed("ArrowDown", "KeyS") ? 1 : 0) - (IsPressed("ArrowUp", "KeyW") ? 1 : 0);
 
@@ -957,6 +1121,12 @@ public partial class Game : ComponentBase, IAsyncDisposable
             }
         }
 
+        if (CanInteractWithPuzzleConsole && IntersectsPuzzleConsoleBase(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize)))
+        {
+            PlayerX = previousX;
+            PlayerY = previousY;
+        }
+
         if (TryTransition(PlayerDirection.Left) ||
             TryTransition(PlayerDirection.Right) ||
             TryTransition(PlayerDirection.Up) ||
@@ -966,8 +1136,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return;
         }
 
-        PlayerX = Math.Clamp(PlayerX, 0d, RoomSize - PlayerSize);
-        PlayerY = Math.Clamp(PlayerY, 0d, RoomSize - PlayerSize);
+        ClampInsideRoomWalls();
         MarkPlayerStateDirty(previousX, previousY, previousFacing, previousMoving, previousRoom);
     }
 
@@ -1032,6 +1201,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         CurrentRoom = nextRoom;
         CurrentRoomState = _roomStates[nextRoom.Coordinates];
+        _roomInteractionWasActive = false;
         ClosePuzzleOverlay();
         switch (direction)
         {
@@ -1049,8 +1219,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 break;
         }
 
-        PlayerX = Math.Clamp(PlayerX, 0d, RoomSize - PlayerSize);
-        PlayerY = Math.Clamp(PlayerY, 0d, RoomSize - PlayerSize);
+        ClampInsideRoomWalls();
         ShowBanner($"Entered room {CurrentRoom.Coordinates}", 0.8d);
         return true;
     }
@@ -1097,19 +1266,35 @@ public partial class Game : ComponentBase, IAsyncDisposable
         switch (direction)
         {
             case PlayerDirection.Left:
-                PlayerX = 0d;
+                PlayerX = WallThickness;
                 break;
             case PlayerDirection.Right:
-                PlayerX = RoomSize - PlayerSize;
+                PlayerX = RoomSize - PlayerSize - WallThickness;
                 break;
             case PlayerDirection.Up:
-                PlayerY = 0d;
+                PlayerY = WallThickness;
                 break;
             case PlayerDirection.Down:
-                PlayerY = RoomSize - PlayerSize;
+                PlayerY = RoomSize - PlayerSize - WallThickness;
                 break;
         }
     }
+
+    private void ClampInsideRoomWalls()
+    {
+        var minX = CanUseDoorBand(PlayerDirection.Left) ? 0d : WallThickness;
+        var maxX = CanUseDoorBand(PlayerDirection.Right) ? RoomSize - PlayerSize : RoomSize - PlayerSize - WallThickness;
+        var minY = CanUseDoorBand(PlayerDirection.Up) ? 0d : WallThickness;
+        var maxY = CanUseDoorBand(PlayerDirection.Down) ? RoomSize - PlayerSize : RoomSize - PlayerSize - WallThickness;
+
+        PlayerX = Math.Clamp(PlayerX, minX, maxX);
+        PlayerY = Math.Clamp(PlayerY, minY, maxY);
+    }
+
+    private bool CanUseDoorBand(PlayerDirection direction) =>
+        CurrentRoom is not null &&
+        CurrentRoom.Connections.HasDoor(direction) &&
+        IsWithinDoorway(direction);
 
     private void CenterPlayer()
     {
@@ -1144,6 +1329,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         _pressedKeys.Clear();
         _lastPlayerStateSyncUtc = DateTime.MinValue;
         _playerStateDirty = true;
+        _roomInteractionWasActive = false;
     }
 
     private static string FormatElapsed(TimeSpan elapsed) =>
@@ -1164,6 +1350,100 @@ public partial class Game : ComponentBase, IAsyncDisposable
     }
 
     private static double ToPercent(double value) => Math.Round((value / RoomSize) * 100d, 4);
+
+    private bool TryGetRoomInteractionProgressState(out RoomInteractionProgressState progressState)
+    {
+        progressState = default!;
+        if (CurrentRoomState?.Puzzle is null)
+        {
+            return false;
+        }
+
+        switch (CurrentRoomState.Puzzle)
+        {
+            case PressurePlatePuzzle pressurePlate when pressurePlate.Progress > 0d:
+                progressState = new(pressurePlate.PlateBounds, pressurePlate.Progress, "Plate Charge");
+                return true;
+            case ZoneActivationPuzzle zoneActivation when zoneActivation.CurrentZoneIndex < zoneActivation.Zones.Count && zoneActivation.HoldProgress > 0d:
+                progressState = new(
+                    zoneActivation.Zones[zoneActivation.CurrentZoneIndex],
+                    zoneActivation.HoldProgress,
+                    $"Beacon {zoneActivation.CurrentZoneIndex + 1}/{zoneActivation.Zones.Count}");
+                return true;
+            case DelayedActivationSequencePuzzle delayed when !delayed.IsWaitingForNextZone && delayed.HoldProgress > 0d:
+                progressState = new(
+                    delayed.Zones[delayed.ActiveZoneIndex],
+                    delayed.HoldProgress,
+                    $"Zone {delayed.CurrentStepIndex + 1}/{delayed.Order.Count}");
+                return true;
+            case RecursiveActivationSequencePuzzle recursive when recursive.CurrentZoneIndex >= 0 && recursive.HoldProgress > 0d:
+                progressState = new(
+                    recursive.Zones[recursive.CurrentZoneIndex],
+                    recursive.HoldProgress,
+                    $"Zone {recursive.CompletedOrder.Count + 1}");
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private bool TryIsRoomInteractionActive()
+    {
+        if (CurrentRoomState?.Puzzle is null)
+        {
+            return false;
+        }
+
+        var playerBounds = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
+        return CurrentRoomState.Puzzle switch
+        {
+            PressurePlatePuzzle pressurePlate => pressurePlate.PlateBounds.Intersects(playerBounds),
+            ZoneActivationPuzzle zoneActivation when zoneActivation.CurrentZoneIndex < zoneActivation.Zones.Count =>
+                zoneActivation.Zones[zoneActivation.CurrentZoneIndex].Intersects(playerBounds),
+            DelayedActivationSequencePuzzle delayed when !delayed.IsWaitingForNextZone =>
+                delayed.Zones[delayed.ActiveZoneIndex].Intersects(playerBounds),
+            RecursiveActivationSequencePuzzle recursive when recursive.CurrentZoneIndex >= 0 =>
+                recursive.Zones[recursive.CurrentZoneIndex].Intersects(playerBounds),
+            _ => false,
+        };
+    }
+
+    private PlayAreaRect GetCurrentPuzzleConsoleBounds()
+    {
+        if (CurrentRoom is null || ParsedSeed is null)
+        {
+            return PuzzleConsoleCandidates[0];
+        }
+
+        var stableKey = $"{ParsedSeed.RawSeed}|{CurrentRoom.Coordinates.X}|{CurrentRoom.Coordinates.Y}|{CurrentRoom.ConnectionKey}|{CurrentRoom.PuzzleKey}";
+        var candidateIndex = GetStableHash(stableKey) % PuzzleConsoleCandidates.Length;
+        return PuzzleConsoleCandidates[candidateIndex];
+    }
+
+    private static PlayAreaRect GetPuzzleConsoleBaseBounds(PlayAreaRect consoleBounds) =>
+        new(
+            consoleBounds.X + (consoleBounds.Width * 0.06d),
+            consoleBounds.Y + (consoleBounds.Height * 0.68d),
+            consoleBounds.Width * 0.88d,
+            consoleBounds.Height * 0.24d);
+
+    private bool IntersectsPuzzleConsoleBase(PlayAreaRect playerBounds) =>
+        GetPuzzleConsoleBaseBounds(GetCurrentPuzzleConsoleBounds()).Intersects(playerBounds);
+
+    private static int GetStableHash(string value)
+    {
+        unchecked
+        {
+            var hash = 2166136261u;
+            foreach (var character in value)
+            {
+                hash ^= character;
+                hash *= 16777619u;
+            }
+
+            return (int)(hash & 0x7FFFFFFF);
+        }
+    }
 
     protected static string GetDirectionArrow(PlayerDirection direction) => direction switch
     {

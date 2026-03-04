@@ -30,9 +30,10 @@
         var scale = 100d / size;
         var left = -(x / size) * 100d;
         var top = -(y / size) * 100d;
+        var scaleText = scale.ToString("F4", CultureInfo.InvariantCulture);
+        var leftText = left.ToString("F4", CultureInfo.InvariantCulture);
+        var topText = top.ToString("F4", CultureInfo.InvariantCulture);
 
-        return string.Create(
-            CultureInfo.InvariantCulture,
-            $"position:absolute;width:{scale:F4}%;height:{scale:F4}%;max-width:none;left:{left:F4}%;top:{top:F4}%;");
+        return $"position:absolute;width:{scaleText}%;height:{scaleText}%;max-width:none;left:{leftText}%;top:{topText}%;";
     }
 }

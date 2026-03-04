@@ -312,6 +312,20 @@
         return audioContext;
     }
 
+    function playOscillatorTone(context, frequency, peakGain, duration, type) {
+        const oscillator = context.createOscillator();
+        const gainNode = context.createGain();
+        oscillator.type = type || "sine";
+        oscillator.frequency.value = frequency;
+        gainNode.gain.setValueAtTime(0.0001, context.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(peakGain, context.currentTime + 0.012);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + duration);
+        oscillator.connect(gainNode);
+        gainNode.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + duration + 0.02);
+    }
+
     function sendJsonBeacon(url, payloadObject) {
         if (!url || !payloadObject) {
             return;
@@ -667,6 +681,31 @@
                 gainNode.connect(context.destination);
                 oscillator.start();
                 oscillator.stop(context.currentTime + 0.24);
+            } catch {
+            }
+        },
+
+        playDing: function (kind) {
+            const context = ensureAudioContext();
+            if (!context) {
+                return;
+            }
+
+            try {
+                if (context.state === "suspended") {
+                    context.resume().catch(() => {});
+                }
+
+                const toneKind = String(kind || "").toLowerCase();
+                if (toneKind === "success") {
+                    playOscillatorTone(context, 740, 0.055, 0.12, "triangle");
+                    window.setTimeout(function () {
+                        playOscillatorTone(context, 988, 0.05, 0.18, "triangle");
+                    }, 70);
+                    return;
+                }
+
+                playOscillatorTone(context, 660, 0.04, 0.14, "sine");
             } catch {
             }
         },

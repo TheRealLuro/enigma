@@ -87,7 +87,8 @@ public partial class Profile
             : new ProfileImageState
             {
                 MapName = AvatarMapName,
-                ImageUrl = AvatarSourceOptions.FirstOrDefault(map => EqualsIgnoreCase(map.MapName, AvatarMapName))?.MapImage,
+                ImageUrl = SelectedAvatarSource?.MapImage,
+                Crop = new ImageCropState(),
             };
 
     protected override async Task OnParametersSetAsync()
