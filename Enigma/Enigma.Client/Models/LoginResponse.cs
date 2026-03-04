@@ -52,6 +52,9 @@ public class LoginUserSummary
     [JsonPropertyName("item_counts")]
     public Dictionary<string, int> ItemCounts { get; set; } = [];
 
+    [JsonPropertyName("pending_multiplayer_invites")]
+    public List<PendingMultiplayerInvite> PendingMultiplayerInvites { get; set; } = [];
+
     [JsonPropertyName("last_login_at")]
     public string? LastLoginAt { get; set; }
 
@@ -77,4 +80,31 @@ public class LoginUserSummary
     public int DiscoveredMapsCount { get; set; }
 
     public double WinRate => NumberOfMapsPlayed <= 0 ? 0 : (double)MapsCompleted / NumberOfMapsPlayed;
+}
+
+public class PendingMultiplayerInvite
+{
+    [JsonPropertyName("session_id")]
+    public string SessionId { get; set; } = string.Empty;
+
+    [JsonPropertyName("owner_username")]
+    public string OwnerUsername { get; set; } = string.Empty;
+
+    [JsonPropertyName("map_name")]
+    public string? MapName { get; set; }
+
+    [JsonPropertyName("difficulty")]
+    public string Difficulty { get; set; } = string.Empty;
+
+    [JsonPropertyName("size")]
+    public int Size { get; set; }
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("created_at")]
+    public string? CreatedAt { get; set; }
+
+    [JsonPropertyName("source")]
+    public string Source { get; set; } = "new";
 }

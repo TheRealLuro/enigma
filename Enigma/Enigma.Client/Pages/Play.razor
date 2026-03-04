@@ -207,15 +207,16 @@
 
         try
         {
-            var response = await Api.GetFromJsonAsync<SeedApiResponse>(
+            using var response = await Api.GetAsync(
                 $"api/auth/newMap?difficulty={Uri.EscapeDataString(newMazeRequest.Difficulty.ToString().ToLowerInvariant())}&size={newMazeRequest.Size}");
+            var payload = await Api.ReadJsonAsync<SeedApiResponse>(response);
 
-            if (string.IsNullOrWhiteSpace(response?.Seed))
+            if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(payload?.Seed))
             {
-                throw new InvalidOperationException("The backend returned an empty seed.");
+                throw new InvalidOperationException(await ExtractErrorDetailAsync(response, "Unable to generate a maze right now."));
             }
 
-            await BeginRunAsync($"/game?seed={Uri.EscapeDataString(response.Seed)}&source=new");
+            await BeginRunAsync($"/game?seed={Uri.EscapeDataString(payload.Seed)}&source=new");
         }
         catch (Exception ex)
         {
@@ -236,15 +237,16 @@
 
         try
         {
-            var response = await Api.GetFromJsonAsync<SeedApiResponse>(
+            using var response = await Api.GetAsync(
                 $"api/auth/loadMap?name={Uri.EscapeDataString(loadMazeRequest.MapName)}");
+            var payload = await Api.ReadJsonAsync<SeedApiResponse>(response);
 
-            if (string.IsNullOrWhiteSpace(response?.Seed))
+            if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(payload?.Seed))
             {
-                throw new InvalidOperationException("The requested map did not return a seed.");
+                throw new InvalidOperationException(await ExtractErrorDetailAsync(response, "Unable to load that saved maze."));
             }
 
-            await BeginRunAsync($"/game?seed={Uri.EscapeDataString(response.Seed)}&source=load&mapName={Uri.EscapeDataString(loadMazeRequest.MapName)}");
+            await BeginRunAsync($"/game?seed={Uri.EscapeDataString(payload.Seed)}&source=load&mapName={Uri.EscapeDataString(loadMazeRequest.MapName)}");
         }
         catch (Exception ex)
         {
@@ -370,6 +372,38 @@
         }
 
         return string.Empty;
+    }
+
+    private static async Task<string> ExtractErrorDetailAsync(HttpResponseMessage response, string fallback)
+    {
+        var raw = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+                ? "Maze generation is temporarily rate-limited. Wait a moment, then try again."
+                : fallback;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(raw);
+            if (document.RootElement.TryGetProperty("detail", out var detailElement))
+            {
+                var detail = detailElement.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? detailElement.GetString()
+                    : detailElement.ToString();
+
+                if (!string.IsNullOrWhiteSpace(detail))
+                {
+                    return detail;
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+
+        return raw;
     }
 
     private sealed class SeedApiResponse

@@ -9,7 +9,7 @@ from main import limiter
 from .db import maps_collection, users_collection
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
-    build_discovered_to_owned_sync_update,
+    build_owned_maps_sync_update,
     build_user_defaults_update,
     serialize_session_user,
 )
@@ -55,9 +55,11 @@ def login_user(request: Request, username: str | None = None, passwd: str | None
     if set_updates:
         update.setdefault("$set", {}).update(set_updates)
 
-    missing_owned_maps = build_discovered_to_owned_sync_update(user)
-    if missing_owned_maps:
-        update["$addToSet"] = {"maps_owned": {"$each": missing_owned_maps}}
+    owned_to_add, owned_to_remove = build_owned_maps_sync_update(user, maps_collection)
+    if owned_to_add:
+        update.setdefault("$addToSet", {})["maps_owned"] = {"$each": owned_to_add}
+    if owned_to_remove:
+        update.setdefault("$pull", {})["maps_owned"] = {"$in": owned_to_remove}
 
     users_collection.update_one({"username": username}, update)
 

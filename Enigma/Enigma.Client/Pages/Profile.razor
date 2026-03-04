@@ -188,8 +188,11 @@ else
                                         @if (IsOwnProfile)
                                         {
                                             <div class="profile-map-actions">
-                                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="() => SelectAvatarMap(map)">Use for Picture</button>
-                                                <button class="btn btn-danger" type="button" disabled="@IsActionBusy" @onclick="() => RecycleMapAsync(map)">Recycle</button>
+                                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(map.MapImage)" @onclick="() => SelectAvatarMap(map)">Use for Picture</button>
+                                                @if (CanRecycleMap(map))
+                                                {
+                                                    <button class="btn btn-danger" type="button" disabled="@IsActionBusy" @onclick="() => RecycleMapAsync(map)">Recycle</button>
+                                                }
                                             </div>
                                         }
                                     </div>
@@ -220,7 +223,7 @@ else
                                             <span class="catalog-card-meta-pill">Size @map.Size x @map.Size</span>
                                             <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
                                             <span class="catalog-card-meta-pill">Best @FormatBestTime(map)</span>
-                                            <span class="catalog-card-meta-pill">Founded @FormatFounded(map)</span>
+                                            <span class="catalog-card-meta-pill">Founder @FormatFounder(map)</span>
                                         </div>
                                     </div>
                                 </article>
@@ -301,7 +304,7 @@ else
                                     <label class="form-label">Crop Y</label><input class="form-range" type="range" min="0" max="90" step="1" @bind="AvatarCrop.Y" />
                                     <label class="form-label">Crop Size</label><input class="form-range" type="range" min="10" max="100" step="1" @bind="AvatarCrop.Size" />
                                 </div>
-                                <button class="btn btn-primary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(AvatarMapName)" @onclick="UpdateAvatarAsync">@(IsActionBusy ? "Saving..." : "Save Profile Picture")</button>
+                                <button class="btn btn-primary" type="button" disabled="@IsActionBusy || !CanSaveAvatar" @onclick="UpdateAvatarAsync">@(IsActionBusy ? "Saving..." : "Save Profile Picture")</button>
                             }
                         </div>
                     </div>

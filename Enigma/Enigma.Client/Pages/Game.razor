@@ -264,6 +264,32 @@ else
                     </div>
                 </div>
 
+                <div class="card enigma-sidebar-card">
+                    <span class="enigma-kicker">Equipped Items</span>
+                    @if (EquippedLoadout.Count == 0)
+                    {
+                        <div class="enigma-loadout-empty">No items equipped for this run.</div>
+                    }
+                    else
+                    {
+                        <div class="enigma-loadout-list">
+                            @foreach (var item in EquippedLoadout)
+                            {
+                                <div class="enigma-loadout-item">
+                                    <div class="enigma-loadout-item-top">
+                                        <strong>@item.Name</strong>
+                                        <span class="enigma-loadout-quantity">x@item.Quantity</span>
+                                    </div>
+                                    <div class="enigma-loadout-tags">
+                                        <span class="enigma-loadout-tag">@FormatLoadoutSlot(item.SlotKind)</span>
+                                        <span class="enigma-loadout-tag">@item.Kind</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
                 @if (IsCoopRun)
                 {
                     <div class="card enigma-sidebar-card enigma-coop-card">
@@ -297,9 +323,24 @@ else
                 <div class="card enigma-sidebar-card enigma-puzzle-card">
                     @if (HasCoopPuzzle)
                     {
+                        var coopGuide = GetCurrentCoopPuzzleGuide();
                         <span class="enigma-kicker">Co-op Puzzle</span>
                         <h2>@CurrentCoopPuzzle!.Name</h2>
                         <p class="enigma-puzzle-copy">@CurrentCoopPuzzle.Instruction</p>
+                        <div class="enigma-puzzle-guide">
+                            <div class="enigma-puzzle-guide-row">
+                                <span>Goal</span>
+                                <p>@coopGuide.Goal</p>
+                            </div>
+                            <div class="enigma-puzzle-guide-row">
+                                <span>Controls</span>
+                                <p>@coopGuide.Controls</p>
+                            </div>
+                            <div class="enigma-puzzle-guide-row">
+                                <span>Success</span>
+                                <p>@coopGuide.Success</p>
+                            </div>
+                        </div>
                         <div class="enigma-puzzle-status">@CurrentCoopPuzzle.Status</div>
 
                         @if (!string.IsNullOrWhiteSpace(GetCoopClueText()))
@@ -459,10 +500,16 @@ else
                         }
                         else if (string.Equals(CurrentCoopPuzzle.ViewType, "binary_echo", StringComparison.OrdinalIgnoreCase))
                         {
-                            <div class="enigma-sequence-display compact mono-numeric">
-                                <span>@GetBinaryString(GetCoopBoolList("current"))</span>
+                            <div class="enigma-mini-stat-grid">
+                                <div class="enigma-mini-stat">
+                                    <span>Current</span>
+                                    <strong class="mono-numeric">@GetBinaryString(GetCoopBoolList("current"))</strong>
+                                </div>
+                                <div class="enigma-mini-stat">
+                                    <span>Target</span>
+                                    <strong class="mono-numeric">@GetBinaryString(GetCoopBoolList("target"))</strong>
+                                </div>
                             </div>
-                            <p class="enigma-helper">Target: @GetBinaryString(GetCoopBoolList("target"))</p>
                             @if (string.Equals(GetCoopViewString("mode"), "toggle_bits", StringComparison.OrdinalIgnoreCase))
                             {
                                 <div class="enigma-option-grid compact">
@@ -552,9 +599,24 @@ else
                     }
                     else
                     {
+                    var puzzleGuide = GetCurrentPuzzleGuide();
                     <span class="enigma-kicker">Current Puzzle</span>
                     <h2>@CurrentRoomState.Puzzle.Title</h2>
                     <p class="enigma-puzzle-copy">@CurrentRoomState.Puzzle.Instruction</p>
+                    <div class="enigma-puzzle-guide">
+                        <div class="enigma-puzzle-guide-row">
+                            <span>Goal</span>
+                            <p>@puzzleGuide.Goal</p>
+                        </div>
+                        <div class="enigma-puzzle-guide-row">
+                            <span>Controls</span>
+                            <p>@puzzleGuide.Controls</p>
+                        </div>
+                        <div class="enigma-puzzle-guide-row">
+                            <span>Success</span>
+                            <p>@puzzleGuide.Success</p>
+                        </div>
+                    </div>
                     <div class="enigma-puzzle-status">@CurrentRoomState.Puzzle.StatusText</div>
 
                     @if (CurrentRoomState.Puzzle is PressurePlatePuzzle pressure)
@@ -654,7 +716,9 @@ else
                             @for (var index = 0; index < temporalLock.Positions.Length; index++)
                             {
                                 var ringIndex = index;
-                                <button class="btn @(temporalLock.IsStopped[index] ? "btn-success" : "btn-secondary")" @onclick="(() => ToggleTemporalRing(ringIndex))">Ring @(index + 1)</button>
+                                <button class="btn @(temporalLock.IsStopped[index] ? "btn-success" : "btn-secondary")" @onclick="(() => ToggleTemporalRing(ringIndex))">
+                                    @(temporalLock.IsStopped[index] ? $"Release Ring {index + 1}" : $"Lock Ring {index + 1}")
+                                </button>
                             }
                         </div>
                     }
@@ -671,6 +735,16 @@ else
                     }
                     else if (CurrentRoomState.Puzzle is SymbolLogicPuzzle symbolLogic)
                     {
+                        <div class="enigma-mini-stat-grid">
+                            <div class="enigma-mini-stat">
+                                <span>Slots Filled</span>
+                                <strong>@symbolLogic.Entered.Count / @symbolLogic.Solution.Count</strong>
+                            </div>
+                            <div class="enigma-mini-stat">
+                                <span>Available Sigils</span>
+                                <strong>@symbolLogic.Symbols.Count</strong>
+                            </div>
+                        </div>
                         <div class="enigma-puzzle-statements">
                             @foreach (var statement in symbolLogic.Statements)
                             {
@@ -678,11 +752,12 @@ else
                             }
                         </div>
                         <div class="enigma-sequence-display compact">
-                            @foreach (var symbol in symbolLogic.Entered)
+                            @for (var index = 0; index < symbolLogic.Solution.Count; index++)
                             {
-                                <span>@symbol</span>
+                                <span>@(index < symbolLogic.Entered.Count ? symbolLogic.Entered[index] : "\u2014")</span>
                             }
                         </div>
+                        <p class="enigma-helper">Build the order left to right. Clear Order restarts the arrangement.</p>
                         <div class="enigma-option-grid compact enigma-symbol-grid">
                             @foreach (var symbol in symbolLogic.Symbols)
                             {
@@ -936,7 +1011,10 @@ else
                             @for (var index = 0; index < redistribution.ValveAdjustments.Count; index++)
                             {
                                 var valveIndex = index;
-                                <button class="btn btn-secondary" @onclick="(() => ToggleValve(valveIndex))">Valve @(index + 1)</button>
+                                <button class="btn btn-secondary enigma-detail-button" @onclick="(() => ToggleValve(valveIndex))">
+                                    <span>Valve @(index + 1)</span>
+                                    <small>@FormatAdjustmentSummary(redistribution.ValveAdjustments[index])</small>
+                                </button>
                             }
                         </div>
                     }
@@ -959,7 +1037,10 @@ else
                             @for (var index = 0; index < conservation.ValveAdjustments.Count; index++)
                             {
                                 var valveIndex = index;
-                                <button class="btn btn-secondary" @onclick="(() => ToggleValve(valveIndex))">Valve @(index + 1)</button>
+                                <button class="btn btn-secondary enigma-detail-button" @onclick="(() => ToggleValve(valveIndex))">
+                                    <span>Valve @(index + 1)</span>
+                                    <small>@FormatAdjustmentSummary(conservation.ValveAdjustments[index])</small>
+                                </button>
                             }
                         </div>
                         <p class="enigma-helper">Each valve steals pressure from one output and feeds another. The total never changes.</p>
@@ -1054,9 +1135,15 @@ else
                     }
                     else if (CurrentRoomState.Puzzle is BinaryShiftPuzzle binaryShift)
                     {
-                        <div class="enigma-sequence-display compact binary-display">
-                            <span>@GetBinaryString(binaryShift.Bits)</span>
-                            <span>@GetBinaryString(binaryShift.TargetBits)</span>
+                        <div class="enigma-mini-stat-grid">
+                            <div class="enigma-mini-stat">
+                                <span>Current</span>
+                                <strong class="mono-numeric">@GetBinaryString(binaryShift.Bits)</strong>
+                            </div>
+                            <div class="enigma-mini-stat">
+                                <span>Target</span>
+                                <strong class="mono-numeric">@GetBinaryString(binaryShift.TargetBits)</strong>
+                            </div>
                         </div>
                         <div class="enigma-direction-grid">
                             <button class="btn btn-secondary" @onclick="RotateBinaryLeft">Rotate Left</button>
@@ -1067,9 +1154,15 @@ else
                     else if (CurrentRoomState.Puzzle is BinaryTransformationPuzzle binaryTransformation)
                     {
                         <p class="enigma-helper">@binaryTransformation.Hint</p>
-                        <div class="enigma-sequence-display compact binary-display">
-                            <span>@GetBinaryString(binaryTransformation.Bits)</span>
-                            <span>@GetBinaryString(binaryTransformation.TargetBits)</span>
+                        <div class="enigma-mini-stat-grid">
+                            <div class="enigma-mini-stat">
+                                <span>Current</span>
+                                <strong class="mono-numeric">@GetBinaryString(binaryTransformation.Bits)</strong>
+                            </div>
+                            <div class="enigma-mini-stat">
+                                <span>Target</span>
+                                <strong class="mono-numeric">@GetBinaryString(binaryTransformation.TargetBits)</strong>
+                            </div>
                         </div>
                         <div class="enigma-option-grid compact">
                             <button class="btn btn-secondary" @onclick="RotateBinaryLeft">Rotate Left</button>
@@ -1082,17 +1175,39 @@ else
                     }
                     else if (CurrentRoomState.Puzzle is YarnUntanglePuzzle yarn)
                     {
-                        <div class="enigma-yarn-grid">
+                        <div class="enigma-mini-stat-grid">
+                            <div class="enigma-mini-stat">
+                                <span>Crossings</span>
+                                <strong>@yarn.CrossingCount</strong>
+                            </div>
+                            <div class="enigma-mini-stat">
+                                <span>Strands</span>
+                                <strong>@yarn.StrandOrder.Length</strong>
+                            </div>
+                        </div>
+                        <div class="enigma-yarn-board">
+                            <svg viewBox="0 0 100 100" class="enigma-yarn-svg" aria-hidden="true">
+                                @foreach (var line in GetYarnLineSegments(yarn))
+                                {
+                                    <line x1="@line.X1" y1="@line.Y1" x2="@line.X2" y2="@line.Y2" class="enigma-yarn-line"></line>
+                                }
+                            </svg>
+                            @for (var index = 0; index < yarn.StrandOrder.Length; index++)
+                            {
+                                <div class="enigma-yarn-anchor left" style="top: @($"{GetYarnNodeTopPercent(index, yarn.StrandOrder.Length):F2}%");">@(index + 1)</div>
+                            }
                             @for (var index = 0; index < yarn.StrandOrder.Length; index++)
                             {
                                 var strandIndex = index;
                                 var isSelected = yarn.SelectedIndex == index;
-                                <button class="enigma-yarn-node @(isSelected ? "selected" : string.Empty)"
+                                <button class="enigma-yarn-anchor right @(isSelected ? "selected" : string.Empty)"
+                                        style="top: @($"{GetYarnNodeTopPercent(index, yarn.StrandOrder.Length):F2}%");"
                                         @onclick="(() => SelectYarnStrand(strandIndex))">
                                     @yarn.StrandOrder[index]
                                 </button>
                             }
                         </div>
+                        <p class="enigma-helper">Swap the right-side endpoints until every strand runs straight without crossing.</p>
                     }
                     else if (CurrentRoomState.Puzzle is CrossingPathPuzzle crossing)
                     {

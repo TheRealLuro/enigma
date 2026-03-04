@@ -9,6 +9,7 @@ namespace Enigma.Client.Pages;
 
 public partial class Game : ComponentBase, IAsyncDisposable
 {
+    private sealed record PuzzleGuide(string Goal, string Controls, string Success);
     private const double RoomSize = 1080d;
     private const double PlayerSize = 60d;
     private const double PlayerSpeed = 380d;
@@ -63,6 +64,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected PlayerDirection PlayerFacing { get; private set; } = PlayerDirection.Down;
     protected bool IsMoving { get; private set; }
     protected int TotalGold { get; private set; }
+    protected List<RunLoadoutSelection> EquippedLoadout { get; private set; } = [];
 
     protected IReadOnlyDictionary<char, string> RoomBackgrounds { get; } = new Dictionary<char, string>
     {
@@ -196,6 +198,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 Username = session!.Username;
             }
 
+            var storedLoadout = await JS.InvokeAsync<List<RunLoadoutSelection>?>("enigmaGame.getRunLoadout");
+            EquippedLoadout = (storedLoadout ?? [])
+                .Where(item => !string.IsNullOrWhiteSpace(item.ItemId) && item.Quantity > 0)
+                .ToList();
+
             try
             {
                 await InitializeCoopAsync();
@@ -294,6 +301,35 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     protected string GetRectStyle(PlayAreaRect rect) =>
         $"left: {ToPercent(rect.X)}%; top: {ToPercent(rect.Y)}%; width: {ToPercent(rect.Width)}%; height: {ToPercent(rect.Height)}%;";
+
+    protected IEnumerable<(double X1, double Y1, double X2, double Y2)> GetYarnLineSegments(YarnUntanglePuzzle puzzle)
+    {
+        if (puzzle.StrandOrder.Length == 0)
+        {
+            yield break;
+        }
+
+        for (var index = 0; index < puzzle.StrandOrder.Length; index++)
+        {
+            yield return (14d, GetYarnNodeCenter(index, puzzle.StrandOrder.Length), 86d, GetYarnNodeCenter(puzzle.GetRightSlotForLeftIndex(index), puzzle.StrandOrder.Length));
+        }
+    }
+
+    protected double GetYarnNodeTopPercent(int index, int totalCount)
+    {
+        var center = GetYarnNodeCenter(index, totalCount);
+        return Math.Clamp(center - 6d, 0d, 94d);
+    }
+
+    private static double GetYarnNodeCenter(int index, int totalCount)
+    {
+        if (totalCount <= 1)
+        {
+            return 50d;
+        }
+
+        return 12d + ((76d / (totalCount - 1)) * index);
+    }
 
     protected IEnumerable<WallSegment> GetWallSegments()
     {
@@ -735,6 +771,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             LoadedMapName = MapName,
             Difficulty = ParsedSeed.Difficulty.ToString(),
             Size = ParsedSeed.Size,
+            UsedItems = BuildSelectedItemIds(),
         };
 
         await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
@@ -1093,6 +1130,151 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
         _ => "Shift",
     };
 
+    private PuzzleGuide GetCurrentPuzzleGuide() => CurrentRoomState?.Puzzle switch
+    {
+        PressurePlatePuzzle => new(
+            "Charge the plate until it fully locks.",
+            "Stand on the glowing plate inside the room. Leaving early drains its progress.",
+            "The plate reaches full charge and the progress bar fills completely."),
+        PhaseRelayPuzzle => new(
+            "Trigger the phase nodes in the hidden order.",
+            "Watch the active node while it is visible, then walk to the nodes in that same sequence.",
+            "Every node is stepped on in the correct order without touching a wrong one."),
+        HarmonicPhasePuzzle => new(
+            "Make every plate resonate at the same value.",
+            "Stepping on a plate adds +2 to that plate and +1 to each adjacent plate.",
+            "All displayed plate values are equal at the same time."),
+        QuickTimePuzzle quickTime => new(
+            "Stop the moving pulse inside the bright target window.",
+            "Press Stop Pulse when the white marker overlaps the green band. Higher difficulties require a clean streak.",
+            $"Land {quickTime.RequiredHits} clean hit{(quickTime.RequiredHits == 1 ? string.Empty : "s")} in a row."),
+        DualPulseLockPuzzle => new(
+            "Freeze both pulses inside their target windows at the same time.",
+            "Use Pulse A and Pulse B to lock or release each track separately until both markers sit inside their green windows together.",
+            "Both tracks are locked while each marker is inside its own target window."),
+        TemporalLockPuzzle => new(
+            "Freeze the three rings in a constellation that satisfies every clue.",
+            "Let the rings spin, then lock or release each ring individually while reading the clue list as symbol relationships.",
+            "All clue statements are true for the symbols currently shown on the outer, middle, and inner rings."),
+        RiddlePuzzle => new(
+            "Choose the only answer that fits the riddle.",
+            "Read the question carefully and select one answer from the option list.",
+            "The selected answer is the correct solution to the riddle."),
+        SymbolLogicPuzzle => new(
+            "Build the only symbol order that satisfies every logic rule.",
+            "Read every statement, then place symbols left-to-right in the order strip. Clear Order resets the attempt.",
+            "The final left-to-right order keeps every listed statement true."),
+        LogicalParadoxPuzzle => new(
+            "Pick the lever that matches the only consistent interpretation of the statue statements.",
+            "Treat the statements as one logic set. Compare them before choosing a single lever.",
+            "The chosen lever is the only one that does not create a contradiction."),
+        SequenceMemoryPuzzle => new(
+            "Repeat the rune sequence exactly from memory.",
+            "Watch the runes first, then press the runes back in the same order after they disappear.",
+            "Every rune is entered in the original sequence with no mistakes."),
+        FadingPathMemoryPuzzle => new(
+            "Walk the exact floor path after it fades.",
+            "Watch the glowing cells on the room floor, then move your character along the same route from memory.",
+            "You trace the full path without stepping off the correct route."),
+        MemoryInterferencePuzzle => new(
+            "Recover the true sequence and ignore the interference.",
+            "Watch the original pattern, ignore the fake overlay, then enter the real answer once the display ends.",
+            "The full correct sequence is entered from start to finish without an error."),
+        TileRotationPuzzle => new(
+            "Rotate every tile so all arrows point north.",
+            "Click a tile to rotate its arrow by 90 degrees clockwise.",
+            "Every tile arrow points up at the same time."),
+        SignalRotationNetworkPuzzle => new(
+            "Create one continuous live circuit from the start node to the end node.",
+            "Rotate tiles until the pipe glyphs connect the upper-left start to the lower-right end.",
+            "There is a single continuous path linking start and end through connected tiles."),
+        RotationalCipherGridPuzzle => new(
+            "Transform the grid until the center row reveals the clue answer.",
+            "Use the row and column buttons to rotate letters around the board while watching the middle row.",
+            "The center row spells the word implied by the clue."),
+        UnlockPatternPuzzle => new(
+            "Replay the hidden arrow pattern exactly.",
+            "Wait until the preview disappears, then use the keyboard arrow keys or the on-screen arrow buttons to enter the same sequence.",
+            "Every direction matches the original pattern in the same order."),
+        DirectionalEchoPuzzle => new(
+            "Enter the transformed version of the shown direction pattern.",
+            "Watch the preview, then enter the answer using the transformation rule instead of copying it directly.",
+            "The full entered sequence matches the transformed target pattern."),
+        DimensionalPatternShiftPuzzle => new(
+            "Translate the shown pattern using the puzzle's transformation rule.",
+            "Use the arrow controls to enter the transformed path, not the raw preview.",
+            "The entered pattern matches the required dimensional transform exactly."),
+        ValveFlowPuzzle => new(
+            "Open the exact set of valves that produces the target flow.",
+            "Each valve adds its displayed amount to the live flow. You must hit the total using the required number of open valves.",
+            "Current Flow equals Target Flow and the exact required count of valves is open."),
+        FlowRedistributionPuzzle => new(
+            "Equalize all outputs to the same pressure.",
+            "Each valve button shows the change it applies to every output. Pulse valves until every output matches the shared target.",
+            "All output values are identical and equal to the displayed target flow."),
+        ConservationNetworkPuzzle => new(
+            "Reach the exact target distribution without changing the total flow.",
+            "Each valve moves pressure between outputs. Use the displayed valve deltas to turn the current distribution into the target one.",
+            "Every current output value matches the corresponding target value exactly."),
+        WeightBalancePuzzle => new(
+            "Select the exact combination of weights that hits the target load.",
+            "Toggle weights on or off. Both the total weight and the required number of selected weights must match.",
+            "Current Load equals Target Load and the selected count matches the exact requirement."),
+        WeightedTriggerZonesPuzzle => new(
+            "Push the weight blocks until the weighted pad total matches the target.",
+            "Move blocks around the room onto multiplier pads. Each pad changes a block's contribution.",
+            "The displayed weighted total equals the target."),
+        WeightedEquilibriumPuzzle => new(
+            "Balance the full pad equation at zero.",
+            "Move blocks onto positive and negative multiplier pads. Zero only counts if enough pads are occupied.",
+            "Equation total is exactly 0 and the occupied-pad count meets the minimum."),
+        XorLogicPuzzle => new(
+            "Match the circuit's target parity and exact live-bit count.",
+            "Toggle bits on and off. Every active bit flips the parity, so both the parity and number of lit bits matter.",
+            "Live Parity matches Target Parity and the live-bit count matches the target count."),
+        BinaryShiftPuzzle => new(
+            "Transform the current bit string into the target bit string.",
+            "Use Rotate Left, Rotate Right, and Flip Center to change the current pattern.",
+            "The current bit string matches the target bit string exactly."),
+        BinaryTransformationPuzzle binaryTransformation => new(
+            "Chain the machine operations until the current state matches the target.",
+            "Use the listed binary operations in a deliberate order. The hint points toward a useful sequence and the move limit is strict.",
+            $"Current bits match target bits before exceeding {binaryTransformation.MoveLimit} moves."),
+        YarnUntanglePuzzle => new(
+            "Untangle the strands so no lines cross.",
+            "The left anchors stay fixed. Click right-side endpoints to swap them until every strand runs cleanly.",
+            "Crossings drop to zero."),
+        CrossingPathPuzzle => new(
+            "Match each word tile to its correct descriptor tile.",
+            "Step on a word tile in the room to carry it, then walk to the descriptor tile that matches it.",
+            "Every word has been matched to its correct descriptor."),
+        KnotTopologyPuzzle => new(
+            "Remove every real crossing and leave only fake illusion crossings.",
+            "Swap strand endpoints until the solid crossings disappear. Dotted illusion crossings do not count.",
+            "Real crossings reach zero."),
+        ZoneActivationPuzzle => new(
+            "Charge the active beacon one zone at a time.",
+            "Walk into the highlighted zone in the room and stay there until it locks.",
+            "Each zone locks in order until the full sequence is complete."),
+        DelayedActivationSequencePuzzle => new(
+            "Lock each zone in order while respecting the wake delay.",
+            "Hold the live zone until it locks, then stay planted on the locked zone until the next zone activates.",
+            "Every zone locks in order without leaving the sequence."),
+        RecursiveActivationSequencePuzzle => new(
+            "Adapt to the changing zone order and modifiers until the full sequence is complete.",
+            "Charge the current zone, then read the modifier list because each completed zone can change the order or next hold time.",
+            "All recursive zone steps complete in the resulting final order."),
+        _ => new(
+            "Solve the current room puzzle.",
+            "Use the controls shown in the panel and watch the status line for live feedback.",
+            "The room reports solved and the doors unlock.")
+    };
+
+    protected static string FormatSignedDelta(int value) => value > 0 ? $"+{value}" : value.ToString();
+
+    protected static string FormatAdjustmentSummary(IEnumerable<int> adjustments) =>
+        string.Join(" / ", adjustments.Select(FormatSignedDelta));
+
     private async Task SyncLivePlayerStateAsync(bool force = false)
     {
         if (!_jsReady || !IsLoaded || ParsedSeed is null || CurrentRoom is null || CurrentRoomState is null)
@@ -1164,13 +1346,42 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
             MapValue = mapValue,
             ForfeitedRunPayout = TotalGold,
             ProjectedCompletionPayout = projectedCompletionPayout,
-            UsedItems = [],
+            UsedItems = BuildSelectedItemIds(),
             Reason = reason,
             AbandonedAtUtc = DateTime.UtcNow.ToString("O"),
             IsMultiplayer = IsCoopRun,
             MultiplayerSessionId = CoopSessionId,
             PartnerUsername = CoopPartnerName,
         };
+    }
+
+    protected static string FormatLoadoutSlot(string slotKind)
+    {
+        if (string.IsNullOrWhiteSpace(slotKind))
+        {
+            return "Support";
+        }
+
+        return slotKind.Trim().Replace('_', ' ');
+    }
+
+    private List<string> BuildSelectedItemIds()
+    {
+        var usedItems = new List<string>();
+        foreach (var item in EquippedLoadout)
+        {
+            if (string.IsNullOrWhiteSpace(item.ItemId) || item.Quantity <= 0)
+            {
+                continue;
+            }
+
+            for (var index = 0; index < item.Quantity; index++)
+            {
+                usedItems.Add(item.ItemId);
+            }
+        }
+
+        return usedItems;
     }
 
     private async Task UpdatePendingLossDraftAsync(bool force = false)

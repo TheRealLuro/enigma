@@ -14,6 +14,62 @@ public partial class Game
     protected bool HasCoopPuzzle => IsCoopRun && CurrentCoopPuzzle is not null;
     protected bool HasCoopStageElements => GetCoopStageElements().Count > 0;
 
+    private PuzzleGuide GetCurrentCoopPuzzleGuide()
+    {
+        var role = string.IsNullOrWhiteSpace(CurrentCoopPuzzle?.Role) ? "your side" : CurrentCoopPuzzle.Role;
+        return CurrentCoopPuzzle?.ViewType switch
+        {
+            "pressure_systems" => new(
+                "Lock the shared plate pattern together.",
+                $"Move both players onto the correct plates and keep them there for the full hold. {role} only controls their own position.",
+                "Every required plate phase locks in sequence."),
+            "sync_reaction" => new(
+                "Lock both players under the timing rule for this room.",
+                $"Use the information visible on {role}'s side and press Lock Now only when your side's timing condition is satisfied.",
+                "Both players are locked in a valid state at the same time."),
+            "deduction_riddle" => new(
+                "Combine both players' clues into one consistent answer.",
+                $"Share the prompt, clue fragments, and options with your partner, then commit to the same answer from {role}'s side.",
+                "The selected answer matches the combined clue set."),
+            "split_memory" => new(
+                "Rebuild one full sequence from split information.",
+                $"Memorize your visible symbols, wait for {GetCoopMemoryNextRole()}, and enter only one symbol at a time from {role}'s side.",
+                "The team enters the full shared sequence without a mistake."),
+            "dual_rotation" => new(
+                "Align every shared tile to its target orientation.",
+                $"Rotate only the blue tiles that belong to {role}. Locked tiles are controlled by your partner.",
+                "Every tile arrow matches its target arrow."),
+            "opposing_pattern_input" => new(
+                "Apply the hidden transformation to the shared pattern.",
+                $"Use the arrow controls for {role}'s side and enter the transformed pattern, not the literal preview.",
+                "Both players finish the correct transformed pattern."),
+            "flow_transfer" => new(
+                "Move shared flow into the exact target distribution.",
+                $"Pulse the valves available to {role}. Each pulse changes the whole system, not just your side.",
+                "Every output reaches its target value simultaneously."),
+            "distributed_weight" => new(
+                "Reach the combined weighted total together.",
+                $"Adjust only the pad allocations available to {role} and account for each multiplier before you add or remove weight.",
+                "The shared weighted total equals the target exactly."),
+            "binary_echo" => new(
+                "Transform the shared bit state into the target state.",
+                $"Use only the operations exposed to {role}. Your partner sees a different piece of the binary system.",
+                "Current bits match target bits before the move budget or rule set rejects the attempt."),
+            "signal_lines" => new(
+                "Route every signal to the correct destination without violating blocked paths.",
+                $"Assign routes only for the nodes controlled by {role}. Compare notes with your partner because some route information is asymmetric.",
+                "All signals form a valid non-conflicting network."),
+            "spatial_sync" => new(
+                "Stand in the correct zones together and hold them in sync.",
+                $"Move both players into the active zones at the same time and stay there for the required hold. {role} still controls only one character.",
+                "All sync steps lock in order."),
+            _ => new(
+                "Solve the co-op room together.",
+                "Use the controls shown on your side of the board and communicate with your partner.",
+                "The shared puzzle reports complete and the room unlocks.")
+        };
+    }
+
     private bool TryGetCoopViewProperty(string propertyName, out JsonElement value)
     {
         value = default;

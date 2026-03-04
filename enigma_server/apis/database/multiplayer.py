@@ -27,9 +27,12 @@ from .redis_store import (
     SESSION_TTL_SECONDS,
     delete_keys,
     load_json,
+    remove_user_invite,
     save_json,
+    upsert_user_invite,
     session_key,
     session_lock,
+    user_invites_key,
     user_session_key,
 )
 
@@ -276,6 +279,34 @@ def _store_user_session(username: str, session_id: str) -> None:
 
 def _clear_user_session(username: str) -> None:
     delete_keys(user_session_key(username))
+
+
+def _build_invite_payload(session: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_id": session.get("session_id"),
+        "owner_username": session.get("owner_username"),
+        "map_name": session.get("map_name"),
+        "difficulty": session.get("difficulty"),
+        "size": int(session.get("size", 0) or 0),
+        "status": session.get("status"),
+        "created_at": session.get("created_at"),
+        "source": session.get("source"),
+    }
+
+
+def _store_pending_invite(friend_username: str, session: dict[str, Any]) -> None:
+    upsert_user_invite(friend_username, str(session.get("session_id") or ""), _build_invite_payload(session))
+
+
+def _clear_pending_invites(session: dict[str, Any], *usernames: str) -> None:
+    session_id = str(session.get("session_id") or "").strip()
+    if not session_id:
+        return
+
+    invitees = set(session.get("invited_friends", []))
+    invitees.update(username for username in usernames if username)
+    for username in invitees:
+        remove_user_invite(username, session_id)
 
 
 def _register_session_socket(session_id: str, username: str, websocket: WebSocket) -> None:
@@ -667,6 +698,7 @@ def _finish_multiplayer_session_locked(session_id: str, session: dict[str, Any],
     }
 
     save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _clear_pending_invites(session)
     delete_keys(user_session_key(owner_username), user_session_key(guest_username))
     return session["completion"]
 
@@ -701,6 +733,7 @@ def _leave_multiplayer_session_locked(session_id: str, session: dict[str, Any], 
     session["abandon_reason"] = (reason or "left_session").strip() or "left_session"
     session["abandon_penalties"] = penalties
     save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _clear_pending_invites(session)
 
     for player_username in session.get("players", {}).keys():
         _clear_user_session(player_username)
@@ -765,6 +798,8 @@ def create_multiplayer_session(request: Request, payload: MultiplayerCreatePaylo
 
     save_json(session_key(session_id), session)
     _store_user_session(owner_username, session_id)
+    for invited_friend in invited_friends:
+        _store_pending_invite(invited_friend, session)
 
     return {"status": "success", "session": _serialize_session_for_user(session, owner_username)}
 
@@ -781,11 +816,14 @@ def invite_friend_to_session(request: Request, payload: MultiplayerInvitePayload
     with session_lock(payload.session_id):
         session = _load_session_or_404(payload.session_id)
         _assert_owner(session, username)
+        if session.get("guest_username"):
+            raise HTTPException(status_code=409, detail="This session already has a guest and cannot accept more invites")
 
         invited_friends = set(session.get("invited_friends", []))
         invited_friends.add(friend_username)
         session["invited_friends"] = sorted(invited_friends, key=str.casefold)
         save_json(session_key(payload.session_id), session)
+        _store_pending_invite(friend_username, session)
 
     _broadcast_ws_session_from_thread(session)
     return {"status": "success", "session": _serialize_session_for_user(session, username)}
@@ -818,6 +856,7 @@ def join_multiplayer_session(request: Request, payload: MultiplayerJoinPayload):
         session["players"][username] = _create_player_state(username, "guest", session["current_room"])
         save_json(session_key(payload.session_id), session)
         _store_user_session(username, payload.session_id)
+        _clear_pending_invites(session)
 
     _broadcast_ws_session_from_thread(session)
     return {"status": "success", "session": _serialize_session_for_user(session, username)}

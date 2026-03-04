@@ -1798,7 +1798,7 @@ public sealed class KnotTopologyPuzzle : RoomPuzzle
     {
         for (var index = 0; index < Order.Length; index++)
         {
-            yield return (LeftPoints[index], RightPoints[Order[index]], IsIllusionPair(index, Order[index]));
+            yield return (LeftPoints[index], RightPoints[Order[index]], IsIllusionStrand(index));
         }
     }
 
@@ -1809,7 +1809,7 @@ public sealed class KnotTopologyPuzzle : RoomPuzzle
         {
             for (var right = left + 1; right < Order.Length; right++)
             {
-                if ((Order[left] > Order[right]) && !IsIllusionPair(left, right))
+                if ((Order[left] > Order[right]) && !IsIllusionCrossing(left, right))
                 {
                     count++;
                 }
@@ -1819,7 +1819,9 @@ public sealed class KnotTopologyPuzzle : RoomPuzzle
         return count;
     }
 
-    private bool IsIllusionPair(int a, int b) => IllusionPairs.Any(pair => (pair.A == a && pair.B == b) || (pair.A == b && pair.B == a));
+    private bool IsIllusionCrossing(int a, int b) => IllusionPairs.Any(pair => (pair.A == a && pair.B == b) || (pair.A == b && pair.B == a));
+
+    private bool IsIllusionStrand(int strandIndex) => IllusionPairs.Any(pair => pair.A == strandIndex || pair.B == strandIndex);
 
     private void UpdateStatus()
     {

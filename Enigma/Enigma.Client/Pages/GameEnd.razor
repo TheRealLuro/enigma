@@ -292,7 +292,7 @@ else
         using var response = await Api.PutJsonAsync("api/auth/updateStats", new
         {
             seed = Summary.Seed,
-            items = "none",
+            items = Summary.UsedItems.Count == 0 ? "none" : string.Join(",", Summary.UsedItems),
             reward = Summary.GoldCollected,
             seedExisted,
             mapLost = false,

@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from apis.database.db import maps_collection, marketplace_collection, users_collection
 from apis.database.system_accounts import ensure_bank_account
-from apis.database.user_utils import build_discovered_to_owned_sync_update, build_user_defaults_update
+from apis.database.user_utils import build_owned_maps_sync_update, build_user_defaults_update
 
 
 def ensure_indexes() -> None:
@@ -24,20 +24,23 @@ def ensure_indexes() -> None:
 
 
 def backfill_users() -> dict[str, int]:
-    metrics = {"updated_users": 0, "synced_owned_maps": 0}
+    metrics = {"updated_users": 0, "owned_maps_added": 0, "owned_maps_removed": 0}
     for user in users_collection.find({}):
         set_updates = build_user_defaults_update(user)
-        add_owned = build_discovered_to_owned_sync_update(user)
+        add_owned, remove_owned = build_owned_maps_sync_update(user, maps_collection)
         update_query: dict = {}
         if set_updates:
             update_query["$set"] = set_updates
         if add_owned:
-            update_query["$addToSet"] = {"maps_owned": {"$each": add_owned}}
+            update_query.setdefault("$addToSet", {})["maps_owned"] = {"$each": add_owned}
+        if remove_owned:
+            update_query.setdefault("$pull", {})["maps_owned"] = {"$in": remove_owned}
 
         if update_query:
             users_collection.update_one({"_id": user["_id"]}, update_query)
             metrics["updated_users"] += 1
-            metrics["synced_owned_maps"] += len(add_owned)
+            metrics["owned_maps_added"] += len(add_owned)
+            metrics["owned_maps_removed"] += len(remove_owned)
     return metrics
 
 

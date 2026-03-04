@@ -55,6 +55,9 @@ else
                     <strong>@PuzzleDefinitionCount</strong>
                 </div>
             </div>
+            <div class="play-header-actions">
+                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="RefreshSessionSummaryAsync">Refresh Lobby</button>
+            </div>
         </section>
 
         @if (!string.IsNullOrWhiteSpace(StatusMessage))
@@ -65,6 +68,46 @@ else
         @if (CurrentSession is null)
         {
             <div class="coop-grid">
+                <section class="panel coop-join-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Invites</span>
+                            <h2>Pending Co-op Invites</h2>
+                        </div>
+                        <span class="section-count">@Session.PendingMultiplayerInvites.Count</span>
+                    </div>
+                    @if (Session.PendingMultiplayerInvites.Count == 0)
+                    {
+                        <div class="empty-state-inline">No active co-op invites right now. Ask a friend to invite you from their co-op lobby, then refresh here.</div>
+                    }
+                    else
+                    {
+                        <div class="coop-catalog-stack">
+                            @foreach (var invite in Session.PendingMultiplayerInvites)
+                            {
+                                <article class="coop-invite-card">
+                                    <div>
+                                        <span class="profile-eyebrow">Invite from @invite.OwnerUsername</span>
+                                        <strong>@(string.IsNullOrWhiteSpace(invite.MapName) ? "Generated Co-op Run" : invite.MapName)</strong>
+                                    </div>
+                                    <div class="coop-player-meta">
+                                        <span>@FormatSessionStatus(invite.Status)</span>
+                                        <span>@FormatDifficulty(invite.Difficulty)</span>
+                                        <span>@invite.Size x @invite.Size</span>
+                                    </div>
+                                    <div class="coop-player-meta mono-numeric">
+                                        <span>Session</span>
+                                        <strong>@invite.SessionId</strong>
+                                    </div>
+                                    <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="(() => JoinPendingInviteAsync(invite.SessionId))">
+                                        Join Invite
+                                    </button>
+                                </article>
+                            }
+                        </div>
+                    }
+                </section>
+
                 <section class="panel coop-create-panel">
                     <div class="panel-heading">
                         <div>
@@ -150,7 +193,7 @@ else
                         <button class="btn btn-primary w-100" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(JoinSessionId)" @onclick="JoinSessionAsync">
                             @(IsActionBusy ? "Joining..." : "Join Lobby")
                         </button>
-                        <div class="empty-state-inline">You must already be invited by the owner before join will succeed.</div>
+                        <div class="empty-state-inline">Manual session join only works after the owner has invited you. If you were just invited, hit Refresh Lobby and use the invite card above.</div>
                     </div>
                 </section>
             </div>
@@ -172,6 +215,7 @@ else
                         <div><span>Map</span><strong>@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Seed" : CurrentSession.MapName)</strong></div>
                         <div><span>Difficulty</span><strong>@CurrentSession.Difficulty</strong></div>
                         <div><span>Size</span><strong>@CurrentSession.Size x @CurrentSession.Size</strong></div>
+                        <div><span>Session ID</span><strong class="mono-numeric">@CurrentSession.SessionId</strong></div>
                     </div>
 
                     <div class="coop-player-stack">
@@ -216,6 +260,13 @@ else
                             <button class="btn btn-secondary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(InvitePendingFriend)" @onclick="InviteFriendAsync">
                                 Invite
                             </button>
+                        </div>
+                    }
+
+                    @if (CurrentSession.InvitedFriends.Count > 0)
+                    {
+                        <div class="marketplace-bullet-list">
+                            <div><strong>Invited friends:</strong> @string.Join(", ", CurrentSession.InvitedFriends)</div>
                         </div>
                     }
 
@@ -379,7 +430,14 @@ else
             if (!string.IsNullOrWhiteSpace(RequestedSessionId))
             {
                 JoinSessionId = RequestedSessionId;
-                await LoadSessionAsync(RequestedSessionId);
+                if (Session.PendingMultiplayerInvites.Any(invite => string.Equals(invite.SessionId, RequestedSessionId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    await JoinPendingInviteAsync(RequestedSessionId);
+                }
+                else
+                {
+                    await LoadSessionAsync(RequestedSessionId);
+                }
             }
 
             await InvokeAsync(StateHasChanged);
@@ -399,12 +457,13 @@ else
     {
         await ExecuteActionAsync(async () =>
         {
-            var seedResponse = await Api.GetFromJsonAsync<SeedApiResponse>(
+            using var response = await Api.GetAsync(
                 $"api/auth/newMap?difficulty={Uri.EscapeDataString(CreateRequest.Difficulty.ToString().ToLowerInvariant())}&size={CreateRequest.Size}");
+            var seedResponse = await Api.ReadJsonAsync<SeedApiResponse>(response);
 
-            if (string.IsNullOrWhiteSpace(seedResponse?.Seed))
+            if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(seedResponse?.Seed))
             {
-                throw new InvalidOperationException("The backend returned an empty seed.");
+                throw new InvalidOperationException(await ExtractErrorDetailAsync(response));
             }
 
             await CreateSessionAsync(seedResponse.Seed, null, "new");
@@ -415,12 +474,13 @@ else
     {
         await ExecuteActionAsync(async () =>
         {
-            var seedResponse = await Api.GetFromJsonAsync<SeedApiResponse>(
+            using var response = await Api.GetAsync(
                 $"api/auth/loadMap?name={Uri.EscapeDataString(LoadRequest.MapName)}");
+            var seedResponse = await Api.ReadJsonAsync<SeedApiResponse>(response);
 
-            if (string.IsNullOrWhiteSpace(seedResponse?.Seed))
+            if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(seedResponse?.Seed))
             {
-                throw new InvalidOperationException("The requested map did not return a seed.");
+                throw new InvalidOperationException(await ExtractErrorDetailAsync(response));
             }
 
             await CreateSessionAsync(seedResponse.Seed, LoadRequest.MapName, "load");
@@ -455,6 +515,12 @@ else
             StatusMessage = "Joined session. Ready up when both players are in the lobby.";
             HasError = false;
         });
+    }
+
+    private Task JoinPendingInviteAsync(string sessionId)
+    {
+        JoinSessionId = sessionId;
+        return JoinSessionAsync();
     }
 
     private async Task ToggleReadyAsync()
@@ -559,6 +625,30 @@ else
             IsLoading = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private async Task RefreshSessionSummaryAsync()
+    {
+        Session = await Api.GetSessionAsync();
+        if (Session is null)
+        {
+            NavigationManager.NavigateTo("/", replace: true);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(RequestedSessionId))
+        {
+            if (Session.PendingMultiplayerInvites.Any(invite => string.Equals(invite.SessionId, RequestedSessionId, StringComparison.OrdinalIgnoreCase)))
+            {
+                await JoinPendingInviteAsync(RequestedSessionId);
+            }
+            else
+            {
+                await LoadSessionAsync(RequestedSessionId);
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     private void ApplySessionEnvelope(MultiplayerSessionEnvelope? payload)
@@ -677,8 +767,35 @@ else
             return;
         }
 
+        var detail = await ExtractErrorDetailAsync(response);
+        throw new InvalidOperationException(string.IsNullOrWhiteSpace(detail) ? prefix : $"{prefix} {detail}");
+    }
+
+    private static async Task<string> ExtractErrorDetailAsync(HttpResponseMessage response)
+    {
         var raw = await response.Content.ReadAsStringAsync();
-        throw new InvalidOperationException(string.IsNullOrWhiteSpace(raw) ? prefix : $"{prefix} {raw}");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+                ? "The backend rate limit was hit. Wait a moment and try again."
+                : string.Empty;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(raw);
+            if (document.RootElement.TryGetProperty("detail", out var detailElement))
+            {
+                return detailElement.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? detailElement.GetString() ?? string.Empty
+                    : detailElement.ToString();
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+
+        return raw;
     }
 
     private string GetSessionHeading()
@@ -720,6 +837,17 @@ else
         "hard" => "Hard Co-op",
         _ => key,
     };
+
+    private static string FormatDifficulty(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Unknown";
+        }
+
+        var normalized = value.Trim();
+        return char.ToUpperInvariant(normalized[0]) + normalized[1..].ToLowerInvariant();
+    }
 
     private void GoPlay() => NavigationManager.NavigateTo("/play");
     private void GoHome() => NavigationManager.NavigateTo("/home");

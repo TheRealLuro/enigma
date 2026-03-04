@@ -76,6 +76,11 @@ public partial class Profile
             .OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+    private MapSummary? SelectedAvatarSource =>
+        AvatarSourceOptions.FirstOrDefault(map => EqualsIgnoreCase(map.MapName, AvatarMapName));
+
+    private bool CanSaveAvatar => SelectedAvatarSource is not null && !string.IsNullOrWhiteSpace(SelectedAvatarSource.MapImage);
+
     private ProfileImageState? AvatarPreview =>
         string.IsNullOrWhiteSpace(AvatarMapName)
             ? ProfileData?.ProfileImage
@@ -93,7 +98,7 @@ public partial class Profile
 
     protected override async Task OnParametersSetAsync()
     {
-        await LoadProfileAsync(forceReload: !EqualsIgnoreCase(LoadedUsername, ViewedUsername));
+        await LoadProfileAsync(forceReload: false);
     }
 
     private async Task LoadProfileAsync(bool forceReload)
@@ -114,7 +119,12 @@ public partial class Profile
             }
 
             var targetUsername = string.IsNullOrWhiteSpace(ViewedUsername) ? Session.Username : ViewedUsername.Trim();
-            if (!forceReload && ProfileData is not null && EqualsIgnoreCase(ProfileData.Username, targetUsername))
+            var needsReload =
+                forceReload
+                || ProfileData is null
+                || !EqualsIgnoreCase(ProfileData.Username, targetUsername);
+
+            if (!needsReload)
             {
                 ApplyRequestedTab();
                 return;
@@ -177,7 +187,10 @@ public partial class Profile
         DeleteForm = new DeleteFormModel();
 
         var profileImage = ProfileData.ProfileImage;
-        AvatarMapName = profileImage?.MapName ?? AvatarSourceOptions.FirstOrDefault()?.MapName ?? string.Empty;
+        AvatarMapName = profileImage?.MapName is { Length: > 0 } currentMapName
+            && AvatarSourceOptions.Any(map => EqualsIgnoreCase(map.MapName, currentMapName))
+                ? currentMapName
+                : AvatarSourceOptions.FirstOrDefault()?.MapName ?? string.Empty;
         AvatarCrop = profileImage?.Crop is not null
             ? new ImageCropState { X = profileImage.Crop.X, Y = profileImage.Crop.Y, Size = profileImage.Crop.Size }
             : new ImageCropState { X = 0, Y = 0, Size = 100 };
@@ -293,7 +306,7 @@ public partial class Profile
 
     private async Task UpdateAvatarAsync()
     {
-        if (string.IsNullOrWhiteSpace(AvatarMapName))
+        if (string.IsNullOrWhiteSpace(AvatarMapName) || SelectedAvatarSource is null)
         {
             HasError = true;
             StatusMessage = "Choose an owned map with artwork first.";
@@ -395,10 +408,22 @@ public partial class Profile
     private void SelectAvatarMap(MapSummary map)
     {
         SetActiveTab(SettingsTab);
+        if (string.IsNullOrWhiteSpace(map.MapImage))
+        {
+            HasError = true;
+            StatusMessage = $"{map.MapName} does not have artwork yet, so it cannot be used as a profile picture.";
+            return;
+        }
+
         AvatarMapName = map.MapName;
         AvatarCrop = new ImageCropState { X = 0, Y = 0, Size = 100 };
         StatusMessage = $"{map.MapName} selected for your profile picture.";
         HasError = false;
+    }
+
+    private bool CanRecycleMap(MapSummary map)
+    {
+        return Session is not null && EqualsIgnoreCase(map.Owner, Session.Username);
     }
 
     private async Task RefreshSessionAsync()
@@ -578,6 +603,21 @@ public partial class Profile
         if (DateTimeOffset.TryParse(map.TimeFounded, out var founded))
         {
             return founded.ToLocalTime().ToString("MMM d, yyyy h:mm tt");
+        }
+
+        return "Unknown";
+    }
+
+    private static string FormatFounder(MapSummary map)
+    {
+        if (!string.IsNullOrWhiteSpace(map.Founder))
+        {
+            return map.Founder;
+        }
+
+        if (!string.IsNullOrWhiteSpace(map.Owner))
+        {
+            return map.Owner;
         }
 
         return "Unknown";

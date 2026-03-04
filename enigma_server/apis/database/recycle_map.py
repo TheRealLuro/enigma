@@ -41,14 +41,13 @@ def recycle_map(request: Request, username: str, map_name: str):
         {
             "$inc": {"maze_nuggets": payout_to_user},
             "$pull": {"maps_owned": map_id},
-            "$addToSet": {"maps_discovered": map_id},
         },
     )
     credit_bank_dividend(users_collection, payout_to_bank)
     users_collection.update_one(
         {"username": SYSTEM_BANK_USERNAME},
         {
-            "$addToSet": {"maps_owned": map_id, "maps_discovered": map_id},
+            "$addToSet": {"maps_owned": map_id},
         },
     )
     users_collection.update_many(

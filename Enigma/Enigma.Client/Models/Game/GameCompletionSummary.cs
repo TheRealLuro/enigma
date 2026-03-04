@@ -26,4 +26,5 @@ public sealed class GameCompletionSummary
     public bool RequiresOwnerSave { get; set; }
     public bool DiscoverersSynced { get; set; }
     public bool CanSubmitMapRecord { get; set; }
+    public List<string> UsedItems { get; set; } = [];
 }

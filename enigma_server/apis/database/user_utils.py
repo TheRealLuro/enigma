@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterable
 
 from .map_utils import load_maps_by_ids, normalize_int, serialize_user_map_documents
+from .redis_store import load_user_invites
 
 SYSTEM_BANK_USERNAME = "enigma_bank"
 TUTORIAL_VERSION = 1
@@ -70,10 +71,18 @@ def build_user_defaults_update(user: dict[str, Any]) -> dict[str, Any]:
     return updates
 
 
-def build_discovered_to_owned_sync_update(user: dict[str, Any]) -> list[Any]:
-    discovered_ids = list(user.get("maps_discovered", []))
-    owned_id_strings = {str(map_id) for map_id in user.get("maps_owned", [])}
-    return [map_id for map_id in discovered_ids if str(map_id) not in owned_id_strings]
+def build_owned_maps_sync_update(user: dict[str, Any], maps_collection) -> tuple[list[Any], list[Any]]:
+    username = str(user.get("username") or "").strip()
+    stored_owned_ids = list(user.get("maps_owned", []))
+    stored_owned_id_strings = {str(map_id) for map_id in stored_owned_ids}
+
+    actual_owned_docs = list(maps_collection.find({"owner": username}, {"_id": 1}))
+    actual_owned_ids = [doc["_id"] for doc in actual_owned_docs]
+    actual_owned_id_strings = {str(map_id) for map_id in actual_owned_ids}
+
+    ids_to_add = [map_id for map_id in actual_owned_ids if str(map_id) not in stored_owned_id_strings]
+    ids_to_remove = [map_id for map_id in stored_owned_ids if str(map_id) not in actual_owned_id_strings]
+    return ids_to_add, ids_to_remove
 
 
 def _merge_map_docs(primary: Iterable[dict[str, Any]], secondary: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -139,6 +148,37 @@ def serialize_tutorial_state(value: Any) -> dict[str, Any]:
     }
 
 
+def serialize_pending_multiplayer_invites(username: str | None) -> list[dict[str, Any]]:
+    invites = load_user_invites(str(username or "").strip())
+    serialized: list[dict[str, Any]] = []
+
+    for session_id, payload in invites.items():
+        if not isinstance(payload, dict):
+            continue
+
+        serialized.append(
+            {
+                "session_id": str(payload.get("session_id") or session_id),
+                "owner_username": str(payload.get("owner_username") or "").strip(),
+                "map_name": str(payload.get("map_name") or "").strip() or None,
+                "difficulty": str(payload.get("difficulty") or "").strip(),
+                "size": normalize_int(payload.get("size")),
+                "status": str(payload.get("status") or "").strip(),
+                "created_at": payload.get("created_at"),
+                "source": str(payload.get("source") or "").strip() or "new",
+            }
+        )
+
+    return sorted(
+        serialized,
+        key=lambda invite: (
+            str(invite.get("created_at") or ""),
+            str(invite.get("session_id") or ""),
+        ),
+        reverse=True,
+    )
+
+
 def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, Any]:
     normalized_user = apply_user_defaults(user)
     maps_owned_docs, maps_discovered_docs = resolve_user_maps(normalized_user, maps_collection)
@@ -164,6 +204,7 @@ def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, A
         "maps_lost": normalize_int(normalized_user.get("maps_lost")),
         "owned_cosmetics": list(normalized_user.get("owned_cosmetics", [])),
         "item_counts": normalized_user.get("item_counts", {}),
+        "pending_multiplayer_invites": serialize_pending_multiplayer_invites(normalized_user.get("username")),
         "last_login_at": last_login_value,
         "profile_image": serialize_profile_image(normalized_user.get("profile_image"), maps_owned_docs),
         "tutorial_state": serialize_tutorial_state(normalized_user.get("tutorial_state")),

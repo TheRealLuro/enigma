@@ -4,7 +4,7 @@ from main import limiter
 
 from .db import maps_collection, users_collection
 from .user_utils import (
-    build_discovered_to_owned_sync_update,
+    build_owned_maps_sync_update,
     build_user_defaults_update,
     is_hidden_account,
     serialize_public_profile,
@@ -28,9 +28,11 @@ def get_user(request: Request, username: str, viewer: str | None = None):
     if set_updates:
         update_query["$set"] = set_updates
 
-    missing_owned_maps = build_discovered_to_owned_sync_update(user)
-    if missing_owned_maps:
-        update_query["$addToSet"] = {"maps_owned": {"$each": missing_owned_maps}}
+    owned_to_add, owned_to_remove = build_owned_maps_sync_update(user, maps_collection)
+    if owned_to_add:
+        update_query.setdefault("$addToSet", {})["maps_owned"] = {"$each": owned_to_add}
+    if owned_to_remove:
+        update_query.setdefault("$pull", {})["maps_owned"] = {"$in": owned_to_remove}
 
     if update_query:
         users_collection.update_one({"_id": user["_id"]}, update_query)

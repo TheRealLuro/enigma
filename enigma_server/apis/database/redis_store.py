@@ -42,6 +42,10 @@ def user_session_key(username: str) -> str:
     return f"enigma:multiplayer:user-session:{username.strip().lower()}"
 
 
+def user_invites_key(username: str) -> str:
+    return f"enigma:multiplayer:user-invites:{username.strip().lower()}"
+
+
 def load_json(key: str) -> dict[str, Any] | None:
     client = ensure_redis_available()
     raw = client.get(key)
@@ -67,6 +71,40 @@ def delete_keys(*keys: str) -> None:
 
     client = ensure_redis_available()
     client.delete(*existing)
+
+
+def load_user_invites(username: str) -> dict[str, Any]:
+    payload = load_json(user_invites_key(username))
+    if isinstance(payload, dict):
+        return payload
+    return {}
+
+
+def save_user_invites(username: str, invites: dict[str, Any], ttl_seconds: int = SESSION_TTL_SECONDS) -> None:
+    if not invites:
+        delete_keys(user_invites_key(username))
+        return
+
+    save_json(user_invites_key(username), invites, ttl_seconds=ttl_seconds)
+
+
+def upsert_user_invite(username: str, session_id: str, invite: dict[str, Any], ttl_seconds: int = SESSION_TTL_SECONDS) -> None:
+    if not session_id.strip():
+        return
+
+    invites = load_user_invites(username)
+    invites[session_id.strip()] = invite
+    save_user_invites(username, invites, ttl_seconds=ttl_seconds)
+
+
+def remove_user_invite(username: str, session_id: str) -> None:
+    normalized_session_id = session_id.strip()
+    if not normalized_session_id:
+        return
+
+    invites = load_user_invites(username)
+    if invites.pop(normalized_session_id, None) is not None:
+        save_user_invites(username, invites)
 
 
 @contextmanager

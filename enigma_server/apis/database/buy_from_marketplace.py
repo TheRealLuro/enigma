@@ -62,10 +62,7 @@ def buy_from(request: Request, map_name: str, buyer: str):
                     },
                     {
                         "$inc": {"maze_nuggets": -cost},
-                        "$addToSet": {
-                            "maps_owned": map_id,
-                            "maps_discovered": map_id,
-                        },
+                        "$addToSet": {"maps_owned": map_id},
                     },
                     session=session,
                 )
@@ -78,7 +75,6 @@ def buy_from(request: Request, map_name: str, buyer: str):
                     {
                         "$inc": {"maze_nuggets": split["seller_reward"]},
                         "$pull": {"maps_owned": map_id},
-                        "$addToSet": {"maps_discovered": map_id},
                     },
                     session=session,
                 )
@@ -103,6 +99,12 @@ def buy_from(request: Request, map_name: str, buyer: str):
 
                 if map_result.matched_count != 1:
                     raise HTTPException(status_code=404, detail="Map not found")
+
+                users_collection.update_many(
+                    {"username": seller_username, "profile_image.map_name": normalized_map_name},
+                    {"$set": {"profile_image": None}},
+                    session=session,
+                )
 
                 marketplace_collection.delete_one({"_id": listing["_id"]}, session=session)
     except HTTPException:

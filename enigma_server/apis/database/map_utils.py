@@ -194,6 +194,8 @@ def serialize_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
     map_image = map_doc.get("map_image") or None
     theme_label = normalize_theme_label(map_doc.get("theme"))
     best_time_display = format_best_time(map_doc.get("best_time"))
+    owner_value = str(map_doc.get("owner") or "").strip() or "Unknown"
+    founder_value = str(map_doc.get("founder") or "").strip() or owner_value
 
     return {
         "id": str(map_doc.get("_id", "")),
@@ -206,8 +208,8 @@ def serialize_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
         "theme_label": theme_label,
         "difficulty": map_doc.get("difficulty", "unknown"),
         "size": normalize_int(map_doc.get("size")),
-        "founder": map_doc.get("founder", "Unknown"),
-        "owner": map_doc.get("owner", "Unknown"),
+        "founder": founder_value,
+        "owner": owner_value,
         "value": normalize_int(map_doc.get("value")),
         "sold_for_last": normalize_int(map_doc.get("sold_for_last")),
         "plays": normalize_int(map_doc.get("plays")),
@@ -227,6 +229,10 @@ def serialize_user_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
     map_image = map_doc.get("map_image") or None
     theme_label = normalize_theme_label(map_doc.get("theme"))
     best_time_display = format_best_time(map_doc.get("best_time"))
+    founded_at, founded_display = serialize_datetime(map_doc.get("time_founded"))
+    ratings = map_doc.get("rating", [])
+    owner_value = str(map_doc.get("owner") or "").strip() or "Unknown"
+    founder_value = str(map_doc.get("founder") or "").strip() or owner_value
 
     return {
         "id": str(map_doc.get("_id", "")),
@@ -239,12 +245,19 @@ def serialize_user_map_document(map_doc: dict[str, Any]) -> dict[str, Any]:
         "difficulty": map_doc.get("difficulty", "unknown"),
         "size": normalize_int(map_doc.get("size")),
         "value": normalize_int(map_doc.get("value")),
+        "sold_for_last": normalize_int(map_doc.get("sold_for_last")),
+        "plays": normalize_int(map_doc.get("plays")),
         "best_time": best_time_display,
         "best_time_display": best_time_display,
         "best_time_ms": time_to_milliseconds(map_doc.get("best_time")),
         "user_with_best_time": map_doc.get("user_with_best_time", "Unknown"),
-        "owner": map_doc.get("owner", "Unknown"),
-        "founder": map_doc.get("founder", "Unknown"),
+        "owner": owner_value,
+        "founder": founder_value,
+        "time_founded": founded_at,
+        "time_founded_display": founded_display,
+        "founded_display": founded_display,
+        "rating_average": average_rating(ratings),
+        "rating_count": rating_count(ratings),
     }
 
 

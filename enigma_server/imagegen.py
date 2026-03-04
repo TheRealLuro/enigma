@@ -1,10 +1,11 @@
 import base64
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from contextlib import contextmanager
 from functools import lru_cache
 import hashlib
 import io
 import threading
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
@@ -49,42 +50,91 @@ ROOM_INDEX = {key: idx for idx, key in enumerate(ROOM_TYPES.keys())}
 PUZZLE_INDEX = {key: idx for idx, key in enumerate(PUZZLE_TYPES.keys())}
 
 
-# Prompt content is sourced from fetchprompt.py
-_PROMPT_PACK = get_prompt_pack()
-PROMPT_PACK_NAME = str(_PROMPT_PACK.get("name", "default"))
-PROMPT_COMPOSITION_ELITE = _PROMPT_PACK["PROMPT_COMPOSITION_ELITE"]
-PROMPT_COLORS_ELITE = _PROMPT_PACK["PROMPT_COLORS_ELITE"]
-SCIENCE_CUES_ELITE = _PROMPT_PACK["SCIENCE_CUES_ELITE"]
-PROMPT_PAREIDOLIA_ELITE = _PROMPT_PACK["PROMPT_PAREIDOLIA_ELITE"]
-PROMPT_NEUROCHEM_ELITE = _PROMPT_PACK["PROMPT_NEUROCHEM_ELITE"]
-PROMPT_TEMPORAL_ELITE = _PROMPT_PACK["PROMPT_TEMPORAL_ELITE"]
-PROMPT_EDGE_ELITE = _PROMPT_PACK["PROMPT_EDGE_ELITE"]
-PROMPT_ARCHETYPES_ELITE = _PROMPT_PACK["PROMPT_ARCHETYPES_ELITE"]
-PROMPT_SCALE_ELITE = _PROMPT_PACK["PROMPT_SCALE_ELITE"]
-PROMPT_FLOW_RULES = _PROMPT_PACK["PROMPT_FLOW_RULES"]
-PROMPT_COMPOSITION_ELITE_DEFINED = _PROMPT_PACK["PROMPT_COMPOSITION_ELITE_DEFINED"]
-PROMPT_COLORS_ELITE_DEFINED = _PROMPT_PACK["PROMPT_COLORS_ELITE_DEFINED"]
-SCIENCE_CUES_ELITE_DEFINED = _PROMPT_PACK["SCIENCE_CUES_ELITE_DEFINED"]
-PROMPT_PAREIDOLIA_ELITE_DEFINED = _PROMPT_PACK["PROMPT_PAREIDOLIA_ELITE_DEFINED"]
-PROMPT_NEUROCHEM_ELITE_DEFINED = _PROMPT_PACK["PROMPT_NEUROCHEM_ELITE_DEFINED"]
-PROMPT_TEMPORAL_ELITE_DEFINED = _PROMPT_PACK["PROMPT_TEMPORAL_ELITE_DEFINED"]
-PROMPT_EDGE_ELITE_DEFINED = _PROMPT_PACK["PROMPT_EDGE_ELITE_DEFINED"]
-PROMPT_ARCHETYPES_ELITE_DEFINED = _PROMPT_PACK["PROMPT_ARCHETYPES_ELITE_DEFINED"]
-PROMPT_SCALE_ELITE_DEFINED = _PROMPT_PACK["PROMPT_SCALE_ELITE_DEFINED"]
-PROMPT_FLOW_RULES_DEFINED = _PROMPT_PACK["PROMPT_FLOW_RULES_DEFINED"]
-NEURAL_CAVE_SUBJECT = _PROMPT_PACK["NEURAL_CAVE_SUBJECT"]
-NEURAL_CAVE_STRUCTURE = _PROMPT_PACK["NEURAL_CAVE_STRUCTURE"]
-NEURAL_CAVE_GLOW = _PROMPT_PACK["NEURAL_CAVE_GLOW"]
-NEURAL_CAVE_PAREIDOLIA = _PROMPT_PACK["NEURAL_CAVE_PAREIDOLIA"]
-NEURAL_CAVE_MOOD = _PROMPT_PACK["NEURAL_CAVE_MOOD"]
-NEURAL_CAVE_SCIENCE = _PROMPT_PACK["NEURAL_CAVE_SCIENCE"]
-NEURAL_CAVE_MORPH = _PROMPT_PACK["NEURAL_CAVE_MORPH"]
-NEURAL_CAVE_DEPTH = _PROMPT_PACK["NEURAL_CAVE_DEPTH"]
-NEURAL_CAVE_ORGANIC_PRESENCE = _PROMPT_PACK["NEURAL_CAVE_ORGANIC_PRESENCE"]
-CORE_PROMPTS = _PROMPT_PACK["CORE_PROMPTS"]
-ORGANIC_SHORT = _PROMPT_PACK["ORGANIC_SHORT"]
-BASE_REFINER_PROMPT = _PROMPT_PACK["BASE_REFINER_PROMPT"]
-BASE_NEGATIVE_PROMPT = _PROMPT_PACK["BASE_NEGATIVE_PROMPT"]
+_prompt_pack_context = threading.local()
+
+
+def _get_current_prompt_pack() -> dict:
+    pack = getattr(_prompt_pack_context, "pack", None)
+    return pack if pack is not None else get_prompt_pack()
+
+
+@contextmanager
+def _prompt_pack_scope(pack: dict | None = None):
+    previous = getattr(_prompt_pack_context, "pack", None)
+    _prompt_pack_context.pack = pack if pack is not None else get_prompt_pack()
+    try:
+        yield _prompt_pack_context.pack
+    finally:
+        if previous is None:
+            try:
+                delattr(_prompt_pack_context, "pack")
+            except AttributeError:
+                pass
+        else:
+            _prompt_pack_context.pack = previous
+
+
+class _PromptPackValueProxy:
+    def __init__(self, key: str):
+        self._key = key
+
+    def _value(self) -> Any:
+        return _get_current_prompt_pack()[self._key]
+
+    def __getitem__(self, item):
+        return self._value()[item]
+
+    def __iter__(self):
+        return iter(self._value())
+
+    def __len__(self):
+        return len(self._value())
+
+    def __contains__(self, item):
+        return item in self._value()
+
+    def __str__(self):
+        return str(self._value())
+
+    def __repr__(self):
+        return repr(self._value())
+
+
+# Prompt content is sourced from fetchprompt.py, but the active pack is chosen per generation.
+PROMPT_PACK_NAME = _PromptPackValueProxy("name")
+PROMPT_COMPOSITION_ELITE = _PromptPackValueProxy("PROMPT_COMPOSITION_ELITE")
+PROMPT_COLORS_ELITE = _PromptPackValueProxy("PROMPT_COLORS_ELITE")
+SCIENCE_CUES_ELITE = _PromptPackValueProxy("SCIENCE_CUES_ELITE")
+PROMPT_PAREIDOLIA_ELITE = _PromptPackValueProxy("PROMPT_PAREIDOLIA_ELITE")
+PROMPT_NEUROCHEM_ELITE = _PromptPackValueProxy("PROMPT_NEUROCHEM_ELITE")
+PROMPT_TEMPORAL_ELITE = _PromptPackValueProxy("PROMPT_TEMPORAL_ELITE")
+PROMPT_EDGE_ELITE = _PromptPackValueProxy("PROMPT_EDGE_ELITE")
+PROMPT_ARCHETYPES_ELITE = _PromptPackValueProxy("PROMPT_ARCHETYPES_ELITE")
+PROMPT_SCALE_ELITE = _PromptPackValueProxy("PROMPT_SCALE_ELITE")
+PROMPT_FLOW_RULES = _PromptPackValueProxy("PROMPT_FLOW_RULES")
+PROMPT_COMPOSITION_ELITE_DEFINED = _PromptPackValueProxy("PROMPT_COMPOSITION_ELITE_DEFINED")
+PROMPT_COLORS_ELITE_DEFINED = _PromptPackValueProxy("PROMPT_COLORS_ELITE_DEFINED")
+SCIENCE_CUES_ELITE_DEFINED = _PromptPackValueProxy("SCIENCE_CUES_ELITE_DEFINED")
+PROMPT_PAREIDOLIA_ELITE_DEFINED = _PromptPackValueProxy("PROMPT_PAREIDOLIA_ELITE_DEFINED")
+PROMPT_NEUROCHEM_ELITE_DEFINED = _PromptPackValueProxy("PROMPT_NEUROCHEM_ELITE_DEFINED")
+PROMPT_TEMPORAL_ELITE_DEFINED = _PromptPackValueProxy("PROMPT_TEMPORAL_ELITE_DEFINED")
+PROMPT_EDGE_ELITE_DEFINED = _PromptPackValueProxy("PROMPT_EDGE_ELITE_DEFINED")
+PROMPT_ARCHETYPES_ELITE_DEFINED = _PromptPackValueProxy("PROMPT_ARCHETYPES_ELITE_DEFINED")
+PROMPT_SCALE_ELITE_DEFINED = _PromptPackValueProxy("PROMPT_SCALE_ELITE_DEFINED")
+PROMPT_FLOW_RULES_DEFINED = _PromptPackValueProxy("PROMPT_FLOW_RULES_DEFINED")
+NEURAL_CAVE_SUBJECT = _PromptPackValueProxy("NEURAL_CAVE_SUBJECT")
+NEURAL_CAVE_STRUCTURE = _PromptPackValueProxy("NEURAL_CAVE_STRUCTURE")
+NEURAL_CAVE_GLOW = _PromptPackValueProxy("NEURAL_CAVE_GLOW")
+NEURAL_CAVE_PAREIDOLIA = _PromptPackValueProxy("NEURAL_CAVE_PAREIDOLIA")
+NEURAL_CAVE_MOOD = _PromptPackValueProxy("NEURAL_CAVE_MOOD")
+NEURAL_CAVE_SCIENCE = _PromptPackValueProxy("NEURAL_CAVE_SCIENCE")
+NEURAL_CAVE_MORPH = _PromptPackValueProxy("NEURAL_CAVE_MORPH")
+NEURAL_CAVE_DEPTH = _PromptPackValueProxy("NEURAL_CAVE_DEPTH")
+NEURAL_CAVE_ORGANIC_PRESENCE = _PromptPackValueProxy("NEURAL_CAVE_ORGANIC_PRESENCE")
+CORE_PROMPTS = _PromptPackValueProxy("CORE_PROMPTS")
+ORGANIC_SHORT = _PromptPackValueProxy("ORGANIC_SHORT")
+BASE_REFINER_PROMPT = _PromptPackValueProxy("BASE_REFINER_PROMPT")
+BASE_NEGATIVE_PROMPT = _PromptPackValueProxy("BASE_NEGATIVE_PROMPT")
 
 MAX_GENERATION_QUEUE = 32
 _generation_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="imagegen")

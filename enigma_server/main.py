@@ -1,9 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from slowapi import Limiter
-from slowapi.middleware import SlowAPIMiddleware
-from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import asyncio
 import diffusionengine
@@ -12,18 +9,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from apis.database.item_shop_stocker import ensure_shop_seeded, shop_restock_scheduler
 from apis.database.system_accounts import ensure_bank_account
 
-def get_client_ip(request: Request):
-    x_forwarded_for = request.headers.get("X-Forwarded-For")
-    if x_forwarded_for:
-        return x_forwarded_for.split(",")[0].strip()
-    return request.client.host
+class NoOpLimiter:
+    @staticmethod
+    def limit(_rule: str):
+        def decorator(func):
+            return func
 
-limiter = Limiter(key_func=get_client_ip)
+        return decorator
+
+limiter = NoOpLimiter()
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, default_response_class=JSONResponse)
 
 
 app.state.limiter = limiter
-app.add_middleware(SlowAPIMiddleware)
 origins = [
     "https://pro150enigma-dfd8aqh7g4cuaxee.canadacentral-01.azurewebsites.net",
     "http://localhost:5241"
@@ -36,12 +34,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.exception_handler(RateLimitExceeded)
-async def rate_limit_json_handler(request: Request, exc: RateLimitExceeded):
-    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
-
 
 @app.exception_handler(RequestValidationError)
 async def validation_json_handler(request: Request, exc: RequestValidationError):

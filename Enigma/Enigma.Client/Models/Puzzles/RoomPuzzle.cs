@@ -485,7 +485,7 @@ public sealed class YarnUntanglePuzzle : RoomPuzzle
     private int? _selectedIndex;
 
     public YarnUntanglePuzzle(int[] strandOrder)
-        : base('y', "Path Untangle", "Swap the strands until they run from 1 to 4 without crossing.")
+        : base('y', "Path Untangle", "Swap the right endpoints until no strands cross.")
     {
         StrandOrder = strandOrder;
         UpdateStatus();
@@ -493,6 +493,17 @@ public sealed class YarnUntanglePuzzle : RoomPuzzle
 
     public int[] StrandOrder { get; }
     public int? SelectedIndex => _selectedIndex;
+    public int CrossingCount => CountCrossings();
+
+    public int GetRightSlotForLeftIndex(int leftIndex)
+    {
+        if (leftIndex < 0 || leftIndex >= StrandOrder.Length)
+        {
+            return -1;
+        }
+
+        return Math.Clamp(StrandOrder[leftIndex] - 1, 0, StrandOrder.Length - 1);
+    }
 
     public void Select(int index)
     {
@@ -509,10 +520,17 @@ public sealed class YarnUntanglePuzzle : RoomPuzzle
         }
 
         var otherIndex = _selectedIndex.Value;
+        if (otherIndex == index)
+        {
+            _selectedIndex = null;
+            UpdateStatus();
+            return;
+        }
+
         _selectedIndex = null;
         (StrandOrder[otherIndex], StrandOrder[index]) = (StrandOrder[index], StrandOrder[otherIndex]);
 
-        if (StrandOrder.SequenceEqual([1, 2, 3, 4]))
+        if (CountCrossings() == 0)
         {
             Complete("Path untangled.");
             return;
@@ -523,7 +541,26 @@ public sealed class YarnUntanglePuzzle : RoomPuzzle
 
     private void UpdateStatus()
     {
-        StatusText = $"Current order: {string.Join(" - ", StrandOrder)}";
+        StatusText = _selectedIndex is null
+            ? $"Crossings remaining: {CrossingCount}. Choose one endpoint to move."
+            : $"Crossings remaining: {CrossingCount}. Choose a second endpoint to swap.";
+    }
+
+    private int CountCrossings()
+    {
+        var crossings = 0;
+        for (var left = 0; left < StrandOrder.Length; left++)
+        {
+            for (var right = left + 1; right < StrandOrder.Length; right++)
+            {
+                if (StrandOrder[left] > StrandOrder[right])
+                {
+                    crossings++;
+                }
+            }
+        }
+
+        return crossings;
     }
 }
 

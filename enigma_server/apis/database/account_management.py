@@ -16,9 +16,10 @@ from .economy_rules import compute_loss_fee, credit_bank_dividend
 from .item_catalog import serialize_shop_item
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
-    build_discovered_to_owned_sync_update,
+    build_owned_maps_sync_update,
     build_user_defaults_update,
     normalize_email,
+    resolve_user_maps,
     serialize_session_user,
 )
 
@@ -94,12 +95,14 @@ def _sync_user(username: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="User not found")
 
     set_updates = build_user_defaults_update(user)
-    missing_owned = build_discovered_to_owned_sync_update(user)
+    owned_to_add, owned_to_remove = build_owned_maps_sync_update(user, maps_collection)
     update_query: dict[str, Any] = {}
     if set_updates:
         update_query["$set"] = set_updates
-    if missing_owned:
-        update_query["$addToSet"] = {"maps_owned": {"$each": missing_owned}}
+    if owned_to_add:
+        update_query.setdefault("$addToSet", {})["maps_owned"] = {"$each": owned_to_add}
+    if owned_to_remove:
+        update_query.setdefault("$pull", {})["maps_owned"] = {"$in": owned_to_remove}
 
     if update_query:
         users_collection.update_one({"_id": user["_id"]}, update_query)
@@ -179,7 +182,15 @@ def update_avatar(request: Request, payload: UpdateAvatarPayload):
     if user.get("is_system_account"):
         raise HTTPException(status_code=403, detail="System accounts cannot change avatars")
 
-    owned_map = maps_collection.find_one({"map_name": payload.map_name, "owner": payload.username})
+    owned_map_docs, _ = resolve_user_maps(user, maps_collection)
+    owned_map = next(
+        (
+            map_doc
+            for map_doc in owned_map_docs
+            if str(map_doc.get("map_name") or "").strip().lower() == payload.map_name.strip().lower()
+        ),
+        None,
+    )
     if not owned_map or not owned_map.get("map_image"):
         raise HTTPException(status_code=404, detail="Only owned maps with images can be used as profile pictures")
 
