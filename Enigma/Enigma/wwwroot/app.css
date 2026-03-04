@@ -5318,3 +5318,332 @@ h1:focus {
     }
 }
 
+.enigma-game-shell {
+    grid-template-columns: 1fr;
+}
+
+.enigma-room-shell {
+    width: 100%;
+    gap: 18px;
+}
+
+.enigma-room-meta {
+    grid-template-columns: 1fr;
+    gap: 12px;
+}
+
+.enigma-room-meta-copy {
+    max-width: 62ch;
+}
+
+.enigma-room-stage-wrap {
+    padding: 14px;
+}
+
+.enigma-room-stage {
+    aspect-ratio: 16 / 9;
+    min-height: clamp(860px, 84vh, 1320px);
+}
+
+.enigma-stage-run-status {
+    position: absolute;
+    right: 22px;
+    bottom: 22px;
+    z-index: 7;
+    width: min(360px, calc(100% - 44px));
+    padding: 16px;
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(12, 18, 28, 0.90), rgba(8, 12, 18, 0.94));
+    border: 1px solid rgba(122, 181, 255, 0.16);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+}
+
+.enigma-stage-run-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.enigma-stage-goal {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(77, 131, 255, 0.14);
+    border: 1px solid rgba(122, 181, 255, 0.18);
+    color: #ddecff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.enigma-stage-run-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.enigma-stage-run-grid div {
+    min-height: 86px;
+    padding: 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.enigma-stage-run-grid span {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--epic-text-dim);
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.enigma-stage-run-grid strong {
+    color: var(--epic-text);
+    font-size: 1.05rem;
+}
+
+.enigma-stage-run-items {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.enigma-stage-run-items-label {
+    color: var(--epic-text-dim);
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.enigma-stage-run-empty {
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--epic-text-secondary);
+}
+
+.enigma-stage-run-pill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.enigma-stage-run-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(57, 113, 255, 0.16);
+    border: 1px solid rgba(122, 181, 255, 0.2);
+    color: var(--epic-text);
+}
+
+.enigma-stage-run-pill strong {
+    font-size: 0.88rem;
+}
+
+.enigma-stage-run-pill span {
+    color: var(--epic-text-secondary);
+    font-size: 0.82rem;
+}
+
+.enigma-puzzle-console {
+    position: absolute;
+    z-index: 6;
+    display: grid;
+    place-items: center;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.enigma-puzzle-console-screen {
+    width: 72%;
+    height: 54%;
+    border-radius: 14px;
+    background:
+        linear-gradient(180deg, rgba(98, 162, 255, 0.92), rgba(38, 77, 155, 0.94)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 0 24px rgba(66, 135, 255, 0.2);
+}
+
+.enigma-puzzle-console-base {
+    position: absolute;
+    bottom: 8%;
+    width: 88%;
+    height: 24%;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(22, 30, 44, 0.94), rgba(9, 14, 24, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.34);
+}
+
+.enigma-puzzle-console.nearby .enigma-puzzle-console-screen {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 32px rgba(66, 135, 255, 0.38);
+}
+
+.enigma-console-prompt {
+    position: absolute;
+    left: 28px;
+    bottom: 30px;
+    z-index: 7;
+    min-height: 38px;
+    padding: 0 16px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    background: rgba(8, 12, 18, 0.86);
+    border: 1px solid rgba(122, 181, 255, 0.16);
+    color: var(--epic-text);
+    font-weight: 700;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+
+.enigma-coop-inline-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 6px;
+    padding: 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--epic-border);
+}
+
+.enigma-coop-inline-strip div {
+    display: grid;
+    gap: 4px;
+}
+
+.enigma-coop-inline-strip span {
+    color: var(--epic-text-dim);
+    font-size: 0.78rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.enigma-coop-inline-strip strong {
+    color: var(--epic-text);
+    font-size: 0.96rem;
+}
+
+.enigma-puzzle-overlay-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: grid;
+    place-items: center;
+    padding: 32px;
+    background: rgba(3, 7, 14, 0.72);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+
+.enigma-puzzle-overlay-shell {
+    position: relative;
+    width: min(840px, calc(100vw - 64px));
+    margin: 0;
+    display: block;
+}
+
+.enigma-puzzle-overlay-shell .enigma-sidebar-summary {
+    display: none;
+}
+
+.enigma-puzzle-overlay-shell .enigma-puzzle-card {
+    margin: 0;
+    padding: 26px;
+    padding-top: 70px;
+    max-height: min(86vh, 1120px);
+    overflow: auto;
+    border-radius: 24px;
+    box-shadow: 0 34px 90px rgba(0, 0, 0, 0.4);
+}
+
+.enigma-puzzle-overlay-shell .enigma-puzzle-guide,
+.enigma-puzzle-overlay-shell .enigma-puzzle-status {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.enigma-overlay-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 3;
+    min-height: 40px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--epic-text);
+    font-weight: 700;
+}
+
+.enigma-overlay-close:hover {
+    background: rgba(77, 131, 255, 0.22);
+}
+
+@media (max-width: 1280px) {
+    .enigma-room-stage {
+        min-height: clamp(720px, 74vh, 1120px);
+    }
+
+    .enigma-stage-run-status {
+        width: min(330px, calc(100% - 40px));
+    }
+
+    .enigma-coop-inline-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 900px) {
+    .enigma-room-stage {
+        aspect-ratio: auto;
+        min-height: 760px;
+    }
+
+    .enigma-stage-run-status {
+        position: static;
+        width: 100%;
+        margin: 16px;
+        margin-top: auto;
+    }
+
+    .enigma-console-prompt {
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        max-width: calc(100% - 36px);
+        text-align: center;
+    }
+
+    .enigma-puzzle-overlay-backdrop {
+        padding: 18px;
+    }
+
+    .enigma-puzzle-overlay-shell {
+        width: calc(100vw - 36px);
+    }
+
+    .enigma-puzzle-overlay-shell .enigma-puzzle-card {
+        padding: 20px;
+        padding-top: 64px;
+        max-height: calc(100vh - 36px);
+    }
+}
+

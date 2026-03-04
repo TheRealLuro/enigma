@@ -15,6 +15,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private const double PlayerSpeed = 380d;
     private const double DoorWidth = 240d;
     private const double WallThickness = 42d;
+    private static readonly PlayAreaRect PuzzleConsoleBounds = new(72d, 882d, 116d, 116d);
     private const string CompletionSummaryStorageKey = "enigma.game.summary";
     private static readonly TimeSpan PlayerStateSyncInterval = TimeSpan.FromMilliseconds(120);
 
@@ -65,6 +66,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected bool IsMoving { get; private set; }
     protected int TotalGold { get; private set; }
     protected List<RunLoadoutSelection> EquippedLoadout { get; private set; } = [];
+    protected bool IsPuzzleOverlayOpen { get; private set; }
 
     protected IReadOnlyDictionary<char, string> RoomBackgrounds { get; } = new Dictionary<char, string>
     {
@@ -111,6 +113,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected string NormalizedSource => string.Equals(Source, "load", StringComparison.OrdinalIgnoreCase) ? "load" : "new";
     protected string ElapsedTimeLabel => FormatElapsed(_sessionStopwatch.Elapsed);
     protected bool CanShowRoom => ParsedSeed is not null && CurrentRoom is not null && CurrentRoomState is not null;
+    protected bool HasPuzzleOverlayContent => IsCoopRun ? HasCoopPuzzle : CurrentRoomState?.Puzzle is not null;
+    protected bool IsCurrentPuzzleSolved => IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState?.Puzzle.IsCompleted == true;
+    protected bool CanInteractWithPuzzleConsole => CanShowRoom && HasPuzzleOverlayContent && !IsCurrentPuzzleSolved;
     protected bool PortalReady => IsCoopRun
         ? CurrentRoomState?.Definition.Kind == MazeRoomKind.Finish && IsCurrentCoopRoomSolved
         : CurrentRoomState?.FinishPortalVisible == true;
@@ -239,12 +244,32 @@ public partial class Game : ComponentBase, IAsyncDisposable
     [JSInvokable]
     public Task HandleKeyChange(string keyCode, bool isPressed)
     {
+        if (isPressed && string.Equals(keyCode, "Escape", StringComparison.OrdinalIgnoreCase))
+        {
+            if (IsPuzzleOverlayOpen)
+            {
+                ClosePuzzleOverlay();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        if (string.Equals(keyCode, "KeyE", StringComparison.OrdinalIgnoreCase))
+        {
+            if (isPressed && IsNearPuzzleConsole())
+            {
+                TogglePuzzleOverlay();
+            }
+
+            return Task.CompletedTask;
+        }
+
         if (IsCoopRun)
         {
             return HandleCoopPuzzleKeyChangeAsync(keyCode, isPressed);
         }
 
-        if (CurrentRoomState?.Puzzle is UnlockPatternPuzzle unlockPattern && !unlockPattern.IsCompleted)
+        if (IsPuzzleOverlayOpen && CurrentRoomState?.Puzzle is UnlockPatternPuzzle unlockPattern && !unlockPattern.IsCompleted)
         {
             _pressedKeys.Clear();
 
@@ -256,7 +281,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return Task.CompletedTask;
         }
 
-        if (CurrentRoomState?.Puzzle is DirectionalEchoPuzzle directionalEcho && !directionalEcho.IsCompleted)
+        if (IsPuzzleOverlayOpen && CurrentRoomState?.Puzzle is DirectionalEchoPuzzle directionalEcho && !directionalEcho.IsCompleted)
         {
             _pressedKeys.Clear();
 
@@ -268,7 +293,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return Task.CompletedTask;
         }
 
-        if (CurrentRoomState?.Puzzle is DimensionalPatternShiftPuzzle dimensionalShift && !dimensionalShift.IsCompleted)
+        if (IsPuzzleOverlayOpen && CurrentRoomState?.Puzzle is DimensionalPatternShiftPuzzle dimensionalShift && !dimensionalShift.IsCompleted)
         {
             _pressedKeys.Clear();
 
@@ -290,6 +315,60 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
 
         return Task.CompletedTask;
+    }
+
+    protected string GetPuzzleConsoleStyle() => GetRectStyle(PuzzleConsoleBounds);
+
+    protected bool IsNearPuzzleConsole()
+    {
+        if (!CanInteractWithPuzzleConsole)
+        {
+            return false;
+        }
+
+        var playerCenterX = PlayerX + (PlayerSize / 2d);
+        var playerCenterY = PlayerY + (PlayerSize / 2d);
+        var consoleCenterX = PuzzleConsoleBounds.X + (PuzzleConsoleBounds.Width / 2d);
+        var consoleCenterY = PuzzleConsoleBounds.Y + (PuzzleConsoleBounds.Height / 2d);
+        var distance = Math.Sqrt(Math.Pow(playerCenterX - consoleCenterX, 2d) + Math.Pow(playerCenterY - consoleCenterY, 2d));
+        return distance <= 165d;
+    }
+
+    protected void TogglePuzzleOverlay()
+    {
+        if (IsPuzzleOverlayOpen)
+        {
+            ClosePuzzleOverlay();
+        }
+        else
+        {
+            OpenPuzzleOverlay();
+        }
+    }
+
+    protected void OpenPuzzleOverlay()
+    {
+        if (!CanInteractWithPuzzleConsole)
+        {
+            return;
+        }
+
+        IsPuzzleOverlayOpen = true;
+        IsMoving = false;
+        _pressedKeys.Clear();
+        ShowBanner("Puzzle interface active. Press E or Escape to close.", 1.0d);
+    }
+
+    protected void ClosePuzzleOverlay()
+    {
+        if (!IsPuzzleOverlayOpen)
+        {
+            return;
+        }
+
+        IsPuzzleOverlayOpen = false;
+        IsMoving = false;
+        _pressedKeys.Clear();
     }
 
     protected string GetRoomStageStyle()
@@ -721,6 +800,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
             _playerStateDirty = true;
         }
 
+        if (IsPuzzleOverlayOpen && IsCurrentPuzzleSolved)
+        {
+            ClosePuzzleOverlay();
+        }
+
         if (CurrentRoomState.RewardPickupVisible &&
             CurrentRoomState.RewardPickupBounds.Intersects(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize)))
         {
@@ -802,6 +886,17 @@ public partial class Game : ComponentBase, IAsyncDisposable
         var previousFacing = PlayerFacing;
         var previousMoving = IsMoving;
         var previousRoom = CurrentRoom?.Coordinates;
+
+        if (IsPuzzleOverlayOpen)
+        {
+            IsMoving = false;
+            if (previousMoving)
+            {
+                _playerStateDirty = true;
+            }
+
+            return;
+        }
 
         if (!IsCoopRun &&
             ((CurrentRoomState?.Puzzle is UnlockPatternPuzzle unlockPattern && !unlockPattern.IsCompleted) ||
@@ -937,6 +1032,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         CurrentRoom = nextRoom;
         CurrentRoomState = _roomStates[nextRoom.Coordinates];
+        ClosePuzzleOverlay();
         switch (direction)
         {
             case PlayerDirection.Up:
@@ -1041,6 +1137,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         LoadError = null;
         IsLoaded = false;
         TotalGold = 0;
+        IsPuzzleOverlayOpen = false;
         _completionTriggered = false;
         _abandonTriggered = false;
         _allowRouteExit = false;

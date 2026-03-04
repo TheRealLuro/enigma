@@ -144,7 +144,7 @@
     }
 
     function shouldHandleKey(code) {
-        return ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft", "KeyW", "KeyA", "KeyS", "KeyD"].includes(code);
+        return ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft", "KeyW", "KeyA", "KeyS", "KeyD", "KeyE", "Escape"].includes(code);
     }
 
     function removeListeners() {

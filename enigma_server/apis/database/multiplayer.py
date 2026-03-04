@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -390,15 +390,164 @@ def _broadcast_ws_session_from_thread(
         pass
 
 
+def _session_has_member(session: dict[str, Any], username: str) -> bool:
+    players = session.get("players", {})
+    if not isinstance(players, dict):
+        return False
+
+    normalized_username = _normalize_username(username)
+    return normalized_username in {_normalize_username(player_username) for player_username in players.keys()}
+
+
+def _session_has_live_socket(session_id: str, username: str | None = None) -> bool:
+    sockets = _SESSION_SOCKETS.get(session_id, [])
+    if not sockets:
+        return False
+
+    if username is None:
+        return bool(sockets)
+
+    normalized_username = _normalize_username(username)
+    return any(_normalize_username(socket_username) == normalized_username for socket_username, _ in sockets)
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _session_is_structurally_invalid(session: dict[str, Any]) -> bool:
+    players = session.get("players", {})
+    if not isinstance(players, dict) or not players:
+        return True
+
+    owner_username = _normalize_username(str(session.get("owner_username") or ""))
+    guest_username = _normalize_username(str(session.get("guest_username") or ""))
+    normalized_players = {_normalize_username(player_username) for player_username in players.keys()}
+
+    if not owner_username or owner_username not in normalized_players:
+        return True
+
+    if guest_username and guest_username not in normalized_players:
+        return True
+
+    status = str(session.get("status") or "").strip().lower()
+    if status in {"ready_check", "active"} and len(normalized_players) < 2:
+        return True
+
+    return False
+
+
+def _all_players_stale(session: dict[str, Any], stale_after: timedelta) -> bool:
+    players = session.get("players", {})
+    if not isinstance(players, dict) or not players:
+        return True
+
+    now = _utc_now()
+    for player in players.values():
+        seen_at = _parse_iso_datetime((player or {}).get("last_seen_at"))
+        if seen_at is None:
+            return False
+        if now - seen_at <= stale_after:
+            return False
+
+    return True
+
+
+def _player_is_stale(session: dict[str, Any], username: str, stale_after: timedelta) -> bool:
+    players = session.get("players", {})
+    if not isinstance(players, dict):
+        return True
+
+    player = players.get(_normalize_username(username))
+    if not isinstance(player, dict):
+        return True
+
+    seen_at = _parse_iso_datetime(player.get("last_seen_at"))
+    if seen_at is None:
+        return False
+
+    return _utc_now() - seen_at > stale_after
+
+
+def _soft_close_stale_session(session_id: str, session: dict[str, Any], reason: str) -> None:
+    session["status"] = "abandoned"
+    session["completed_at"] = _utc_now_iso()
+    session["abandon_reason"] = reason
+    session["abandoned_by"] = None
+    save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _clear_pending_invites(session)
+
+    for player_username in session.get("players", {}).keys():
+        _clear_user_session(player_username)
+
+
+def _session_should_soft_close(session_id: str, session: dict[str, Any], username: str) -> bool:
+    status = str(session.get("status") or "").strip().lower()
+    players = session.get("players", {})
+    has_guest = bool(_normalize_username(str(session.get("guest_username") or "")))
+
+    if _session_is_structurally_invalid(session):
+        return True
+
+    if status == "waiting_for_guest":
+        return (not has_guest) or len(players) <= 1
+
+    if status == "ready_check":
+        return (not has_guest) or len(players) < 2
+
+    if status == "active":
+        if _all_players_stale(session, stale_after=timedelta(minutes=3)):
+            return True
+
+        if not _session_has_live_socket(session_id) and _all_players_stale(session, stale_after=timedelta(seconds=20)):
+            return True
+
+        if not _session_has_live_socket(session_id, username) and _player_is_stale(
+            session,
+            username,
+            stale_after=timedelta(seconds=20),
+        ):
+            return True
+
+    return False
+
+
 def _ensure_user_available(username: str) -> None:
     active_session_id = _get_active_session_id_for_user(username)
     if not active_session_id:
         return
 
     existing_session = load_json(session_key(active_session_id))
-    if not existing_session or existing_session.get("status") in {"completed", "abandoned"}:
+    if (
+        not existing_session
+        or existing_session.get("status") in {"completed", "abandoned"}
+        or not _session_has_member(existing_session, username)
+    ):
         _clear_user_session(username)
         return
+
+    if _session_should_soft_close(active_session_id, existing_session, username):
+        with session_lock(active_session_id):
+            existing_session = load_json(session_key(active_session_id))
+            if not existing_session:
+                _clear_user_session(username)
+                return
+
+            if (
+                existing_session.get("status") in {"completed", "abandoned"}
+                or not _session_has_member(existing_session, username)
+                or _session_should_soft_close(active_session_id, existing_session, username)
+            ):
+                _soft_close_stale_session(active_session_id, existing_session, "stale_multiplayer_session")
+                _clear_user_session(username)
+                return
 
     raise HTTPException(status_code=409, detail="User is already in a multiplayer session")
 

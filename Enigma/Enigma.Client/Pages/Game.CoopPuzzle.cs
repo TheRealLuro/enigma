@@ -437,7 +437,8 @@ public partial class Game
             return;
         }
 
-        if (string.Equals(CurrentCoopPuzzle.ViewType, "opposing_pattern_input", StringComparison.OrdinalIgnoreCase) &&
+        if (IsPuzzleOverlayOpen &&
+            string.Equals(CurrentCoopPuzzle.ViewType, "opposing_pattern_input", StringComparison.OrdinalIgnoreCase) &&
             TryMapDirectionKey(keyCode, out var direction))
         {
             await SubmitCoopPuzzleActionAsync("press_direction", new { direction = direction.ToString() });

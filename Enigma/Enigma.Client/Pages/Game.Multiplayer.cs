@@ -371,6 +371,7 @@ public partial class Game
         {
             CurrentRoom = nextRoom;
             CurrentRoomState = _roomStates[nextPoint];
+            ClosePuzzleOverlay();
             PlayerX = Math.Clamp(session.You?.Position.X ?? ((RoomSize - PlayerSize) / 2d), 0d, RoomSize - PlayerSize);
             PlayerY = Math.Clamp(session.You?.Position.Y ?? ((RoomSize - PlayerSize) / 2d), 0d, RoomSize - PlayerSize);
             ShowBanner($"Both players entered room {nextPoint}", 0.8d);
