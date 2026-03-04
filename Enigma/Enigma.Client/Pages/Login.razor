@@ -3,6 +3,7 @@
 @using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@using Microsoft.JSInterop
 
 <div class="content auth-shell" style="max-width: 480px; margin-top: 60px;">
     <div class="card p-4 shadow-sm auth-card">
@@ -86,8 +87,8 @@
             return;
         }
 
-        rememberMe = await JS.InvokeAsync<bool>("enigmaGame.isUserSessionRemembered");
-        var rememberedSession = await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        rememberMe = await GetRememberedSessionStateAsync();
+        var rememberedSession = await GetStoredUserSessionSafeAsync();
         if (!string.IsNullOrWhiteSpace(rememberedSession?.Username))
         {
             user.Username = rememberedSession.Username;
@@ -158,5 +159,29 @@
     private void OnRegisterClick()
     {
         NavigationManager.NavigateTo("/register");
+    }
+
+    private async Task<bool> GetRememberedSessionStateAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<bool>("enigmaGame.isUserSessionRemembered");
+        }
+        catch (JSException)
+        {
+            return false;
+        }
+    }
+
+    private async Task<LoginUserSummary?> GetStoredUserSessionSafeAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<LoginUserSummary?>("enigmaGame.getUserSession");
+        }
+        catch (JSException)
+        {
+            return null;
+        }
     }
 }

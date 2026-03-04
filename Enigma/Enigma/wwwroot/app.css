@@ -955,10 +955,10 @@ h1:focus {
 }
 
 .enigma-game-page.content {
-    width: calc(100% + 20px);
-    max-width: min(100vw - 8px, 1880px);
-    margin-inline: -10px;
-    padding-inline: clamp(4px, 0.35vw, 10px);
+    width: calc(100vw - 6px);
+    max-width: none;
+    margin-inline: calc(50% - 50vw);
+    padding-inline: clamp(2px, 0.2vw, 6px);
 }
 
 .enigma-game-shell {
@@ -971,7 +971,7 @@ h1:focus {
 .enigma-room-shell {
     display: grid;
     gap: 14px;
-    padding: clamp(12px, 1.2vw, 18px);
+    padding: clamp(8px, 0.85vw, 14px);
     margin: 0;
 }
 
@@ -1053,7 +1053,8 @@ h1:focus {
 }
 
 .enigma-room-stage-wrap {
-    width: 100%;
+    width: min(calc(100vw - 22px), calc(100vh - 132px));
+    max-width: 100%;
     overflow: auto;
     border-radius: 18px;
     border: 1px solid var(--epic-border);
@@ -1061,7 +1062,7 @@ h1:focus {
         radial-gradient(circle at top, rgba(118, 184, 255, 0.08), transparent 38%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
         #111822;
-    padding: 6px;
+    padding: 4px;
 }
 
 .enigma-room-stage {
@@ -5351,6 +5352,12 @@ h1:focus {
     box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
+}
+
+@media (min-width: 1400px) {
+    .enigma-room-stage-wrap {
+        width: min(calc(100vw - 18px), calc(100vh - 120px));
+    }
 }
 
 .enigma-stage-run-head {

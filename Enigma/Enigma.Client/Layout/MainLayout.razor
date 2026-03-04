@@ -200,7 +200,7 @@
             }
 
             await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
-            var rememberSession = await JS.InvokeAsync<bool>("enigmaGame.isUserSessionRemembered");
+            var rememberSession = await GetRememberedSessionStateAsync();
             await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session!.Username }, rememberSession);
             await EnsureTutorialStateAsync(session);
             await InvokeAsync(StateHasChanged);
@@ -524,6 +524,19 @@
 
         NavigationManager.NavigateTo("/home", replace: true);
     }
+
+    private async Task<bool> GetRememberedSessionStateAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<bool>("enigmaGame.isUserSessionRemembered");
+        }
+        catch (JSException)
+        {
+            return false;
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         NavigationManager.LocationChanged -= HandleLocationChanged;
