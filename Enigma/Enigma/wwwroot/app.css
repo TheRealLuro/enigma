@@ -5187,6 +5187,17 @@ h1:focus {
     width: 100%;
 }
 
+.marketplace-founder-benefits {
+    border: 1px solid rgba(243, 195, 95, 0.22);
+    background: linear-gradient(180deg, rgba(243, 195, 95, 0.1), rgba(255, 255, 255, 0.02));
+    border-radius: 16px;
+    padding: 14px 16px;
+}
+
+.marketplace-founder-benefits h3 {
+    color: #ffe3a9;
+}
+
 .marketplace-faq-card {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;

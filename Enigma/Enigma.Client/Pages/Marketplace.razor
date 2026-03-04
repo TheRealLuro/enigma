@@ -467,6 +467,19 @@ else
                     }
                 </section>
 
+                @if (IsFoundersMark(SelectedItemDetails))
+                {
+                    <section class="marketplace-item-overlay-section marketplace-founder-benefits">
+                        <h3>Founder Benefits</h3>
+                        <ul class="marketplace-item-overlay-list">
+                            @foreach (var benefit in GetFoundersMarkBenefits(SelectedItemDetails))
+                            {
+                                <li>@benefit</li>
+                            }
+                        </ul>
+                    </section>
+                }
+
                 @if (SelectedItemDetails.Requirements.Count > 0)
                 {
                     <section class="marketplace-item-overlay-section">
@@ -964,6 +977,59 @@ else
         return item.PurchaseLimit == 1
             ? "1 per person"
             : $"{item.PurchaseLimit} per person";
+    }
+
+    private static bool IsFoundersMark(ItemCatalogEntry item)
+    {
+        return EqualsIgnoreCase(item.ItemId, "founders_mark");
+    }
+
+    private static IReadOnlyList<string> GetFoundersMarkBenefits(ItemCatalogEntry item)
+    {
+        var rewardMultiplier = GetEffectDecimal(item, "reward_multiplier", 1.5m);
+        var feeMultiplier = GetEffectDecimal(item, "fee_multiplier", 0.5m);
+        var rewardBonusPercent = Math.Max(0m, (rewardMultiplier - 1m) * 100m);
+        var feeReductionPercent = Math.Max(0m, (1m - feeMultiplier) * 100m);
+
+        return
+        [
+            "Permanent account perk. Once claimed, it stays active with no run-use limit.",
+            $"+{rewardBonusPercent:0.#}% Maze Nugget rewards on run payouts.",
+            $"{feeReductionPercent:0.#}% reduction on gameplay dividend fees.",
+        ];
+    }
+
+    private static decimal GetEffectDecimal(ItemCatalogEntry item, string key, decimal fallback)
+    {
+        if (!item.EffectConfig.TryGetValue(key, out var value) || value is null)
+        {
+            return fallback;
+        }
+
+        if (value is JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind == JsonValueKind.Number && jsonElement.TryGetDecimal(out var decimalValue))
+            {
+                return decimalValue;
+            }
+
+            if (jsonElement.ValueKind == JsonValueKind.String
+                && decimal.TryParse(jsonElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+            {
+                return parsed;
+            }
+
+            return fallback;
+        }
+
+        try
+        {
+            return Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return fallback;
+        }
     }
 
     private void OpenItemDetails(ItemCatalogEntry item)
