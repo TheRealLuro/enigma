@@ -35,6 +35,17 @@ else
                 <h1>Marketplace</h1>
                 <p>Browse live listings, inspect map artwork, and trade player-owned mazes.</p>
             </div>
+
+            <div class="marketplace-banner-metrics">
+                <div>
+                    <span>Live Listings</span>
+                    <strong>@Listings.Count</strong>
+                </div>
+                <div>
+                    <span>Shop Items</span>
+                    <strong>@ShopItems.Count</strong>
+                </div>
+            </div>
         </section>
 
         @if (!string.IsNullOrWhiteSpace(StatusMessage))

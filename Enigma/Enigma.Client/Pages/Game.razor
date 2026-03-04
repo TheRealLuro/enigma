@@ -30,7 +30,7 @@ else
         <section class="enigma-game-shell">
             <div class="enigma-room-shell card">
                 <div class="enigma-room-meta">
-                    <div>
+                    <div class="enigma-room-meta-copy">
                         <h1>@CurrentMapLabel</h1>
                         <p class="enigma-game-subline">Leaving this maze ends the run permanently.</p>
                     </div>
@@ -243,30 +243,31 @@ else
 
             <aside class="enigma-sidebar">
                 <div class="enigma-sidebar-summary">
-                <div class="card enigma-sidebar-card">
-                    <span class="enigma-kicker">Run Status</span>
-                    <div class="enigma-stat-grid">
-                        <div>
+                <div class="card enigma-sidebar-card enigma-status-card">
+                    <div class="enigma-sidebar-card-head">
+                        <span class="enigma-kicker">Run Status</span>
+                        <span class="enigma-status-goal">@(PortalReady ? "Enter the black hole" : "Solve and move")</span>
+                    </div>
+                    <div class="enigma-status-metrics">
+                        <div class="enigma-status-metric">
                             <span>Solved Rooms</span>
                             <strong>@SolvedRoomCount / @TotalRoomCount</strong>
                         </div>
-                        <div>
+                        <div class="enigma-status-metric">
                             <span>Player</span>
                             <strong>@Username</strong>
                         </div>
-                        <div>
-                            <span>Display</span>
-                            <strong>@(UsePlaceholderGraphics ? "Placeholder" : "Sprites")</strong>
-                        </div>
-                        <div>
-                            <span>Goal</span>
-                            <strong>@(PortalReady ? "Enter the black hole" : "Solve and move")</strong>
+                        <div class="enigma-status-metric enigma-status-metric-wide">
+                            <span>Room State</span>
+                            <strong>@((IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState.Puzzle.IsCompleted) ? "Unlocked" : "Locked")</strong>
                         </div>
                     </div>
                 </div>
 
-                <div class="card enigma-sidebar-card">
-                    <span class="enigma-kicker">Equipped Items</span>
+                <div class="card enigma-sidebar-card enigma-loadout-card">
+                    <div class="enigma-sidebar-card-head">
+                        <span class="enigma-kicker">Equipped Items</span>
+                    </div>
                     @if (EquippedLoadout.Count == 0)
                     {
                         <div class="enigma-loadout-empty">No items equipped for this run.</div>

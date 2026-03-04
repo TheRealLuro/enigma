@@ -145,7 +145,7 @@
             : null;
 
     private bool ShouldShowHeader => !IsPublicPath() && !IsGamePath() && AuthCheckComplete && IsAuthenticated;
-    private bool ShouldShowHeaderBalance => ShouldShowHeader && !IsMarketplacePath() && Session is not null;
+    private bool ShouldShowHeaderBalance => ShouldShowHeader && Session is not null;
 
     private bool CanRenderCurrentRoute => IsPublicPath() || (AuthCheckComplete && IsAuthenticated);
 
@@ -312,12 +312,6 @@
     {
         var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
         return string.Equals(cleanPath, "lose", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private bool IsMarketplacePath(string? uri = null)
-    {
-        var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
-        return string.Equals(cleanPath, "marketplace", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool IsPublicPath(string? uri = null)

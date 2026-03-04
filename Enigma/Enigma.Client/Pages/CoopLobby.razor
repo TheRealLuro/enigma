@@ -200,7 +200,7 @@ else
         }
         else
         {
-            <div class="coop-grid">
+            <div class="coop-grid coop-active-grid">
                 <section class="panel coop-session-panel">
                     <div class="panel-heading">
                         <div>
@@ -215,7 +215,6 @@ else
                         <div><span>Map</span><strong>@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Seed" : CurrentSession.MapName)</strong></div>
                         <div><span>Difficulty</span><strong>@CurrentSession.Difficulty</strong></div>
                         <div><span>Size</span><strong>@CurrentSession.Size x @CurrentSession.Size</strong></div>
-                        <div><span>Session ID</span><strong class="mono-numeric">@CurrentSession.SessionId</strong></div>
                     </div>
 
                     <div class="coop-player-stack">
@@ -283,7 +282,7 @@ else
                         <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="ToggleReadyAsync">
                             @(CurrentSession.You?.Ready == true ? "Unready" : "Ready Up")
                         </button>
-                        <button class="btn btn-secondary" type="button" disabled="@(!CanEnterGame)" @onclick="EnterActiveSession">
+                        <button class="btn btn-secondary" type="button" disabled="@(!CanEnterGame || IsEnteringActiveSession)" @onclick="EnterActiveSessionAsync">
                             Enter Maze
                         </button>
                         <button class="btn btn-danger" type="button" disabled="@IsActionBusy" @onclick="LeaveSessionAsync">
@@ -318,7 +317,7 @@ else
                             <div>
                                 <span class="profile-eyebrow">@ActivePuzzleTierKey.ToUpperInvariant()</span>
                                 <h3>@FormatTierLabel(ActivePuzzleTierKey)</h3>
-                                <p>This run pulls from the @FormatTierLabel(ActivePuzzleTierKey).ToLowerInvariant() set. The live room view explains the current puzzle once the run starts, so the lobby only keeps a compact reference.</p>
+                                <p>This run pulls from the @FormatTierLabel(ActivePuzzleTierKey).ToLowerInvariant() set. The maze explains the active room puzzle in context, so the lobby only keeps the short session summary.</p>
                             </div>
                             <div class="coop-puzzle-summary-metrics">
                                 <div>
@@ -335,16 +334,9 @@ else
                                 </div>
                             </div>
                         </div>
-
-                        <div class="coop-puzzle-key-grid">
-                            @foreach (var entry in ActivePuzzleTier)
-                            {
-                                <article class="coop-puzzle-key-card">
-                                    <span class="coop-puzzle-key">Key @entry.Key.ToUpperInvariant()</span>
-                                    <strong>@entry.Value.Name</strong>
-                                    <small>@entry.Value.CoreMechanic</small>
-                                </article>
-                            }
+                        <div class="coop-puzzle-compact-note">
+                            <strong>Compact reference only.</strong>
+                            <span>Open the full set if you need the complete co-op puzzle list before starting.</span>
                         </div>
 
                     }
@@ -436,6 +428,7 @@ else
     private CancellationTokenSource? PollCancellation { get; set; }
     private Task? PollTask { get; set; }
     private bool HasEnteredActiveSession { get; set; }
+    private bool IsEnteringActiveSession { get; set; }
     private bool CoopSocketOpen { get; set; }
     private DotNetObjectReference<CoopLobby>? LobbySocketRef { get; set; }
 
@@ -478,6 +471,7 @@ else
                 return;
             }
 
+            await JS.InvokeVoidAsync("enigmaGame.clearCoopLeaveUnload");
             LobbySocketRef = DotNetObjectReference.Create(this);
             var catalog = await Api.GetFromJsonAsync<MultiplayerPuzzleCatalogResponse>("api/auth/multiplayer/puzzles");
             PuzzleCatalog = catalog?.Catalog ?? [];
@@ -500,7 +494,7 @@ else
             await InvokeAsync(StateHasChanged);
         }
 
-        if (CurrentSession is not null && !HasEnteredActiveSession)
+        if (CurrentSession is not null && !HasEnteredActiveSession && !IsEnteringActiveSession)
         {
             await EnsureLobbySocketConnectedAsync();
         }
@@ -643,6 +637,7 @@ else
             CurrentSession = null;
             LoadedSessionId = null;
             HasEnteredActiveSession = false;
+            IsEnteringActiveSession = false;
             JoinSessionId = string.Empty;
             NavigationManager.NavigateTo("/play/coop", replace: true);
             StatusMessage = "Session closed.";
@@ -718,33 +713,53 @@ else
             return;
         }
 
-        NavigationManager.NavigateTo($"/play/coop?sessionId={Uri.EscapeDataString(CurrentSession.SessionId)}", replace: true);
+        if (!string.Equals(RequestedSessionId, CurrentSession.SessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            NavigationManager.NavigateTo($"/play/coop?sessionId={Uri.EscapeDataString(CurrentSession.SessionId)}", replace: true);
+        }
+
         if (!CoopSocketOpen)
         {
             StartPolling();
         }
 
-        if (CanEnterGame && !HasEnteredActiveSession)
+        if (CanEnterGame && !HasEnteredActiveSession && !IsEnteringActiveSession)
         {
-            HasEnteredActiveSession = true;
-            EnterActiveSession();
+            StatusMessage = "Both players are ready. Enter the maze when you're ready.";
+            HasError = false;
         }
     }
 
-    private void EnterActiveSession()
+    private async Task EnterActiveSessionAsync()
     {
-        if (CurrentSession is null)
+        if (CurrentSession is null || IsEnteringActiveSession)
         {
             return;
         }
 
+        IsEnteringActiveSession = true;
+        HasEnteredActiveSession = true;
+        StatusMessage = "Entering the co-op maze...";
+        HasError = false;
+        await StopPollingAsync();
+
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.clearCoopLeaveUnload");
+            await JS.InvokeVoidAsync("enigmaGame.disposeCoopSocket");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        CoopSocketOpen = false;
         var url = $"/game?seed={Uri.EscapeDataString(CurrentSession.Seed)}&source={Uri.EscapeDataString(CurrentSession.Source)}&coop=true&coopSessionId={Uri.EscapeDataString(CurrentSession.SessionId)}";
         if (!string.IsNullOrWhiteSpace(CurrentSession.MapName))
         {
             url += $"&mapName={Uri.EscapeDataString(CurrentSession.MapName)}";
         }
 
-        NavigationManager.NavigateTo(url);
+        NavigationManager.NavigateTo(url, replace: true);
     }
 
     private void StartPolling()
@@ -781,10 +796,10 @@ else
                 await InvokeAsync(() =>
                 {
                     CurrentSession = payload.Session;
-                    if (CanEnterGame && !HasEnteredActiveSession)
+                    if (CanEnterGame && !HasEnteredActiveSession && !IsEnteringActiveSession)
                     {
-                        HasEnteredActiveSession = true;
-                        EnterActiveSession();
+                        StatusMessage = "Both players are ready. Enter the maze when you're ready.";
+                        HasError = false;
                     }
                     StateHasChanged();
                 });
