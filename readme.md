@@ -5,7 +5,7 @@
 ![AI Powered](https://img.shields.io/badge/AI-diffusion-purple)
 ![Backend](https://img.shields.io/badge/backend-Dockerized-informational)
 ![Database](https://img.shields.io/badge/database-MongoDB-green)
-![Realtime](https://img.shields.io/badge/realtime-Redis%20(planned)-orange)
+![Realtime](https://img.shields.io/badge/realtime-Redis-orange)
 ![License](https://img.shields.io/badge/license-proprietary-lightgrey)
 
 > Seeds. Mazes. Diffusion. Mystery.
