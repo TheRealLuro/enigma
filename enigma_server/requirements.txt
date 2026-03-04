@@ -8,7 +8,6 @@ slowapi>=0.1.9
 redis>=5.2
 numpy>=1.26,<3
 pillow>=10.2
-torch>=2.2
 diffusers>=0.35.1
 transformers>=4.44
 accelerate>=0.33
