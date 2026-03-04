@@ -11,6 +11,8 @@ router = APIRouter(prefix="/database/leaderboard")
 def get_players_leaderboard(
     sort_by: str = Query("maze_nuggets"),
     order: str = Query("desc"),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ):
     allowed_fields = [
         "maze_nuggets",
@@ -93,10 +95,15 @@ def get_players_leaderboard(
         key=lambda entry: (sort_key(entry), (entry.get("username") or "").lower()),
         reverse=reverse,
     )
+    total_count = len(leaderboard)
+    page_players = leaderboard[offset : offset + limit]
 
     return {
         "status": "success",
         "sort_by": sort_by,
         "order": normalized_order,
-        "players": leaderboard,
+        "limit": limit,
+        "offset": offset,
+        "total_count": total_count,
+        "players": page_players,
     }

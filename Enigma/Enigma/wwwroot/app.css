@@ -3436,6 +3436,7 @@ h1:focus {
 .profile-stats-panel,
 .profile-list-panel,
 .profile-maps-panel,
+.leaderboard-pagination-panel,
 .leaderboard-controls-panel,
 .leaderboard-table-panel,
 .leaderboard-empty-panel {
@@ -4298,6 +4299,32 @@ h1:focus {
     justify-content: end;
 }
 
+.leaderboard-pagination-panel {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.leaderboard-pagination-summary h2 {
+    margin: 6px 0 0;
+    font-size: 1.2rem;
+}
+
+.leaderboard-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.leaderboard-page-button {
+    min-width: 48px;
+    padding-inline: 14px;
+}
+
 .leaderboard-mode-toggle {
     margin-bottom: 18px;
     flex-wrap: wrap;
@@ -4644,6 +4671,7 @@ h1:focus {
     .profile-stats-panel,
     .profile-list-panel,
     .profile-maps-panel,
+    .leaderboard-pagination-panel,
     .leaderboard-controls-panel,
     .leaderboard-table-panel,
     .leaderboard-empty-panel,

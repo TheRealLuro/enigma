@@ -279,20 +279,30 @@ public class APIController : ControllerBase
     [Authorize]
     [HttpGet("leaderboard")]
     [HttpGet("leaderboard/maps")]
-    public async Task<IActionResult> GetLeaderboard([FromQuery] string sortBy = "rating", [FromQuery] string order = "desc")
+    public async Task<IActionResult> GetLeaderboard(
+        [FromQuery] string sortBy = "rating",
+        [FromQuery] string order = "desc",
+        [FromQuery] int limit = 10,
+        [FromQuery] int offset = 0)
     {
         using var client = CreateClient();
-        using var response = await client.GetAsync($"database/leaderboard/leaderboard?sort_by={Esc(sortBy)}&order={Esc(order)}");
+        using var response = await client.GetAsync(
+            $"database/leaderboard/leaderboard?sort_by={Esc(sortBy)}&order={Esc(order)}&limit={limit}&offset={offset}");
         return await RelayAsync(response);
     }
 
     [Authorize]
     [HttpGet("playerLeaderboard")]
     [HttpGet("leaderboard/players")]
-    public async Task<IActionResult> GetPlayerLeaderboard([FromQuery] string sortBy = "maze_nuggets", [FromQuery] string order = "desc")
+    public async Task<IActionResult> GetPlayerLeaderboard(
+        [FromQuery] string sortBy = "maze_nuggets",
+        [FromQuery] string order = "desc",
+        [FromQuery] int limit = 10,
+        [FromQuery] int offset = 0)
     {
         using var client = CreateClient();
-        using var response = await client.GetAsync($"database/leaderboard/players?sort_by={Esc(sortBy)}&order={Esc(order)}");
+        using var response = await client.GetAsync(
+            $"database/leaderboard/players?sort_by={Esc(sortBy)}&order={Esc(order)}&limit={limit}&offset={offset}");
         return await RelayAsync(response);
     }
 

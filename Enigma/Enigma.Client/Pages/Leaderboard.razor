@@ -40,7 +40,7 @@
             </div>
 
             <div class="leaderboard-actions">
-                <button class="btn btn-primary" disabled="@IsLoading" @onclick="LoadLeaderboardAsync">
+                <button class="btn btn-primary" disabled="@IsLoading" @onclick="ApplyLeaderboardSettingsAsync">
                     @(IsLoading ? "Loading..." : "Apply")
                 </button>
             </div>
@@ -61,6 +61,34 @@
     }
     else if (IsPlayerMode)
     {
+        @if (TotalCount > 0)
+        {
+            <section class="panel leaderboard-pagination-panel">
+                <div class="leaderboard-pagination-summary">
+                    <span class="profile-eyebrow">Rank Section</span>
+                    <h2>@CurrentSectionSummary</h2>
+                </div>
+
+                <div class="leaderboard-pagination">
+                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToPreviousSection)" @onclick="GoToPreviousSectionAsync">
+                        Previous
+                    </button>
+                    @foreach (var sectionIndex in GetVisibleSectionIndexes())
+                    {
+                        <button class="@GetSectionButtonClass(sectionIndex)"
+                                type="button"
+                                disabled="@IsLoading"
+                                @onclick="() => GoToSectionAsync(sectionIndex)">
+                            @(sectionIndex + 1)
+                        </button>
+                    }
+                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToNextSection)" @onclick="GoToNextSectionAsync">
+                        Next
+                    </button>
+                </div>
+            </section>
+        }
+
         @if (Players.Count == 0)
         {
             <div class="panel leaderboard-empty-panel">
@@ -71,7 +99,7 @@
         else
         {
             <section class="leaderboard-podium player-podium">
-                @foreach (var entry in Players.Take(3).Select((player, index) => new { Player = player, Rank = index + 1 }))
+                @foreach (var entry in PodiumPlayers.Select((player, index) => new { Player = player, Rank = index + 1 }))
                 {
                     <article class="podium-card player-podium-card rank-@entry.Rank">
                         <span class="podium-rank">#@entry.Rank</span>
@@ -105,7 +133,7 @@
                         <span class="profile-eyebrow">Player Board</span>
                         <h2>All Ranked Players</h2>
                     </div>
-                    <span class="section-count">@Players.Count</span>
+                    <span class="section-count">@CurrentSectionSummary</span>
                 </div>
 
                 <div class="leaderboard-table-wrap">
@@ -123,7 +151,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var entry in Players.Select((player, index) => new { Player = player, Rank = index + 1 }))
+                            @foreach (var entry in Players.Select((player, index) => new { Player = player, Rank = CurrentRankStart + index }))
                             {
                                 <tr>
                                     <td><span class="leaderboard-rank-pill">#@entry.Rank</span></td>
@@ -191,8 +219,36 @@
     }
     else
     {
+        @if (TotalCount > 0)
+        {
+            <section class="panel leaderboard-pagination-panel">
+                <div class="leaderboard-pagination-summary">
+                    <span class="profile-eyebrow">Rank Section</span>
+                    <h2>@CurrentSectionSummary</h2>
+                </div>
+
+                <div class="leaderboard-pagination">
+                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToPreviousSection)" @onclick="GoToPreviousSectionAsync">
+                        Previous
+                    </button>
+                    @foreach (var sectionIndex in GetVisibleSectionIndexes())
+                    {
+                        <button class="@GetSectionButtonClass(sectionIndex)"
+                                type="button"
+                                disabled="@IsLoading"
+                                @onclick="() => GoToSectionAsync(sectionIndex)">
+                            @(sectionIndex + 1)
+                        </button>
+                    }
+                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToNextSection)" @onclick="GoToNextSectionAsync">
+                        Next
+                    </button>
+                </div>
+            </section>
+        }
+
         <section class="leaderboard-podium">
-            @foreach (var entry in Maps.Take(3).Select((map, index) => new { Map = map, Rank = index + 1 }))
+            @foreach (var entry in PodiumMaps.Select((map, index) => new { Map = map, Rank = index + 1 }))
             {
                 <article class="podium-card rank-@entry.Rank">
                     <span class="podium-rank">#@entry.Rank</span>
@@ -236,7 +292,7 @@
                     <span class="profile-eyebrow">Map Board</span>
                     <h2>All Ranked Maps</h2>
                 </div>
-                <span class="section-count">@Maps.Count</span>
+                <span class="section-count">@CurrentSectionSummary</span>
             </div>
 
             <div class="leaderboard-table-wrap">
@@ -253,7 +309,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var entry in Maps.Select((map, index) => new { Map = map, Rank = index + 1 }))
+                        @foreach (var entry in Maps.Select((map, index) => new { Map = map, Rank = CurrentRankStart + index }))
                         {
                             <tr>
                                 <td>
@@ -338,8 +394,21 @@
     private string Order { get; set; } = "desc";
     private List<MapSummary> Maps { get; set; } = [];
     private List<PlayerLeaderboardEntry> Players { get; set; } = [];
+    private List<MapSummary> PodiumMaps { get; set; } = [];
+    private List<PlayerLeaderboardEntry> PodiumPlayers { get; set; } = [];
+    private int TotalCount { get; set; }
+    private int CurrentSectionIndex { get; set; }
 
     private bool IsPlayerMode => BoardMode == "players";
+    private const int SectionSize = 10;
+    private int CurrentOffset => CurrentSectionIndex * SectionSize;
+    private int TotalSections => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)SectionSize));
+    private int CurrentPageCount => IsPlayerMode ? Players.Count : Maps.Count;
+    private int CurrentRankStart => TotalCount == 0 ? 0 : CurrentOffset + 1;
+    private int CurrentRankEnd => TotalCount == 0 ? 0 : Math.Min(CurrentOffset + CurrentPageCount, TotalCount);
+    private string CurrentSectionSummary => TotalCount == 0 ? "No results" : $"Ranks {CurrentRankStart}-{CurrentRankEnd} of {TotalCount}";
+    private bool CanGoToPreviousSection => CurrentSectionIndex > 0;
+    private bool CanGoToNextSection => CurrentSectionIndex + 1 < TotalSections;
 
     private static readonly IReadOnlyList<(string Value, string Label)> MapSortOptions =
     [
@@ -387,6 +456,13 @@
         BoardMode = mode;
         SortBy = IsPlayerMode ? "maze_nuggets" : "rating";
         Order = "desc";
+        CurrentSectionIndex = 0;
+        await LoadLeaderboardAsync();
+    }
+
+    private async Task ApplyLeaderboardSettingsAsync()
+    {
+        CurrentSectionIndex = 0;
         await LoadLeaderboardAsync();
     }
 
@@ -399,35 +475,80 @@
         {
             if (IsPlayerMode)
             {
+                using var podiumResponse = await Api.GetAsync(
+                    $"api/auth/leaderboard/players?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}&limit=3&offset=0");
+
+                if (!podiumResponse.IsSuccessStatusCode)
+                {
+                    ErrorMessage = await podiumResponse.Content.ReadAsStringAsync();
+                    Players = [];
+                    PodiumPlayers = [];
+                    TotalCount = 0;
+                    return;
+                }
+
+                var podiumPayload = await Api.ReadJsonAsync<PlayerLeaderboardResponse>(podiumResponse);
+                PodiumPlayers = podiumPayload?.Players ?? [];
+
                 using var playerResponse = await Api.GetAsync(
-                    $"api/auth/leaderboard/players?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}");
+                    $"api/auth/leaderboard/players?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}&limit={SectionSize}&offset={CurrentOffset}");
 
                 if (!playerResponse.IsSuccessStatusCode)
                 {
                     ErrorMessage = await playerResponse.Content.ReadAsStringAsync();
                     Players = [];
+                    PodiumPlayers = [];
+                    TotalCount = 0;
                     return;
                 }
 
                 var playerPayload = await Api.ReadJsonAsync<PlayerLeaderboardResponse>(playerResponse);
                 Players = playerPayload?.Players ?? [];
+                TotalCount = playerPayload?.TotalCount ?? Players.Count;
                 Maps = [];
+                PodiumMaps = [];
             }
             else
             {
+                using var podiumResponse = await Api.GetAsync(
+                    $"api/auth/leaderboard/maps?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}&limit=3&offset=0");
+
+                if (!podiumResponse.IsSuccessStatusCode)
+                {
+                    ErrorMessage = await podiumResponse.Content.ReadAsStringAsync();
+                    Maps = [];
+                    PodiumMaps = [];
+                    TotalCount = 0;
+                    return;
+                }
+
+                var podiumPayload = await Api.ReadJsonAsync<LeaderboardResponse>(podiumResponse);
+                PodiumMaps = podiumPayload?.Maps ?? [];
+
                 using var response = await Api.GetAsync(
-                    $"api/auth/leaderboard/maps?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}");
+                    $"api/auth/leaderboard/maps?sortBy={Uri.EscapeDataString(SortBy)}&order={Uri.EscapeDataString(Order)}&limit={SectionSize}&offset={CurrentOffset}");
 
                 if (!response.IsSuccessStatusCode)
                 {
                     ErrorMessage = await response.Content.ReadAsStringAsync();
                     Maps = [];
+                    PodiumMaps = [];
+                    TotalCount = 0;
                     return;
                 }
 
                 var payload = await Api.ReadJsonAsync<LeaderboardResponse>(response);
                 Maps = payload?.Maps ?? [];
+                TotalCount = payload?.TotalCount ?? Maps.Count;
                 Players = [];
+                PodiumPlayers = [];
+            }
+
+            if (TotalCount > 0 && CurrentOffset >= TotalCount)
+            {
+                CurrentSectionIndex = Math.Max(0, TotalSections - 1);
+                await LoadLeaderboardAsync();
+                return;
             }
         }
         catch (Exception ex)
@@ -435,6 +556,9 @@
             ErrorMessage = ex.Message;
             Maps = [];
             Players = [];
+            PodiumMaps = [];
+            PodiumPlayers = [];
+            TotalCount = 0;
         }
         finally
         {
@@ -446,6 +570,38 @@
     {
         return BoardMode == mode ? "btn btn-primary" : "btn btn-secondary";
     }
+
+    private IEnumerable<int> GetVisibleSectionIndexes()
+    {
+        var start = Math.Max(0, CurrentSectionIndex - 2);
+        var end = Math.Min(TotalSections - 1, start + 4);
+        start = Math.Max(0, end - 4);
+
+        for (var index = start; index <= end; index++)
+        {
+            yield return index;
+        }
+    }
+
+    private string GetSectionButtonClass(int sectionIndex)
+    {
+        return sectionIndex == CurrentSectionIndex ? "btn btn-primary leaderboard-page-button" : "btn btn-secondary leaderboard-page-button";
+    }
+
+    private async Task GoToSectionAsync(int sectionIndex)
+    {
+        if (sectionIndex == CurrentSectionIndex || sectionIndex < 0 || sectionIndex >= TotalSections)
+        {
+            return;
+        }
+
+        CurrentSectionIndex = sectionIndex;
+        await LoadLeaderboardAsync();
+    }
+
+    private Task GoToPreviousSectionAsync() => GoToSectionAsync(CurrentSectionIndex - 1);
+
+    private Task GoToNextSectionAsync() => GoToSectionAsync(CurrentSectionIndex + 1);
 
     private static string GetDifficultyClass(string difficulty)
     {

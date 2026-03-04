@@ -16,6 +16,8 @@ DIFFICULTY_ORDER = {
 def get_maps_leaderboard(
     sort_by: str = Query("rating"),
     order: str = Query("desc"),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
 ):
     allowed_fields = [
         "rating",
@@ -51,10 +53,15 @@ def get_maps_leaderboard(
         return (map_doc.get("map_name") or "").lower()
 
     serialized_maps.sort(key=sort_key, reverse=reverse)
+    total_count = len(serialized_maps)
+    page_maps = serialized_maps[offset : offset + limit]
 
     return {
         "status": "success",
         "sort_by": sort_by,
         "order": normalized_order,
-        "maps": serialized_maps,
+        "limit": limit,
+        "offset": offset,
+        "total_count": total_count,
+        "maps": page_maps,
     }
