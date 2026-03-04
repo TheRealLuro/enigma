@@ -491,9 +491,10 @@ input[type="number"].form-select:hover::-webkit-outer-spin-button {
         linear-gradient(180deg, rgba(41, 58, 90, 0.98), rgba(17, 25, 40, 0.98));
 }
 
-.enigma-stepper-button:disabled {
+.enigma-stepper-button:disabled,
+.enigma-stepper-button.is-disabled {
     opacity: 0.42;
-    cursor: not-allowed;
+    cursor: default;
 }
 
 .enigma-stepper-input {
@@ -5067,6 +5068,199 @@ h1:focus {
 
 .marketplace-item-card {
     max-width: 320px;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.marketplace-item-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(111, 169, 255, 0.34);
+    box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28);
+}
+
+.marketplace-item-card:focus-visible {
+    outline: 0;
+    border-color: rgba(111, 169, 255, 0.52);
+    box-shadow: 0 0 0 2px rgba(94, 181, 255, 0.24);
+}
+
+.marketplace-item-open-hint {
+    color: #8fb8ff;
+    border: 1px solid rgba(94, 181, 255, 0.22);
+    background: rgba(42, 94, 176, 0.2);
+}
+
+.marketplace-buy-owned,
+.marketplace-buy-owned:hover,
+.marketplace-buy-owned:active {
+    background: rgba(155, 164, 181, 0.24);
+    border-color: rgba(193, 203, 222, 0.18);
+    color: rgba(233, 239, 252, 0.78);
+    box-shadow: none;
+    transform: none;
+}
+
+.marketplace-buy-owned:disabled {
+    opacity: 1;
+    cursor: not-allowed;
+}
+
+.marketplace-item-overlay-backdrop {
+    z-index: 2200;
+    background: rgba(4, 10, 18, 0.78);
+}
+
+.marketplace-item-overlay-card {
+    position: relative;
+    width: min(760px, calc(100vw - 28px));
+    display: grid;
+    gap: 20px;
+    padding-top: 70px;
+}
+
+.marketplace-item-overlay-head,
+.marketplace-item-overlay-section,
+.marketplace-item-effect-grid,
+.marketplace-item-overlay-actions {
+    display: grid;
+    gap: 12px;
+}
+
+.marketplace-item-overlay-head h2 {
+    margin: 0;
+    font-size: clamp(1.5rem, 2.3vw, 2rem);
+    line-height: 1.05;
+}
+
+.marketplace-item-overlay-head p {
+    margin: 0;
+    color: var(--epic-text);
+    font-size: 0.98rem;
+    line-height: 1.55;
+}
+
+.marketplace-item-overlay-section h3 {
+    margin: 0;
+    font-size: 1.02rem;
+    letter-spacing: 0.02em;
+}
+
+.marketplace-item-overlay-list {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 8px;
+    color: var(--epic-text);
+    line-height: 1.5;
+}
+
+.marketplace-item-effect-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.marketplace-item-effect-row {
+    display: grid;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.marketplace-item-effect-row span {
+    color: rgba(220, 232, 255, 0.72);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+.marketplace-item-effect-row strong {
+    color: var(--epic-text);
+    font-size: 1rem;
+}
+
+.marketplace-item-overlay-meta {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.marketplace-item-overlay-actions .btn {
+    width: 100%;
+}
+
+.marketplace-faq-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(143, 183, 255, 0.16);
+    background: linear-gradient(180deg, rgba(18, 24, 38, 0.9), rgba(13, 18, 28, 0.92));
+    cursor: pointer;
+}
+
+.marketplace-faq-card:hover {
+    border-color: rgba(143, 183, 255, 0.3);
+}
+
+.marketplace-faq-card:focus-visible {
+    outline: 0;
+    border-color: rgba(111, 169, 255, 0.52);
+    box-shadow: 0 0 0 2px rgba(94, 181, 255, 0.24);
+}
+
+.marketplace-faq-card h3 {
+    margin: 4px 0 0;
+    font-size: 1.02rem;
+}
+
+.marketplace-faq-card p {
+    margin: 6px 0 0;
+    color: var(--epic-text);
+}
+
+.marketplace-faq-open-button {
+    min-width: 120px;
+}
+
+.marketplace-faq-overlay-backdrop {
+    z-index: 2250;
+}
+
+.marketplace-faq-overlay-card {
+    position: relative;
+    width: min(680px, calc(100vw - 28px));
+    display: grid;
+    gap: 18px;
+    padding-top: 70px;
+}
+
+.marketplace-faq-list {
+    margin: 0;
+    padding-left: 22px;
+    display: grid;
+    gap: 10px;
+    color: var(--epic-text);
+    line-height: 1.55;
+}
+
+@media (max-width: 760px) {
+    .marketplace-item-overlay-card {
+        width: min(100%, calc(100vw - 20px));
+    }
+
+    .marketplace-item-overlay-meta,
+    .marketplace-item-effect-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .marketplace-faq-card {
+        grid-template-columns: 1fr;
+    }
+
+    .marketplace-faq-open-button {
+        width: 100%;
+    }
 }
 
 .tutorial-backdrop {

@@ -2,12 +2,11 @@
 
 <div class="enigma-stepper @Class">
     <button type="button"
-            class="enigma-stepper-button"
+            class="enigma-stepper-button @(CanDecrease ? string.Empty : "is-disabled")"
             @onclick="DecreaseAsync"
             @onclick:stopPropagation="true"
-            @onpointerdown:preventDefault="true"
-            @onpointerdown:stopPropagation="true"
-            disabled="@Disabled || Value <= Min"
+            @onmousedown:preventDefault="true"
+            @onmousedown:stopPropagation="true"
             aria-label="Decrease value">
         <span aria-hidden="true">-</span>
     </button>
@@ -19,12 +18,11 @@
            @onblur="CommitAsync"
            disabled="@Disabled" />
     <button type="button"
-            class="enigma-stepper-button"
+            class="enigma-stepper-button @(CanIncrease ? string.Empty : "is-disabled")"
             @onclick="IncreaseAsync"
             @onclick:stopPropagation="true"
-            @onpointerdown:preventDefault="true"
-            @onpointerdown:stopPropagation="true"
-            disabled="@Disabled || Value >= Max"
+            @onmousedown:preventDefault="true"
+            @onmousedown:stopPropagation="true"
             aria-label="Increase value">
         <span aria-hidden="true">+</span>
     </button>
@@ -40,6 +38,8 @@
     [Parameter] public string Class { get; set; } = string.Empty;
 
     private string _draftValue = string.Empty;
+    private bool CanDecrease => !Disabled && Value > Min;
+    private bool CanIncrease => !Disabled && Value < Max;
 
     protected override void OnParametersSet()
     {
@@ -67,11 +67,21 @@
 
     private Task IncreaseAsync()
     {
+        if (!CanIncrease)
+        {
+            return Task.CompletedTask;
+        }
+
         return SetValueAsync(Value + Math.Max(1, Step));
     }
 
     private Task DecreaseAsync()
     {
+        if (!CanDecrease)
+        {
+            return Task.CompletedTask;
+        }
+
         return SetValueAsync(Value - Math.Max(1, Step));
     }
 

@@ -1,5 +1,8 @@
 @page "/marketplace"
 @using System.ComponentModel.DataAnnotations
+@using System.Globalization
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.Web
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
 <SeoHead Title="Enigma Marketplace | Map Trading and Item Shop"
@@ -255,9 +258,23 @@ else
                 </div>
 
                 <div class="marketplace-bullet-list marketplace-item-shop-copy">
-                    <div>Item purchases update your inventory immediately.</div>
-                    <div>Use the Play page to select items for your next run.</div>
-                    <div>Item shop payments go 100% to Enigma Bank.</div>
+                    <article class="marketplace-faq-card"
+                             role="button"
+                             tabindex="0"
+                             @onclick="OpenMarketplaceFaq"
+                             @onkeydown="HandleMarketplaceFaqKeyDown">
+                        <div>
+                            <span class="profile-eyebrow">Marketplace FAQ</span>
+                            <h3>How item shop purchases work</h3>
+                            <p>Open the FAQ overlay for a quick numbered guide.</p>
+                        </div>
+                        <button type="button"
+                                class="btn btn-secondary marketplace-faq-open-button"
+                                @onclick="OpenMarketplaceFaq"
+                                @onclick:stopPropagation="true">
+                            View FAQ
+                        </button>
+                    </article>
                 </div>
 
                 @if (ShopItems.Count == 0)
@@ -328,7 +345,11 @@ else
                     <div class="catalog-card-grid marketplace-shop-grid">
                         @foreach (var item in FilteredShopItems)
                         {
-                            <article class="catalog-card marketplace-item-card">
+                            <article class="catalog-card marketplace-item-card"
+                                     role="button"
+                                     tabindex="0"
+                                     @onclick="() => OpenItemDetails(item)"
+                                     @onkeydown="(eventArgs) => HandleItemCardKeyDown(eventArgs, item)">
                                 <div class="catalog-card-body">
                                     <div class="marketplace-item-topline">
                                         <span class="catalog-card-kicker">@item.Rarity @item.SlotKind</span>
@@ -341,6 +362,7 @@ else
                                     <p class="catalog-card-subline">@item.Description</p>
                                     <strong class="catalog-card-price">@item.Price.ToString("N0") MN</strong>
                                     <div class="catalog-card-meta">
+                                        <span class="catalog-card-meta-pill marketplace-item-open-hint">Click for details</span>
                                         <span class="catalog-card-meta-pill">Stock @item.Stock</span>
                                         <span class="catalog-card-meta-pill">Owned @GetOwnedCount(item.ItemId)</span>
                                         <span class="catalog-card-meta-pill">@item.Kind</span>
@@ -371,7 +393,11 @@ else
                                     {
                                         <div class="marketplace-item-note">This founder item never restocks. Once all ten are claimed, it is gone permanently.</div>
                                     }
-                                    <button class="btn btn-primary" type="button" disabled="@(!CanPurchase(item) || IsActionBusy)" @onclick="() => PurchaseItemAsync(item)">
+                                    <button class="@GetPurchaseButtonClass(item)"
+                                            type="button"
+                                            disabled="@(!CanPurchase(item) || IsActionBusy)"
+                                            @onclick="() => PurchaseItemAsync(item)"
+                                            @onclick:stopPropagation="true">
                                         @GetPurchaseLabel(item)
                                     </button>
                                 </div>
@@ -383,6 +409,116 @@ else
             </section>
         }
     </div>
+
+    @if (SelectedItemDetails is not null)
+    {
+        <div class="enigma-modal-backdrop marketplace-item-overlay-backdrop" @onclick="CloseItemDetails">
+            <aside class="enigma-modal-card marketplace-item-overlay-card" @onclick:stopPropagation="true">
+                <button type="button" class="enigma-overlay-close" @onclick="CloseItemDetails">Close</button>
+
+                <header class="marketplace-item-overlay-head">
+                    <span class="catalog-card-kicker">@SelectedItemDetails.Rarity @SelectedItemDetails.SlotKind</span>
+                    <h2>@SelectedItemDetails.Name</h2>
+                    <p>@SelectedItemDetails.Description</p>
+                </header>
+
+                <div class="catalog-card-meta marketplace-item-overlay-meta">
+                    <span class="catalog-card-meta-pill">Price @SelectedItemDetails.Price.ToString("N0") MN</span>
+                    <span class="catalog-card-meta-pill">Stock @SelectedItemDetails.Stock</span>
+                    <span class="catalog-card-meta-pill">Owned @GetOwnedCount(SelectedItemDetails.ItemId)</span>
+                    <span class="catalog-card-meta-pill">Uses @GetUsesLabel(SelectedItemDetails)</span>
+                    <span class="catalog-card-meta-pill">@GetItemTypeSummary(SelectedItemDetails)</span>
+                    @if (!string.IsNullOrWhiteSpace(GetOwnershipLimitLabel(SelectedItemDetails)))
+                    {
+                        <span class="catalog-card-meta-pill">@GetOwnershipLimitLabel(SelectedItemDetails)</span>
+                    }
+                </div>
+
+                <section class="marketplace-item-overlay-section">
+                    <h3>How to use it</h3>
+                    <ul class="marketplace-item-overlay-list">
+                        @foreach (var step in GetUsageGuideSteps(SelectedItemDetails))
+                        {
+                            <li>@step</li>
+                        }
+                    </ul>
+                </section>
+
+                <section class="marketplace-item-overlay-section">
+                    <h3>Effect details</h3>
+                    @{
+                        var effectRows = GetEffectDetailRows(SelectedItemDetails);
+                    }
+                    @if (effectRows.Count == 0)
+                    {
+                        <p class="marketplace-item-note">No additional effect metadata was provided for this item.</p>
+                    }
+                    else
+                    {
+                        <div class="marketplace-item-effect-grid">
+                            @foreach (var row in effectRows)
+                            {
+                                <div class="marketplace-item-effect-row">
+                                    <span>@row.Label</span>
+                                    <strong>@row.Value</strong>
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+
+                @if (SelectedItemDetails.Requirements.Count > 0)
+                {
+                    <section class="marketplace-item-overlay-section">
+                        <h3>Requirements</h3>
+                        <div class="marketplace-item-requirements">
+                            @foreach (var requirement in SelectedItemDetails.Requirements)
+                            {
+                                <div class="marketplace-requirement-row @(requirement.Completed ? "complete" : string.Empty)">
+                                    <span>@(requirement.Completed ? "Complete" : "Pending")</span>
+                                    <span>@requirement.Label</span>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(SelectedItemDetails.PurchaseBlockedReason))
+                {
+                    <div class="marketplace-item-note">@SelectedItemDetails.PurchaseBlockedReason</div>
+                }
+
+                <div class="marketplace-item-overlay-actions">
+                    <button class="@GetPurchaseButtonClass(SelectedItemDetails)"
+                            type="button"
+                            disabled="@(!CanPurchase(SelectedItemDetails) || IsActionBusy)"
+                            @onclick="() => PurchaseItemAsync(SelectedItemDetails)">
+                        @GetPurchaseLabel(SelectedItemDetails)
+                    </button>
+                </div>
+            </aside>
+        </div>
+    }
+
+    @if (IsMarketplaceFaqOpen)
+    {
+        <div class="enigma-modal-backdrop marketplace-faq-overlay-backdrop" @onclick="CloseMarketplaceFaq">
+            <aside class="enigma-modal-card marketplace-faq-overlay-card" @onclick:stopPropagation="true">
+                <button type="button" class="enigma-overlay-close" @onclick="CloseMarketplaceFaq">Close</button>
+                <header class="marketplace-item-overlay-head">
+                    <span class="catalog-card-kicker">Marketplace FAQ</span>
+                    <h2>Item Shop Guide</h2>
+                    <p>Use this quick reference to understand item purchases and run usage.</p>
+                </header>
+                <ol class="marketplace-faq-list">
+                    @foreach (var faqEntry in MarketplaceFaqEntries)
+                    {
+                        <li>@faqEntry</li>
+                    }
+                </ol>
+            </aside>
+        </div>
+    }
 }
 
 @code {
@@ -411,6 +547,15 @@ else
     private string ItemRarityFilter { get; set; } = "all";
     private string ItemSortBy { get; set; } = "name";
     private string ItemSortOrder { get; set; } = "asc";
+    private ItemCatalogEntry? SelectedItemDetails { get; set; }
+    private bool IsMarketplaceFaqOpen { get; set; }
+
+    private static readonly IReadOnlyList<string> MarketplaceFaqEntries =
+    [
+        "Item purchases update your inventory immediately.",
+        "Use the Play page to select items for your next run.",
+        "Item shop payments go 100% to Enigma Bank.",
+    ];
 
     private static readonly IReadOnlyList<SelectOption<string>> SortOrderOptions =
     [
@@ -666,7 +811,6 @@ else
         return Session is not null
             && item.Stock > 0
             && item.CanPurchase
-            && !item.IsOwned
             && Session.MazeNuggets >= item.Price;
     }
 
@@ -822,6 +966,221 @@ else
             : $"{item.PurchaseLimit} per person";
     }
 
+    private void OpenItemDetails(ItemCatalogEntry item)
+    {
+        SelectedItemDetails = item;
+    }
+
+    private void CloseItemDetails()
+    {
+        SelectedItemDetails = null;
+    }
+
+    private void HandleItemCardKeyDown(KeyboardEventArgs eventArgs, ItemCatalogEntry item)
+    {
+        if (eventArgs.Key is "Enter" or " ")
+        {
+            OpenItemDetails(item);
+        }
+    }
+
+    private void OpenMarketplaceFaq()
+    {
+        IsMarketplaceFaqOpen = true;
+    }
+
+    private void CloseMarketplaceFaq()
+    {
+        IsMarketplaceFaqOpen = false;
+    }
+
+    private void HandleMarketplaceFaqKeyDown(KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key is "Enter" or " ")
+        {
+            OpenMarketplaceFaq();
+        }
+    }
+
+    private string GetPurchaseButtonClass(ItemCatalogEntry item)
+    {
+        return IsOnePerPersonOwned(item) ? "btn btn-secondary marketplace-buy-owned" : "btn btn-primary";
+    }
+
+    private bool IsOnePerPersonOwned(ItemCatalogEntry item)
+    {
+        return item.PurchaseLimit == 1 && GetOwnedCount(item.ItemId) > 0;
+    }
+
+    private static string GetItemTypeSummary(ItemCatalogEntry item)
+    {
+        var labels = new List<string>();
+        if (!string.IsNullOrWhiteSpace(item.Category))
+        {
+            labels.Add(ToDisplayLabel(item.Category));
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Kind) && !EqualsIgnoreCase(item.Kind, item.Category))
+        {
+            labels.Add(ToDisplayLabel(item.Kind));
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.SlotKind))
+        {
+            labels.Add($"{ToDisplayLabel(item.SlotKind)} slot");
+        }
+
+        if (labels.Count == 0)
+        {
+            return "Utility item";
+        }
+
+        return string.Join(" | ", labels.Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static IReadOnlyList<string> GetUsageGuideSteps(ItemCatalogEntry item)
+    {
+        var steps = new List<string>
+        {
+            "Buy this item in the marketplace and equip it from the Play screen before you start a run.",
+        };
+
+        if (item.MaxPerRun <= 0)
+        {
+            steps.Add("This is a permanent perk. It stays active after purchase and does not consume run uses.");
+        }
+        else
+        {
+            var usesText = item.MaxPerRun == 1 ? "1 use" : $"{item.MaxPerRun} uses";
+            steps.Add($"Run limit: {usesText} per maze run.");
+        }
+
+        steps.Add(item.SlotKind.Trim().ToLowerInvariant() switch
+        {
+            "passive" => "Passive items auto-apply during the run.",
+            "high_power" => "High-power items are best saved for high-pressure moments.",
+            "perk" => "Perk effects are always active and do not need manual activation.",
+            _ => "Support items can be triggered when you need puzzle or traversal help.",
+        });
+
+        return steps;
+    }
+
+    private static IReadOnlyList<ItemDetailRow> GetEffectDetailRows(ItemCatalogEntry item)
+    {
+        if (item.EffectConfig.Count == 0)
+        {
+            return [];
+        }
+
+        var details = new List<ItemDetailRow>();
+        foreach (var detail in item.EffectConfig.OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            details.Add(new ItemDetailRow(
+                Label: ToDisplayLabel(detail.Key),
+                Value: FormatEffectValue(detail.Key, detail.Value)));
+        }
+
+        return details;
+    }
+
+    private static string ToDisplayLabel(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Detail";
+        }
+
+        var tokens = value
+            .Replace('_', ' ')
+            .Replace('-', ' ')
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return string.Join(" ", tokens.Select(token => token.Length <= 1
+            ? token.ToUpperInvariant()
+            : char.ToUpperInvariant(token[0]) + token[1..].ToLowerInvariant()));
+    }
+
+    private static string FormatEffectValue(string key, object? value)
+    {
+        if (value is null)
+        {
+            return "None";
+        }
+
+        if (value is JsonElement jsonElement)
+        {
+            return FormatJsonElement(key, jsonElement);
+        }
+
+        return FormatScalarValue(key, value);
+    }
+
+    private static string FormatJsonElement(string key, JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => FormatScalarValue(key, value.GetString() ?? string.Empty),
+            JsonValueKind.Number when value.TryGetInt64(out var integer) => FormatNumericValue(key, integer),
+            JsonValueKind.Number when value.TryGetDouble(out var number) => FormatNumericValue(key, (decimal)number),
+            JsonValueKind.True => "Yes",
+            JsonValueKind.False => "No",
+            JsonValueKind.Array => string.Join(", ", value.EnumerateArray().Select(entry => FormatJsonElement(key, entry))),
+            JsonValueKind.Object => string.Join(
+                ", ",
+                value.EnumerateObject().Select(property => $"{ToDisplayLabel(property.Name)}: {FormatJsonElement(property.Name, property.Value)}")),
+            _ => value.ToString(),
+        };
+    }
+
+    private static string FormatScalarValue(string key, object value)
+    {
+        return value switch
+        {
+            bool boolValue => boolValue ? "Yes" : "No",
+            byte number => FormatNumericValue(key, number),
+            sbyte number => FormatNumericValue(key, number),
+            short number => FormatNumericValue(key, number),
+            ushort number => FormatNumericValue(key, number),
+            int number => FormatNumericValue(key, number),
+            uint number => FormatNumericValue(key, number),
+            long number => FormatNumericValue(key, number),
+            ulong number => FormatNumericValue(key, number),
+            float number => FormatNumericValue(key, (decimal)number),
+            double number => FormatNumericValue(key, (decimal)number),
+            decimal number => FormatNumericValue(key, number),
+            string text => text,
+            _ => value.ToString() ?? string.Empty,
+        };
+    }
+
+    private static string FormatNumericValue(string key, decimal value)
+    {
+        var normalizedKey = key.Trim().ToLowerInvariant();
+        if (normalizedKey.Contains("multiplier", StringComparison.Ordinal))
+        {
+            return $"{value:0.##}x";
+        }
+
+        if (normalizedKey.Contains("seconds", StringComparison.Ordinal)
+            || normalizedKey.Contains("duration", StringComparison.Ordinal))
+        {
+            return $"{value:0.##}s";
+        }
+
+        if (normalizedKey.Contains("percent", StringComparison.Ordinal))
+        {
+            return $"{value:0.##}%";
+        }
+
+        if (decimal.Truncate(value) == value)
+        {
+            return value.ToString("0", CultureInfo.InvariantCulture);
+        }
+
+        return value.ToString("0.##", CultureInfo.InvariantCulture);
+    }
+
     private string GetBuyLabel(MarketplaceListing listing)
     {
         if (IsActionBusy)
@@ -859,9 +1218,9 @@ else
             return "Out of stock";
         }
 
-        if (item.IsOwned)
+        if (IsOnePerPersonOwned(item))
         {
-            return "Claimed";
+            return "You already own this";
         }
 
         if (!item.CanPurchase)
@@ -936,6 +1295,8 @@ else
         Session = session;
         await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
     }
+
+    private sealed record ItemDetailRow(string Label, string Value);
 
     private sealed class MarketplaceSellForm
     {
