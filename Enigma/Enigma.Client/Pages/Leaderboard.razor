@@ -61,34 +61,6 @@
     }
     else if (IsPlayerMode)
     {
-        @if (TotalCount > 0)
-        {
-            <section class="panel leaderboard-pagination-panel">
-                <div class="leaderboard-pagination-summary">
-                    <span class="profile-eyebrow">Rank Section</span>
-                    <h2>@CurrentSectionSummary</h2>
-                </div>
-
-                <div class="leaderboard-pagination">
-                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToPreviousSection)" @onclick="GoToPreviousSectionAsync">
-                        Previous
-                    </button>
-                    @foreach (var sectionIndex in GetVisibleSectionIndexes())
-                    {
-                        <button class="@GetSectionButtonClass(sectionIndex)"
-                                type="button"
-                                disabled="@IsLoading"
-                                @onclick="() => GoToSectionAsync(sectionIndex)">
-                            @(sectionIndex + 1)
-                        </button>
-                    }
-                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToNextSection)" @onclick="GoToNextSectionAsync">
-                        Next
-                    </button>
-                </div>
-            </section>
-        }
-
         @if (Players.Count == 0)
         {
             <div class="panel leaderboard-empty-panel">
@@ -127,13 +99,38 @@
                 }
             </section>
 
+            @if (TotalCount > 0)
+            {
+                <section class="panel leaderboard-pagination-panel">
+                    <p class="leaderboard-pagination-summary">@CurrentSectionSummary</p>
+
+                    <div class="leaderboard-pagination">
+                        <button class="btn btn-secondary" type="button" disabled="@(!CanGoToPreviousSection)" @onclick="GoToPreviousSectionAsync">
+                            Previous
+                        </button>
+                        @foreach (var sectionIndex in GetVisibleSectionIndexes())
+                        {
+                            <button class="@GetSectionButtonClass(sectionIndex)"
+                                    type="button"
+                                    disabled="@IsLoading"
+                                    @onclick="() => GoToSectionAsync(sectionIndex)">
+                                @(sectionIndex + 1)
+                            </button>
+                        }
+                        <button class="btn btn-secondary" type="button" disabled="@(!CanGoToNextSection)" @onclick="GoToNextSectionAsync">
+                            Next
+                        </button>
+                    </div>
+                </section>
+            }
+
             <section class="panel leaderboard-table-panel">
                 <div class="panel-heading maps-heading">
                     <div>
                         <span class="profile-eyebrow">Player Board</span>
                         <h2>All Ranked Players</h2>
                     </div>
-                    <span class="section-count">@CurrentSectionSummary</span>
+                    <span class="section-count">@CurrentSectionBadge</span>
                 </div>
 
                 <div class="leaderboard-table-wrap">
@@ -219,34 +216,6 @@
     }
     else
     {
-        @if (TotalCount > 0)
-        {
-            <section class="panel leaderboard-pagination-panel">
-                <div class="leaderboard-pagination-summary">
-                    <span class="profile-eyebrow">Rank Section</span>
-                    <h2>@CurrentSectionSummary</h2>
-                </div>
-
-                <div class="leaderboard-pagination">
-                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToPreviousSection)" @onclick="GoToPreviousSectionAsync">
-                        Previous
-                    </button>
-                    @foreach (var sectionIndex in GetVisibleSectionIndexes())
-                    {
-                        <button class="@GetSectionButtonClass(sectionIndex)"
-                                type="button"
-                                disabled="@IsLoading"
-                                @onclick="() => GoToSectionAsync(sectionIndex)">
-                            @(sectionIndex + 1)
-                        </button>
-                    }
-                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToNextSection)" @onclick="GoToNextSectionAsync">
-                        Next
-                    </button>
-                </div>
-            </section>
-        }
-
         <section class="leaderboard-podium">
             @foreach (var entry in PodiumMaps.Select((map, index) => new { Map = map, Rank = index + 1 }))
             {
@@ -286,13 +255,38 @@
             }
         </section>
 
+        @if (TotalCount > 0)
+        {
+            <section class="panel leaderboard-pagination-panel">
+                <p class="leaderboard-pagination-summary">@CurrentSectionSummary</p>
+
+                <div class="leaderboard-pagination">
+                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToPreviousSection)" @onclick="GoToPreviousSectionAsync">
+                        Previous
+                    </button>
+                    @foreach (var sectionIndex in GetVisibleSectionIndexes())
+                    {
+                        <button class="@GetSectionButtonClass(sectionIndex)"
+                                type="button"
+                                disabled="@IsLoading"
+                                @onclick="() => GoToSectionAsync(sectionIndex)">
+                            @(sectionIndex + 1)
+                        </button>
+                    }
+                    <button class="btn btn-secondary" type="button" disabled="@(!CanGoToNextSection)" @onclick="GoToNextSectionAsync">
+                        Next
+                    </button>
+                </div>
+            </section>
+        }
+
         <section class="panel leaderboard-table-panel">
             <div class="panel-heading maps-heading">
                 <div>
                     <span class="profile-eyebrow">Map Board</span>
                     <h2>All Ranked Maps</h2>
                 </div>
-                <span class="section-count">@CurrentSectionSummary</span>
+                <span class="section-count">@CurrentSectionBadge</span>
             </div>
 
             <div class="leaderboard-table-wrap">
@@ -406,7 +400,8 @@
     private int CurrentPageCount => IsPlayerMode ? Players.Count : Maps.Count;
     private int CurrentRankStart => TotalCount == 0 ? 0 : CurrentOffset + 1;
     private int CurrentRankEnd => TotalCount == 0 ? 0 : Math.Min(CurrentOffset + CurrentPageCount, TotalCount);
-    private string CurrentSectionSummary => TotalCount == 0 ? "No results" : $"Ranks {CurrentRankStart}-{CurrentRankEnd} of {TotalCount}";
+    private string CurrentSectionSummary => TotalCount == 0 ? "No results" : $"Showing {CurrentRankStart}-{CurrentRankEnd} of {TotalCount}";
+    private string CurrentSectionBadge => TotalCount == 0 ? "No results" : $"{CurrentRankStart}-{CurrentRankEnd} of {TotalCount}";
     private bool CanGoToPreviousSection => CurrentSectionIndex > 0;
     private bool CanGoToNextSection => CurrentSectionIndex + 1 < TotalSections;
 

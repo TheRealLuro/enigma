@@ -130,16 +130,86 @@
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
-        new() { Eyebrow = "Home", Title = "Main Menu", Description = "This is the hub for every major system: runs, rankings, player search, your profile, and the trading floor.", HelperText = "Use the menu cards to move around the app. The top header stays with you on normal pages so navigation is always one click away.", Path = "/home" },
-        new() { Eyebrow = "Play", Title = "Run Setup", Description = "Generate a new maze or load a saved one here, then choose up to three items before you enter.", HelperText = "The fullscreen choice is remembered. If you lock in fullscreen once, future runs will try to use that mode on the next start click.", Path = "/play" },
-        new() { Eyebrow = "Co-op", Title = "Co-op Lobby", Description = "Create a shared session, invite exactly one friend, ready up together, and enter the maze once both players are locked in.", HelperText = "This page is for session setup only. Co-op runs stay synchronized once both players enter, and leaving the run abandons it for the team. If a new co-op maze gets saved after completion, the host becomes the owner and both explorers receive discovery credit.", Path = "/play/coop" },
-        new() { Eyebrow = "Game Demo", Title = "Live Maze", Description = "This safe demo shows the real run layout: move through rooms, watch the in-room HUD, walk up to the console, and press E to open a puzzle overlay.", HelperText = "Some rooms use the console, and some puzzles resolve directly on the stage itself. Leaving a real maze is permanent; this demo is exempt so you can learn the flow safely.", Path = "/game?tutorial=true" },
-        new() { Eyebrow = "Leaderboard", Title = "Rankings", Description = "Switch between map rankings and player rankings. Founder names, record holders, and ranked players all link directly into profiles or maps.", HelperText = "Map mode is for ratings, plays, records, and founding date. Player mode ranks explorers by collection, winnings, and performance.", Path = "/leaderboard" },
-        new() { Eyebrow = "Marketplace", Title = "Trading Floor", Description = "The marketplace is split into Map Shop and Item Shop. Trade owned maps in one tab and buy run items in the other.", HelperText = "Map sales transfer ownership. Item purchases go straight into inventory and are equipped later from the Play page.", Path = "/marketplace" },
-        new() { Eyebrow = "Players", Title = "Explorer Search", Description = "Search live explorer accounts, open exact profiles directly, and review the current top discoverers from the player index.", HelperText = "Search updates as you type. The featured players here are the current top three by discovered maps, not just a generic popularity list.", Path = "/players" },
-        new() { Eyebrow = "Profile", Title = "Your Profile", Description = "Your profile is split into Overview, Maps, Inventory, and Settings. Public visitors only see the public-facing sections.", HelperText = "Owned maps, discovered maps, stats, and social state all live here. If you are viewing someone else, their private account controls stay hidden.", Path = "/profile" },
-        new() { Eyebrow = "Settings", Title = "Account Controls", Description = "Settings now hold password changes, email updates, tutorial replay, and avatar selection from owned map art.", HelperText = "Profile pictures use your owned map art with the default crop already applied. There is no manual crop step anymore.", Path = "/profile?tab=settings" },
-        new() { Eyebrow = "Retention Rule", Title = "60-Day Inactivity Deletion", Description = "If the account is inactive for 60 consecutive days, it and all owned maps are deleted permanently.", HelperText = "This warning is repeated in profile settings because it affects both your account and the maps you currently own.", Path = "/profile?tab=settings&tutorialstep=policy" },
+        new()
+        {
+            Eyebrow = "Home",
+            Title = "Home",
+            Description = "Home is the main hub. From here you jump into Play, Leaderboard, Players, Profile, and Marketplace without hunting through nested menus.",
+            HelperText = "Use the header for fast navigation on normal pages. The home cards are the quick launch version of the same major sections.",
+            Path = "/home"
+        },
+        new()
+        {
+            Eyebrow = "Play",
+            Title = "Start a Discovery",
+            Description = "Play is where single-player runs start. Generate a new maze, load a saved one, choose your run items, and then enter the maze.",
+            HelperText = "The fullscreen choice is remembered. If you lock in fullscreen and choose not to be asked again, future runs try that mode on the next start click.",
+            Path = "/play"
+        },
+        new()
+        {
+            Eyebrow = "Co-op",
+            Title = "Dual Expedition",
+            Description = "Co-op is the shared session lobby. Create a run, invite exactly one friend, wait for both players to ready up, then enter together.",
+            HelperText = "This page is only for session setup. If a new co-op maze is saved after completion, the host becomes the owner and both explorers receive discovery credit.",
+            Path = "/play/coop"
+        },
+        new()
+        {
+            Eyebrow = "Game",
+            Title = "Maze Run",
+            Description = "This safe demo shows the live maze layout. Move through rooms, watch the in-room HUD, walk to the console, and press E to open puzzle overlays.",
+            HelperText = "Some puzzles are console-based and some resolve directly on the stage. Real runs are permanent if you leave them; this tutorial demo is exempt so you can revisit it safely.",
+            Path = "/game"
+        },
+        new()
+        {
+            Eyebrow = "Leaderboard",
+            Title = "Top Maps and Players",
+            Description = "Leaderboard switches between ranked maps and ranked players. It now loads in rank sections instead of trying to dump the whole board at once.",
+            HelperText = "Map mode tracks records, ratings, founders, and plays. Player mode tracks discoverers, owned maps, Maze Nuggets, wins, losses, and overall performance.",
+            Path = "/leaderboard"
+        },
+        new()
+        {
+            Eyebrow = "Marketplace",
+            Title = "Marketplace",
+            Description = "Marketplace is split into Map Shop and Item Shop. Use Map Shop to list or buy maps, and use Item Shop to stock your run inventory.",
+            HelperText = "Map sales transfer ownership. Item purchases go straight into inventory and are equipped later from Play before a run starts.",
+            Path = "/marketplace"
+        },
+        new()
+        {
+            Eyebrow = "Players",
+            Title = "Find Players",
+            Description = "Players is the live explorer search page. Search usernames, jump straight into exact profiles, and review the featured top discoverers.",
+            HelperText = "Results update as you type. The featured explorers here are the current top three by discovered maps, not just a generic popularity list.",
+            Path = "/players"
+        },
+        new()
+        {
+            Eyebrow = "Profile",
+            Title = "Explorer Ledger",
+            Description = "Profile holds your overview, map collection, inventory, and social state. When you view another explorer, only the public sections stay visible.",
+            HelperText = "Owned maps, discovered maps, run stats, and relationship state all live here. This is also where you check whether a map is owned or only discovered.",
+            Path = "/profile"
+        },
+        new()
+        {
+            Eyebrow = "Settings",
+            Title = "Profile Settings",
+            Description = "Settings hold your account controls: update email, change password, save a profile picture, replay the tutorial, and manage account deletion.",
+            HelperText = "Profile pictures come from owned map art and use the default crop automatically. There is no manual crop workflow in the current app.",
+            Path = "/profile?tab=settings"
+        },
+        new()
+        {
+            Eyebrow = "Retention",
+            Title = "60-Day Inactivity Rule",
+            Description = "If the account is inactive for 60 consecutive days, the account and all owned maps are deleted permanently.",
+            HelperText = "This rule matters because ownership and discovery are separate. Losing the account removes your owned maps, so keep the inactivity window in mind.",
+            Path = "/profile?tab=settings&tutorialstep=policy"
+        },
     ];
 
     private TutorialStepDefinition? CurrentTutorialStep =>
@@ -406,14 +476,14 @@
         var path = current.AbsolutePath.Trim('/').ToLowerInvariant();
         var query = current.Query.ToLowerInvariant();
 
-        if (path == "play")
-        {
-            return 1;
-        }
-
         if (path == "play/coop")
         {
             return 2;
+        }
+
+        if (path == "play")
+        {
+            return 1;
         }
 
         if (path == "game" && (query.Contains("tutorial=1", StringComparison.Ordinal) || query.Contains("tutorial=true", StringComparison.Ordinal)))
@@ -495,13 +565,14 @@
             return Task.CompletedTask;
         }
 
-        if (index == 2)
+        var step = _tutorialSteps[index];
+        if (string.Equals(GetCleanPath(new Uri(new Uri(NavigationManager.BaseUri), step.Path).AbsoluteUri), "game", StringComparison.OrdinalIgnoreCase))
         {
             NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(TutorialDemoSeed)}&source=new&tutorial=true", replace: true);
             return Task.CompletedTask;
         }
 
-        NavigationManager.NavigateTo(_tutorialSteps[index].Path, replace: true);
+        NavigationManager.NavigateTo(step.Path, replace: true);
         return Task.CompletedTask;
     }
 
