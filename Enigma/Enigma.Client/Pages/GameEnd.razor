@@ -41,8 +41,8 @@ else
                     <strong>@Summary.Username</strong>
                 </div>
                 <div>
-                    <span>@(Summary.IsMultiplayer ? "Total Team Gold" : "Total Gold")</span>
-                    <strong>@Summary.GoldCollected</strong>
+                    <span>@(Summary.IsMultiplayer ? "Total Team MN" : "Total MN")</span>
+                    <strong>@Summary.GoldCollected.ToString("N0") MN</strong>
                 </div>
                 <div>
                     <span>Completion Time</span>

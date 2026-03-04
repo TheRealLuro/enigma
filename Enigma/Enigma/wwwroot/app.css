@@ -955,28 +955,29 @@ h1:focus {
 }
 
 .enigma-game-page.content {
-    max-width: 1920px;
-    padding-inline: clamp(16px, 2vw, 28px);
+    max-width: 2500px;
+    padding-inline: clamp(16px, 1.8vw, 32px);
 }
 
 .enigma-game-shell {
     display: grid;
-    grid-template-columns: minmax(0, 2.45fr) minmax(360px, 440px);
-    gap: 24px;
+    grid-template-columns: 1fr;
+    gap: clamp(20px, 1.8vw, 28px);
     align-items: start;
 }
 
 .enigma-room-shell {
     display: grid;
-    gap: 18px;
-    padding: 24px;
+    gap: 20px;
+    padding: clamp(18px, 1.6vw, 26px);
+    margin: 0;
 }
 
 .enigma-room-meta {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
     align-items: start;
-    gap: 20px;
+    gap: 18px;
     margin-bottom: 0;
 }
 
@@ -1064,7 +1065,8 @@ h1:focus {
 .enigma-room-stage {
     position: relative;
     width: 100%;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 16 / 10;
+    min-height: clamp(760px, 76vh, 1180px);
     border-radius: 16px;
     overflow: hidden;
     outline: none;
@@ -1247,20 +1249,25 @@ h1:focus {
 
 .enigma-sidebar {
     display: grid;
-    gap: 16px;
+    grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+    grid-template-areas: "summary puzzle";
+    gap: 20px;
     align-content: start;
-    grid-template-rows: auto auto 1fr;
 }
 
 .enigma-sidebar-summary {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
+    grid-area: summary;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: sticky;
+    top: 24px;
 }
 
 .enigma-sidebar-card {
     padding: 18px;
     border-radius: 18px;
+    margin: 0;
 }
 
 .enigma-coop-card {
@@ -1325,27 +1332,84 @@ h1:focus {
     word-break: break-word;
 }
 
+.enigma-status-loadout {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.enigma-status-section-label {
+    color: var(--epic-text-dim);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.enigma-status-empty {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    color: var(--epic-text-secondary);
+    line-height: 1.45;
+}
+
+.enigma-status-loadout-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.enigma-status-loadout-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(79, 140, 255, 0.12);
+    border: 1px solid rgba(79, 140, 255, 0.18);
+    color: var(--epic-text);
+}
+
+.enigma-status-loadout-pill strong {
+    font-size: 0.88rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.enigma-status-loadout-pill span {
+    color: #dcecff;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
 .enigma-puzzle-card h2 {
     margin-bottom: 8px;
 }
 
 .enigma-puzzle-card {
+    grid-area: puzzle;
     display: grid;
-    gap: 16px;
-    position: sticky;
-    top: 24px;
+    gap: 14px;
+    position: relative;
+    top: auto;
     background:
         radial-gradient(circle at top left, rgba(60, 118, 255, 0.12), transparent 34%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01)),
         #171b24;
     border: 1px solid rgba(122, 181, 255, 0.14);
     box-shadow: 0 24px 56px rgba(0, 0, 0, 0.22);
+    margin: 0;
+    min-width: 0;
 }
 
 .enigma-puzzle-head {
     display: grid;
     gap: 8px;
-    padding-bottom: 12px;
+    padding-bottom: 14px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -1363,7 +1427,7 @@ h1:focus {
 .enigma-puzzle-surface {
     display: grid;
     gap: 16px;
-    padding-top: 4px;
+    padding-top: 6px;
 }
 
 .enigma-loadout-list {
@@ -1452,7 +1516,8 @@ h1:focus {
 
 .enigma-puzzle-guide {
     display: grid;
-    gap: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
     margin: 0;
     padding: 0;
     border: 0;
@@ -1462,13 +1527,10 @@ h1:focus {
 .enigma-puzzle-guide-row {
     display: grid;
     gap: 6px;
-    padding: 12px 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.enigma-puzzle-guide-row:first-child {
-    padding-top: 0;
-    border-top: 0;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .enigma-puzzle-guide-row span {
@@ -1476,6 +1538,21 @@ h1:focus {
     font-size: 0.72rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
+}
+
+.enigma-puzzle-guide-row p {
+    margin: 0;
+    color: var(--epic-text);
+    line-height: 1.5;
+}
+
+.enigma-puzzle-status {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--epic-text);
+    line-height: 1.5;
 }
 
 .enigma-puzzle-guide-row p {
@@ -2610,21 +2687,29 @@ h1:focus {
 }
 
 @media (max-width: 1100px) {
-    .enigma-game-shell {
-        grid-template-columns: 1fr;
-    }
-
     .enigma-room-meta {
         grid-template-columns: 1fr;
     }
 
-    .enigma-sidebar {
-        grid-template-columns: 1fr;
+    .enigma-room-stage {
+        aspect-ratio: 5 / 4;
+        min-height: clamp(600px, 68vh, 860px);
     }
 
-    .enigma-puzzle-card {
+    .enigma-sidebar {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "summary"
+            "puzzle";
+    }
+
+    .enigma-sidebar-summary {
         position: relative;
         top: auto;
+    }
+
+    .enigma-puzzle-guide {
+        grid-template-columns: 1fr;
     }
 
     .coop-puzzle-summary {
@@ -2647,6 +2732,11 @@ h1:focus {
     .enigma-sidebar-summary,
     .enigma-status-metrics {
         grid-template-columns: 1fr;
+    }
+
+    .enigma-room-stage {
+        aspect-ratio: 1 / 1;
+        min-height: 460px;
     }
 
     .coop-puzzle-summary-metrics,

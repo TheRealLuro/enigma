@@ -712,7 +712,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 {
                     TotalGold += reward;
                     _playerStateDirty = true;
-                    ShowBanner($"Puzzle solved. +{reward} gold", 1.5d);
+                    ShowBanner($"Puzzle solved. +{reward} MN", 1.5d);
                 }
             }
         }
@@ -740,7 +740,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 {
                     TotalGold += bonus;
                     _playerStateDirty = true;
-                    ShowBanner($"Reward cache collected. +{bonus} gold", 1.5d);
+                    ShowBanner($"Reward cache collected. +{bonus} MN", 1.5d);
                 }
             }
         }

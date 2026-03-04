@@ -100,6 +100,18 @@ class _PromptPackValueProxy:
         return repr(self._value())
 
 
+def _coerce_prompt_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, _PromptPackValueProxy):
+        value = value._value()
+    return str(value)
+
+
+def _current_pack_name() -> str:
+    return _coerce_prompt_text(PROMPT_PACK_NAME)
+
+
 # Prompt content is sourced from fetchprompt.py, but the active pack is chosen per generation.
 PROMPT_PACK_NAME = _PromptPackValueProxy("name")
 PROMPT_COMPOSITION_ELITE = _PromptPackValueProxy("PROMPT_COMPOSITION_ELITE")
@@ -235,7 +247,8 @@ def _build_prompt(seed: str) -> str:
 
 
 def _clip_prompt_words(text: str, max_words: int = 24) -> str:
-    return " ".join(text.split()[:max_words])
+    normalized = _coerce_prompt_text(text)
+    return " ".join(normalized.split()[:max_words])
 
 
 def _clip_prompt_safe(text: str, max_words: int, max_chars: int = 220) -> str:
@@ -1424,23 +1437,30 @@ def _diffuse_haunted_pipeline(pipe, image: Image.Image, seed: str) -> Image.Imag
 
 def diffuse_abstract(image: Image.Image, seed: str) -> Image.Image:
     pipe = get_pipe()
-    if "cartoon" in PROMPT_PACK_NAME:
+    pack_name = _current_pack_name().lower()
+    if "cartoon" in pack_name:
         return _diffuse_cartoon_pipeline(pipe=pipe, image=image, seed=seed)
-    if "dungeon" in PROMPT_PACK_NAME or "castle" in PROMPT_PACK_NAME:
+    if "dungeon" in pack_name or "castle" in pack_name:
         return _diffuse_dungeon_pipeline(pipe=pipe, image=image, seed=seed)
-    if "sewer" in PROMPT_PACK_NAME:
+    if "sewer" in pack_name:
         return _diffuse_sewer_pipeline(pipe=pipe, image=image, seed=seed)
-    if "hedge" in PROMPT_PACK_NAME:
+    if "hedge" in pack_name:
         return _diffuse_hedge_pipeline(pipe=pipe, image=image, seed=seed)
-    if "haunted" in PROMPT_PACK_NAME:
+    if "haunted" in pack_name:
         return _diffuse_haunted_pipeline(pipe=pipe, image=image, seed=seed)
         
     return _diffuse_membrane_pipeline(pipe=pipe, image=image, seed=seed)
 
 
 def generate_map_image(seed: str, use_diffusion: bool = True) -> Image.Image:
-    is_cartoon_pack = "cartoon" in PROMPT_PACK_NAME
-    is_dungeon_pack = "dungeon" in PROMPT_PACK_NAME or "castle" in PROMPT_PACK_NAME
+    active_pack = getattr(_prompt_pack_context, "pack", None)
+    if active_pack is None:
+        with _prompt_pack_scope():
+            return generate_map_image(seed=seed, use_diffusion=use_diffusion)
+
+    pack_name = _coerce_prompt_text(active_pack.get("name", "")).lower()
+    is_cartoon_pack = "cartoon" in pack_name
+    is_dungeon_pack = "dungeon" in pack_name or "castle" in pack_name
     base_image_size = WORK_IMAGE_SIZE
     target_size = FINAL_IMAGE_SIZE
 
@@ -1488,11 +1508,14 @@ def _generate_map_image_b64_now(seed: str, use_diffusion: bool = True) -> str:
 
 
 def _generate_map_image_payload_now(seed: str, use_diffusion: bool = True) -> dict:
-    map_image = _generate_map_image_b64_now(seed=seed, use_diffusion=use_diffusion)
-    return {
-        "map_image": map_image,
-        "theme": PROMPT_PACK_NAME,
-    }
+    with _prompt_pack_scope() as active_pack:
+        image = generate_map_image(seed=seed, use_diffusion=use_diffusion)
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG", optimize=True)
+        return {
+            "map_image": base64.b64encode(buffer.getvalue()).decode("ascii"),
+            "theme": _coerce_prompt_text(active_pack.get("name", "")),
+        }
 
 
 def _queued_generate(seed: str, use_diffusion: bool) -> str:

@@ -48,8 +48,8 @@ else
                             <strong class="mono-numeric">@ElapsedTimeLabel</strong>
                         </div>
                         <div>
-                            <span>Gold</span>
-                            <strong class="mono-numeric">@TotalGold</strong>
+                            <span>MN</span>
+                            <strong class="mono-numeric">@TotalGold.ToString("N0")</strong>
                         </div>
                     </div>
                 </div>
@@ -243,54 +243,49 @@ else
 
             <aside class="enigma-sidebar">
                 <div class="enigma-sidebar-summary">
-                <div class="card enigma-sidebar-card enigma-status-card">
-                    <div class="enigma-sidebar-card-head">
-                        <span class="enigma-kicker">Run Status</span>
-                        <span class="enigma-status-goal">@(PortalReady ? "Enter the black hole" : "Solve and move")</span>
-                    </div>
-                    <div class="enigma-status-metrics">
-                        <div class="enigma-status-metric">
-                            <span>Solved Rooms</span>
-                            <strong>@SolvedRoomCount / @TotalRoomCount</strong>
+                    <div class="card enigma-sidebar-card enigma-status-card">
+                        <div class="enigma-sidebar-card-head">
+                            <span class="enigma-kicker">Run Status</span>
+                            <span class="enigma-status-goal">@(PortalReady ? "Enter the black hole" : "Solve and move")</span>
                         </div>
-                        <div class="enigma-status-metric">
-                            <span>Player</span>
-                            <strong>@Username</strong>
+                        <div class="enigma-status-metrics">
+                            <div class="enigma-status-metric">
+                                <span>Solved Rooms</span>
+                                <strong>@SolvedRoomCount / @TotalRoomCount</strong>
+                            </div>
+                            <div class="enigma-status-metric">
+                                <span>Player</span>
+                                <strong>@Username</strong>
+                            </div>
+                            <div class="enigma-status-metric">
+                                <span>Room State</span>
+                                <strong>@((IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState.Puzzle.IsCompleted) ? "Unlocked" : "Locked")</strong>
+                            </div>
+                            <div class="enigma-status-metric">
+                                <span>Run Total</span>
+                                <strong>@TotalGold.ToString("N0") MN</strong>
+                            </div>
                         </div>
-                        <div class="enigma-status-metric enigma-status-metric-wide">
-                            <span>Room State</span>
-                            <strong>@((IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState.Puzzle.IsCompleted) ? "Unlocked" : "Locked")</strong>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card enigma-sidebar-card enigma-loadout-card">
-                    <div class="enigma-sidebar-card-head">
-                        <span class="enigma-kicker">Equipped Items</span>
-                    </div>
-                    @if (EquippedLoadout.Count == 0)
-                    {
-                        <div class="enigma-loadout-empty">No items equipped for this run.</div>
-                    }
-                    else
-                    {
-                        <div class="enigma-loadout-list">
-                            @foreach (var item in EquippedLoadout)
+                        <div class="enigma-status-loadout">
+                            <span class="enigma-status-section-label">Equipped Items</span>
+                            @if (EquippedLoadout.Count == 0)
                             {
-                                <div class="enigma-loadout-item">
-                                    <div class="enigma-loadout-item-top">
-                                        <strong>@item.Name</strong>
-                                        <span class="enigma-loadout-quantity">x@item.Quantity</span>
-                                    </div>
-                                    <div class="enigma-loadout-tags">
-                                        <span class="enigma-loadout-tag">@FormatLoadoutSlot(item.SlotKind)</span>
-                                        <span class="enigma-loadout-tag">@item.Kind</span>
-                                    </div>
+                                <div class="enigma-status-empty">No items equipped for this run.</div>
+                            }
+                            else
+                            {
+                                <div class="enigma-status-loadout-list">
+                                    @foreach (var item in EquippedLoadout)
+                                    {
+                                        <div class="enigma-status-loadout-pill">
+                                            <strong>@item.Name</strong>
+                                            <span>x@item.Quantity</span>
+                                        </div>
+                                    }
                                 </div>
                             }
                         </div>
-                    }
-                </div>
+                    </div>
 
                 @if (IsCoopRun)
                 {
@@ -1306,7 +1301,7 @@ else
 
                     @if (CurrentRoomState.Definition.Kind == MazeRoomKind.Reward)
                     {
-                        <p class="enigma-helper reward-copy">Reward rooms spawn bonus gold after the puzzle is cleared.</p>
+                        <p class="enigma-helper reward-copy">Reward rooms spawn bonus MN after the puzzle is cleared.</p>
                     }
                     @if (CurrentRoomState.Definition.Kind == MazeRoomKind.Finish)
                     {
