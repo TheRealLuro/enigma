@@ -268,6 +268,15 @@ public class APIController : ControllerBase
     }
 
     [Authorize]
+    [HttpGet("maps/search")]
+    public async Task<IActionResult> SearchMaps([FromQuery] string query, [FromQuery] int limit = 6)
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync($"database/maps/search?query={Esc(query)}&limit={limit}");
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
     [HttpGet("leaderboard")]
     [HttpGet("leaderboard/maps")]
     public async Task<IActionResult> GetLeaderboard([FromQuery] string sortBy = "rating", [FromQuery] string order = "desc")

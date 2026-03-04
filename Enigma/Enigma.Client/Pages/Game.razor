@@ -2,7 +2,11 @@
 @using Enigma.Client.Models.Gameplay
 @using Microsoft.AspNetCore.Components.Routing
 
-<PageTitle>Enigma Game</PageTitle>
+<SeoHead Title="Enigma Game | Live Maze Run"
+         Description="Play an active Enigma maze run with room-based puzzles, movement, and in-room interaction."
+         Robots="noindex,nofollow"
+         OpenGraphType="website"
+         SchemaType="WebPage" />
 
 @if (!string.IsNullOrWhiteSpace(LoadError))
 {

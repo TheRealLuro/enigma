@@ -439,6 +439,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return;
         }
 
+        if (CurrentRoomState?.Puzzle is IRevealOnOpenPuzzle revealPuzzle)
+        {
+            revealPuzzle.BeginReveal();
+        }
+
         IsPuzzleOverlayOpen = true;
         IsMoving = false;
         _pressedKeys.Clear();
@@ -1441,10 +1446,10 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     private static PlayAreaRect GetPuzzleConsoleBaseBounds(PlayAreaRect consoleBounds) =>
         new(
-            consoleBounds.X + (consoleBounds.Width * 0.06d),
-            consoleBounds.Y + (consoleBounds.Height * 0.68d),
-            consoleBounds.Width * 0.88d,
-            consoleBounds.Height * 0.24d);
+            consoleBounds.X + (consoleBounds.Width * 0.2d),
+            consoleBounds.Y + (consoleBounds.Height * 0.72d),
+            consoleBounds.Width * 0.6d,
+            consoleBounds.Height * 0.2d);
 
     private bool IntersectsPuzzleConsoleBase(PlayAreaRect playerBounds) =>
         GetPuzzleConsoleBaseBounds(GetCurrentPuzzleConsoleBounds()).Intersects(playerBounds);

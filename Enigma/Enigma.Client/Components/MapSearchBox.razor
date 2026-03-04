@@ -1,0 +1,157 @@
+@inject Enigma.Client.Services.EnigmaApiClient Api
+
+<div class="map-search-shell players-search-box">
+    <label class="form-label" for="@InputId">@Label</label>
+    <div class="players-search-row map-search-row">
+        <input id="@InputId"
+               class="form-control"
+               value="@Value"
+               @oninput="OnSearchInput"
+               @onkeydown="HandleSearchKeyDown"
+               placeholder="@Placeholder"
+               autocomplete="off" />
+        <button class="btn btn-secondary"
+                type="button"
+                disabled="@string.IsNullOrWhiteSpace(Value)"
+                @onclick="ClearSearchAsync">
+            Clear
+        </button>
+    </div>
+    <p class="players-search-hint">Results update as you type. Click a saved maze below to fill the field.</p>
+
+    @if (IsSearching)
+    {
+        <div class="players-search-status">
+            <div class="loader small"></div>
+            <span>Searching saved mazes...</span>
+        </div>
+    }
+    else if (HasSearchQuery)
+    {
+        if (SearchResults.Count == 0)
+        {
+            <div class="players-empty-state map-search-empty-state">
+                <h3>No matching mazes yet</h3>
+                <p>Try a different spelling, or keep the exact name you typed and load it directly.</p>
+            </div>
+        }
+        else
+        {
+            <div class="players-results-grid map-search-results-grid">
+                @foreach (var map in SearchResults)
+                {
+                    <button class="player-search-card map-search-result-card"
+                            type="button"
+                            @onclick="() => SelectMapAsync(map.MapName)">
+                        <div class="player-search-card-top map-search-card-top">
+                            <MapImageFrame ImageUrl="@map.MapImage"
+                                           AltText="@($"{map.MapName} artwork")"
+                                           FallbackText="@map.MapName"
+                                           Class="player-search-avatar-frame map-search-avatar-frame" />
+                            <div class="player-search-copy map-search-copy">
+                                <strong>@map.MapName</strong>
+                                <p>@map.Value.ToString("N0") MN</p>
+                                <span class="leaderboard-secondary-text">@map.ThemeLabel</span>
+                                <span class="leaderboard-secondary-text">@map.Difficulty | @map.Size x @map.Size | @map.Founder</span>
+                            </div>
+                        </div>
+                    </button>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Map Name";
+    [Parameter] public string Placeholder { get; set; } = "type a map name";
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string InputId { get; set; } = $"map-search-{Guid.NewGuid():N}";
+    [Parameter] public int Limit { get; set; } = 6;
+
+    private bool IsSearching { get; set; }
+    private int SearchVersion { get; set; }
+    private List<MapSummary> SearchResults { get; set; } = [];
+
+    private bool HasSearchQuery => !string.IsNullOrWhiteSpace(Value) && Value.Trim().Length >= 2;
+
+    private async Task OnSearchInput(ChangeEventArgs args)
+    {
+        var nextValue = args.Value?.ToString() ?? string.Empty;
+        await ValueChanged.InvokeAsync(nextValue);
+        await SearchMapsAsync(nextValue);
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            await ClearSearchAsync();
+        }
+    }
+
+    private async Task SearchMapsAsync(string query)
+    {
+        var normalizedQuery = query?.Trim() ?? string.Empty;
+        var currentVersion = ++SearchVersion;
+
+        if (normalizedQuery.Length < 2)
+        {
+            SearchResults = [];
+            IsSearching = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        IsSearching = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await Api.GetAsync($"api/auth/maps/search?query={Uri.EscapeDataString(normalizedQuery)}&limit={Limit}");
+            var payload = await Api.ReadJsonAsync<MapSearchResponse>(response);
+            if (currentVersion != SearchVersion)
+            {
+                return;
+            }
+
+            SearchResults = response.IsSuccessStatusCode
+                ? payload?.Maps?.Where(map => !string.IsNullOrWhiteSpace(map.MapName)).ToList() ?? []
+                : [];
+        }
+        catch
+        {
+            if (currentVersion != SearchVersion)
+            {
+                return;
+            }
+
+            SearchResults = [];
+        }
+        finally
+        {
+            if (currentVersion == SearchVersion)
+            {
+                IsSearching = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async Task SelectMapAsync(string mapName)
+    {
+        await ValueChanged.InvokeAsync(mapName);
+        SearchResults = [];
+        IsSearching = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ClearSearchAsync()
+    {
+        await ValueChanged.InvokeAsync(string.Empty);
+        SearchResults = [];
+        IsSearching = false;
+        await InvokeAsync(StateHasChanged);
+    }
+}

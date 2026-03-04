@@ -2,7 +2,11 @@
 @using System.ComponentModel.DataAnnotations
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
-<PageTitle>Marketplace</PageTitle>
+<SeoHead Title="Enigma Marketplace | Map Trading and Item Shop"
+         Description="Trade Enigma maps, review live listings, and buy item-shop inventory from the marketplace."
+         Robots="noindex,follow"
+         OpenGraphType="website"
+         SchemaType="WebPage" />
 
 @if (IsLoading && !HasLoadedOnce)
 {

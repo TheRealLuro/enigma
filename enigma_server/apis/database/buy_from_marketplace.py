@@ -8,6 +8,7 @@ from main import limiter
 from .db import client, marketplace_collection, maps_collection, users_collection
 from .economy_rules import compute_marketplace_sale_split, credit_bank_dividend
 from .system_accounts import ensure_bank_account
+from .user_utils import SYSTEM_BANK_USERNAME
 
 
 router = APIRouter(prefix="/database/marketplace")
@@ -54,28 +55,39 @@ def buy_from(request: Request, map_name: str, buyer: str):
                 split = compute_marketplace_sale_split(cost)
                 map_id = map_doc["_id"]
                 last_bought = datetime.now(timezone.utc)
+                buyer_discovered_ids = {str(existing_id) for existing_id in buyer_user.get("maps_discovered", [])}
+                buyer_discovered_map = str(map_id) in buyer_discovered_ids
+
+                buyer_update = {
+                    "$inc": {"maze_nuggets": -cost},
+                    "$addToSet": {"maps_owned": map_id},
+                }
+                # Preserve real discoveries, but never let ownership transfer create one.
+                if not buyer_discovered_map:
+                    buyer_update["$pull"] = {"maps_discovered": map_id}
 
                 buyer_result = users_collection.update_one(
                     {
                         "username": normalized_buyer,
                         "maze_nuggets": {"$gte": cost},
                     },
-                    {
-                        "$inc": {"maze_nuggets": -cost},
-                        "$addToSet": {"maps_owned": map_id},
-                    },
+                    buyer_update,
                     session=session,
                 )
 
                 if buyer_result.modified_count != 1:
                     raise HTTPException(status_code=400, detail="You do not have enough maze nuggets")
 
+                seller_update = {
+                    "$inc": {"maze_nuggets": split["seller_reward"]},
+                    "$pull": {"maps_owned": map_id},
+                }
+                if seller_username.strip().lower() == SYSTEM_BANK_USERNAME:
+                    seller_update["$pull"]["maps_discovered"] = map_id
+
                 seller_result = users_collection.update_one(
                     {"username": seller_username},
-                    {
-                        "$inc": {"maze_nuggets": split["seller_reward"]},
-                        "$pull": {"maps_owned": map_id},
-                    },
+                    seller_update,
                     session=session,
                 )
 

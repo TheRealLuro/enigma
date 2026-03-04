@@ -5,7 +5,11 @@
 @inject IJSRuntime JS
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
-<PageTitle>Game Complete</PageTitle>
+<SeoHead Title="Enigma Run Complete | Maze Cleared"
+         Description="Review the completion summary for a finished Enigma maze run."
+         Robots="noindex,nofollow"
+         OpenGraphType="website"
+         SchemaType="WebPage" />
 
 @if (IsLoading)
 {

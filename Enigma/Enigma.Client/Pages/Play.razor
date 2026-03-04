@@ -4,7 +4,11 @@
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @using Microsoft.JSInterop
 
-<PageTitle>Play Game</PageTitle>
+<SeoHead Title="Play Enigma | Generate or Load a Maze"
+         Description="Generate a new Enigma maze, load a saved map, choose items, and start a new puzzle run."
+         Robots="noindex,follow"
+         OpenGraphType="website"
+         SchemaType="WebPage" />
 
 <div class="container mt-5 play-page-shell">
 
@@ -54,8 +58,11 @@
                     <DataAnnotationsValidator />
 
                     <div class="mb-3">
-                        <label class="form-label">Map Name</label>
-                        <InputText @bind-Value="loadMazeRequest.MapName" class="form-control" />
+                        <MapSearchBox Label="Map Name"
+                                      InputId="play-map-search"
+                                      Placeholder="type a saved maze name"
+                                      Value="@loadMazeRequest.MapName"
+                                      ValueChanged="OnPlayMapNameChanged" />
                         <ValidationMessage For="() => loadMazeRequest.MapName" />
                     </div>
 
@@ -345,6 +352,12 @@
                 return string.Empty;
             }
         }
+    }
+
+    private Task OnPlayMapNameChanged(string mapName)
+    {
+        loadMazeRequest.MapName = mapName;
+        return InvokeAsync(StateHasChanged);
     }
 
     private async Task PersistFullscreenPreferenceAsync(string mode)

@@ -4,10 +4,29 @@
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @using Microsoft.JSInterop
 
-<div class="content auth-shell" style="max-width: 520px; margin-top: 60px;">
+<SeoHead Title="Create Enigma Account | Join the Puzzle Maze Game"
+         Description="Create an Enigma account to play evolving puzzle mazes, collect discovered maps, and join co-op expeditions."
+         Robots="noindex,follow"
+         OpenGraphType="website"
+         SchemaType="WebPage"
+         Keywords="create Enigma account, Enigma signup, puzzle maze game register" />
+
+<div class="content auth-shell seo-auth-shell" style="max-width: 960px; margin-top: 60px;">
+    <section class="seo-auth-intro panel">
+        <span class="profile-kicker">Join Enigma</span>
+        <h1>Create Your Explorer Account</h1>
+        <p>Register to generate mazes, discover collectible maps, join co-op runs, and use the Enigma marketplace and leaderboard systems.</p>
+        <div class="seo-inline-links">
+            <a href="/about">About</a>
+            <a href="/how-enigma-works">How It Works</a>
+            <a href="/enigma-game-mechanics">Game Mechanics</a>
+            <a href="/enigma-multiplayer">Multiplayer</a>
+        </div>
+    </section>
+
     <div class="card p-4 shadow-sm auth-card">
 
-        <h3 class="mb-4 text-center">Create Account</h3>
+        <h2 class="mb-4 text-center">Create Account</h2>
 
         <EditForm Model="newUser" OnValidSubmit="OnRegisterClick">
             <DataAnnotationsValidator />

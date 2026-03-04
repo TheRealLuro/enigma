@@ -245,22 +245,30 @@ html, body {
 
 
 .form-control, .form-control-plaintext {
-    background: var(--epic-surface);
-    border: 1px solid var(--epic-border);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+        var(--epic-surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--epic-text);
     font-family: 'Inter', sans-serif;
     font-size: 0.95rem;
     padding: 12px 16px;
-    border-radius: 4px;
+    border-radius: 14px;
     transition: all 0.2s ease;
     width: 100%;
+    color-scheme: dark;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+        0 8px 18px rgba(0, 0, 0, 0.08);
 }
 
 .form-control:focus, .form-control-plaintext:focus {
     outline: none;
     border-color: var(--epic-primary);
     box-shadow: 0 0 0 3px rgba(0, 120, 242, 0.2);
-    background: var(--epic-elevated);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+        var(--epic-elevated);
 }
 
 .form-control::placeholder {
@@ -274,19 +282,57 @@ select.form-select {
     -moz-appearance: none;
     cursor: pointer;
     padding-right: 48px;
-    border-radius: 14px;
+    color-scheme: dark;
+    border-color: rgba(118, 156, 232, 0.18);
     background-image:
         linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
         url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='M4.5 6.75L9 11.25L13.5 6.75' stroke='%23D8E9FF' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat, no-repeat;
     background-position: center, right 16px center;
     background-size: 100% 100%, 18px 18px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.035),
+        0 10px 24px rgba(0, 0, 0, 0.12);
 }
 
 select.form-control:hover,
 select.form-select:hover {
     border-color: rgba(126, 184, 255, 0.28);
     background-color: rgba(255, 255, 255, 0.045);
+}
+
+select.form-control:focus,
+select.form-select:focus {
+    border-color: rgba(116, 176, 255, 0.72);
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02)),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='M4.5 6.75L9 11.25L13.5 6.75' stroke='%23FFFFFF' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+input[type="number"].form-control,
+input[type="number"].form-select {
+    color-scheme: dark;
+    padding-right: 18px;
+    border-color: rgba(118, 156, 232, 0.18);
+}
+
+input[type="number"].form-control::-webkit-inner-spin-button,
+input[type="number"].form-control::-webkit-outer-spin-button,
+input[type="number"].form-select::-webkit-inner-spin-button,
+input[type="number"].form-select::-webkit-outer-spin-button {
+    opacity: 1;
+    margin: 0;
+    min-height: 44px;
+    width: 18px;
+    cursor: pointer;
+    filter: brightness(1.32) saturate(0.28) contrast(1.12);
+}
+
+input[type="number"].form-control:hover::-webkit-inner-spin-button,
+input[type="number"].form-control:hover::-webkit-outer-spin-button,
+input[type="number"].form-select:hover::-webkit-inner-spin-button,
+input[type="number"].form-select:hover::-webkit-outer-spin-button {
+    filter: brightness(1.5) saturate(0.42) contrast(1.16);
 }
 
 select.form-control::-ms-expand,
@@ -768,14 +814,29 @@ a:hover, .btn-link:hover {
 
 .form-control option,
 .form-select option {
-    background: var(--epic-surface);
-    border: 1px solid var(--epic-border);
-    color: var(--epic-text);
+    background: #171b24;
+    color: #eef5ff;
     font-family: 'Inter', sans-serif;
     font-size: 0.95rem;
-    padding: 12px 16px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    padding: 12px 14px;
+    font-weight: 500;
+}
+
+.form-control option:checked,
+.form-select option:checked {
+    background: linear-gradient(135deg, rgba(61, 123, 231, 0.98), rgba(42, 93, 184, 0.98));
+    color: #ffffff;
+}
+
+.form-control option:hover,
+.form-select option:hover {
+    background: rgba(57, 88, 140, 0.96);
+    color: #ffffff;
+}
+
+.form-control option:disabled,
+.form-select option:disabled {
+    color: rgba(239, 245, 255, 0.46);
     width: 100%;
 }
 
@@ -1167,8 +1228,12 @@ h1:focus {
     z-index: 5;
     border-radius: 12px;
     background: linear-gradient(180deg, #ffffff, #d4e0f0);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
-    transition: box-shadow 0.12s ease, transform 0.12s ease;
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.2);
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    will-change: left, top;
+    transition: box-shadow 0.12s ease;
 }
 
 .enigma-player::after {
@@ -1201,12 +1266,7 @@ h1:focus {
 }
 
 .enigma-player.is-moving {
-    animation: enigmaStride 0.24s ease-in-out infinite alternate;
-}
-
-@keyframes enigmaStride {
-    from { transform: translateY(-1px); }
-    to { transform: translateY(1px); }
+    box-shadow: 0 7px 16px rgba(0, 0, 0, 0.24);
 }
 
 .enigma-room-hud,
@@ -3556,6 +3616,79 @@ h1:focus {
     color: var(--epic-text);
 }
 
+.map-search-shell {
+    display: grid;
+    gap: 14px;
+}
+
+.map-search-row {
+    align-items: start;
+}
+
+.map-search-results-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.map-search-result-card {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.map-search-result-card:hover,
+.map-search-result-card:focus-visible {
+    transform: translateY(-1px);
+    border-color: rgba(126, 184, 255, 0.24);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.2);
+}
+
+.map-search-result-card:focus-visible {
+    outline: none;
+}
+
+.map-search-card-top {
+    align-items: stretch;
+}
+
+.map-search-avatar-frame {
+    width: 78px;
+    min-width: 78px;
+    height: 78px;
+    padding: 8px;
+    border-radius: 18px;
+}
+
+.map-search-copy {
+    min-width: 0;
+}
+
+.map-search-copy strong {
+    display: block;
+    font-size: 1.08rem;
+    line-height: 1.15;
+    color: #f8fbff;
+}
+
+.map-search-copy p {
+    margin: 0;
+    font-size: 0.94rem;
+    font-weight: 700;
+}
+
+.map-search-copy .leaderboard-secondary-text {
+    display: block;
+    font-size: 0.85rem;
+    line-height: 1.35;
+}
+
+.map-search-empty-state {
+    width: 100%;
+    margin-top: 2px;
+}
+
 .players-results-grid {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
@@ -5037,9 +5170,15 @@ h1:focus {
 }
 
 .enigma-player.co-op-peer {
-    filter: hue-rotate(140deg) saturate(1.15);
-    opacity: 0.82;
-    transition: left 0.045s linear, top 0.045s linear, box-shadow 0.12s ease, transform 0.12s ease;
+    background: linear-gradient(180deg, #d8fff7, #7bcfc0);
+    border-color: rgba(142, 255, 233, 0.58);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(54, 185, 166, 0.18);
+    opacity: 0.94;
+    transition: left 0.03s linear, top 0.03s linear, box-shadow 0.12s ease;
+}
+
+.enigma-player.co-op-peer::after {
+    background: #07211e;
 }
 
 .enigma-player-tag {
@@ -5744,5 +5883,159 @@ h1:focus {
         padding: 20px;
         padding-top: 64px;
         max-height: calc(100vh - 36px);
+    }
+}
+
+.seo-auth-shell {
+    display: grid;
+    gap: 24px;
+}
+
+.seo-auth-intro,
+.seo-page-hero,
+.seo-page-section {
+    display: grid;
+    gap: 14px;
+}
+
+.seo-auth-intro {
+    padding: 28px 30px;
+    background:
+        radial-gradient(circle at top left, rgba(79, 143, 255, 0.12), transparent 38%),
+        linear-gradient(180deg, rgba(18, 24, 36, 0.96), rgba(12, 16, 24, 0.92));
+}
+
+.seo-auth-intro h1,
+.seo-page-hero h1 {
+    margin: 0;
+    font-size: clamp(2.4rem, 4vw, 4rem);
+    line-height: 0.96;
+    letter-spacing: -0.04em;
+}
+
+.seo-auth-intro p,
+.seo-page-hero p,
+.seo-page-section p {
+    margin: 0;
+    color: var(--epic-text);
+    max-width: 72ch;
+    line-height: 1.7;
+}
+
+.seo-inline-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.seo-inline-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(122, 181, 255, 0.14);
+    color: #dce7ff;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.seo-inline-links a:hover {
+    background: rgba(69, 126, 255, 0.16);
+    border-color: rgba(122, 181, 255, 0.28);
+    transform: translateY(-1px);
+}
+
+.seo-page-shell {
+    max-width: 1080px;
+    margin: 56px auto 80px;
+    display: grid;
+    gap: 24px;
+}
+
+.seo-page-hero {
+    padding: 34px 36px;
+    background:
+        radial-gradient(circle at top left, rgba(71, 135, 255, 0.14), transparent 34%),
+        linear-gradient(180deg, rgba(18, 24, 36, 0.97), rgba(11, 16, 24, 0.94));
+}
+
+.seo-page-section {
+    padding: 28px 30px;
+}
+
+.seo-page-section h2,
+.seo-page-section h3,
+.seo-page-hero h1 {
+    color: var(--epic-text);
+}
+
+.seo-page-section h2 {
+    margin: 0 0 2px;
+    font-size: 1.55rem;
+}
+
+.seo-page-section h3 {
+    margin: 10px 0 0;
+    font-size: 1.04rem;
+    letter-spacing: 0.01em;
+}
+
+.seo-link-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.seo-link-card {
+    display: grid;
+    gap: 8px;
+    min-height: 152px;
+    padding: 20px;
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at top left, rgba(79, 143, 255, 0.08), transparent 34%),
+        rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(122, 181, 255, 0.14);
+    color: var(--epic-text);
+    text-decoration: none;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.seo-link-card strong {
+    font-size: 1.05rem;
+    color: #f3f7ff;
+}
+
+.seo-link-card span {
+    color: var(--epic-text);
+    line-height: 1.6;
+}
+
+.seo-link-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(122, 181, 255, 0.3);
+    background:
+        radial-gradient(circle at top left, rgba(79, 143, 255, 0.13), transparent 34%),
+        rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 900px) {
+    .seo-page-shell {
+        margin: 32px auto 56px;
+        gap: 18px;
+    }
+
+    .seo-auth-intro,
+    .seo-page-hero,
+    .seo-page-section {
+        padding: 22px 20px;
+    }
+
+    .seo-link-grid {
+        grid-template-columns: 1fr;
     }
 }

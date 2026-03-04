@@ -41,6 +41,12 @@ public abstract class RoomPuzzle
     }
 }
 
+public interface IRevealOnOpenPuzzle
+{
+    bool RevealStarted { get; }
+    void BeginReveal();
+}
+
 public sealed class PressurePlatePuzzle : RoomPuzzle
 {
     public PressurePlatePuzzle(PlayAreaRect plateBounds, double requiredHoldSeconds, double decayRate)
@@ -188,7 +194,7 @@ public sealed class RiddlePuzzle : RoomPuzzle
     }
 }
 
-public sealed class SequenceMemoryPuzzle : RoomPuzzle
+public sealed class SequenceMemoryPuzzle : RoomPuzzle, IRevealOnOpenPuzzle
 {
     private readonly List<string> _entered = [];
     private bool _sequenceHiddenNoticeShown;
@@ -204,11 +210,17 @@ public sealed class SequenceMemoryPuzzle : RoomPuzzle
     public IReadOnlyList<string> Entered => _entered;
     public double RevealDurationSeconds { get; }
     public double ElapsedSeconds { get; private set; }
-    public bool IsSequenceVisible => IsCompleted || ElapsedSeconds < RevealDurationSeconds;
+    public bool RevealStarted { get; private set; }
+    public bool IsSequenceVisible => IsCompleted || !RevealStarted || ElapsedSeconds < RevealDurationSeconds;
+
+    public void BeginReveal()
+    {
+        RevealStarted = true;
+    }
 
     public override void Update(PuzzleUpdateContext context)
     {
-        if (IsCompleted || IsSequenceVisible == false)
+        if (IsCompleted || !RevealStarted || IsSequenceVisible == false)
         {
             return;
         }
@@ -281,7 +293,7 @@ public sealed class TileRotationPuzzle : RoomPuzzle
     }
 }
 
-public sealed class UnlockPatternPuzzle : RoomPuzzle
+public sealed class UnlockPatternPuzzle : RoomPuzzle, IRevealOnOpenPuzzle
 {
     private readonly List<PlayerDirection> _entered = [];
     private bool _patternHiddenNoticeShown;
@@ -298,12 +310,18 @@ public sealed class UnlockPatternPuzzle : RoomPuzzle
     public IReadOnlyList<PlayerDirection> Entered => _entered;
     public double RevealDurationSeconds { get; }
     public double ElapsedSeconds { get; private set; }
-    public bool IsPatternVisible => IsCompleted || ElapsedSeconds < RevealDurationSeconds;
+    public bool RevealStarted { get; private set; }
+    public bool IsPatternVisible => IsCompleted || !RevealStarted || ElapsedSeconds < RevealDurationSeconds;
     public bool AcceptsInput => !IsCompleted && !IsPatternVisible;
+
+    public void BeginReveal()
+    {
+        RevealStarted = true;
+    }
 
     public override void Update(PuzzleUpdateContext context)
     {
-        if (IsCompleted || IsPatternVisible == false)
+        if (IsCompleted || !RevealStarted || IsPatternVisible == false)
         {
             return;
         }

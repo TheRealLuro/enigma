@@ -1,0 +1,104 @@
+@using System.Text.Json
+@inject NavigationManager NavigationManager
+
+<PageTitle>@Title</PageTitle>
+
+<HeadContent>
+    <meta name="description" content="@Description" />
+    <meta name="robots" content="@Robots" />
+    @if (!string.IsNullOrWhiteSpace(Keywords))
+    {
+        <meta name="keywords" content="@Keywords" />
+    }
+    <meta property="og:site_name" content="Enigma" />
+    <meta property="og:title" content="@Title" />
+    <meta property="og:description" content="@Description" />
+    <meta property="og:type" content="@OpenGraphType" />
+    <meta property="og:url" content="@CanonicalHref" />
+    <meta property="og:image" content="@ImageHref" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="@Title" />
+    <meta name="twitter:description" content="@Description" />
+    <meta name="twitter:image" content="@ImageHref" />
+    <link rel="canonical" href="@CanonicalHref" />
+    <script type="application/ld+json">@((MarkupString)StructuredDataJson)</script>
+</HeadContent>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string Description { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Robots { get; set; } = "index,follow";
+
+    [Parameter]
+    public string OpenGraphType { get; set; } = "website";
+
+    [Parameter]
+    public string SchemaType { get; set; } = "WebPage";
+
+    [Parameter]
+    public string ImagePath { get; set; } = "/images/mainmenu-tabs/PlayTab.png";
+
+    [Parameter]
+    public string? Keywords { get; set; }
+
+    [Parameter]
+    public Dictionary<string, object?>? SchemaProperties { get; set; }
+
+    private string CanonicalHref
+    {
+        get
+        {
+            var uri = new Uri(NavigationManager.Uri, UriKind.Absolute);
+            var builder = new UriBuilder(uri)
+            {
+                Query = string.Empty,
+                Fragment = string.Empty,
+            };
+            return builder.Uri.ToString();
+        }
+    }
+
+    private string ImageHref
+    {
+        get
+        {
+            if (Uri.TryCreate(ImagePath, UriKind.Absolute, out var absoluteUri))
+            {
+                return absoluteUri.ToString();
+            }
+
+            return NavigationManager.ToAbsoluteUri(ImagePath).ToString();
+        }
+    }
+
+    private string StructuredDataJson
+    {
+        get
+        {
+            var payload = new Dictionary<string, object?>
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = SchemaType,
+                ["name"] = Title,
+                ["description"] = Description,
+                ["url"] = CanonicalHref,
+                ["image"] = ImageHref,
+            };
+
+            if (SchemaProperties is not null)
+            {
+                foreach (var entry in SchemaProperties)
+                {
+                    payload[entry.Key] = entry.Value;
+                }
+            }
+
+            return JsonSerializer.Serialize(payload);
+        }
+    }
+}

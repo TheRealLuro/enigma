@@ -48,6 +48,7 @@ def recycle_map(request: Request, username: str, map_name: str):
         {"username": SYSTEM_BANK_USERNAME},
         {
             "$addToSet": {"maps_owned": map_id},
+            "$pull": {"maps_discovered": map_id},
         },
     )
     users_collection.update_many(

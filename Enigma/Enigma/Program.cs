@@ -3,6 +3,7 @@ using Enigma.Client.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using System.Net.WebSockets;
 using System.Security.Claims;
+using System.Xml.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 var backendBaseUrl =
@@ -94,6 +95,62 @@ app.MapRazorComponents<App>()
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(typeof(Enigma.Client._Imports).Assembly);
 app.MapControllers();
+
+app.MapGet("/robots.txt", (HttpContext context) =>
+{
+    var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}".TrimEnd('/');
+    var robots = $"""
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: {baseUrl}/sitemap.xml
+""";
+    return Results.Text(robots, "text/plain");
+});
+
+app.MapGet("/sitemap.xml", (HttpContext context) =>
+{
+    var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}".TrimEnd('/');
+    var publicPaths = new[]
+    {
+        "/",
+        "/about",
+        "/how-enigma-works",
+        "/enigma-game-mechanics",
+        "/enigma-multiplayer",
+    };
+
+    var document = new XDocument(
+        new XElement("urlset",
+            new XAttribute(XNamespace.Xmlns + "xsi", "http://www.w3.org/2001/XMLSchema-instance"),
+            new XAttribute("xmlns", "http://www.sitemaps.org/schemas/sitemap/0.9"),
+            publicPaths.Select(path =>
+                new XElement("url",
+                    new XElement("loc", $"{baseUrl}{path}"),
+                    new XElement("changefreq", path == "/" ? "weekly" : "monthly"),
+                    new XElement("priority", path == "/" ? "1.0" : "0.8")))));
+
+    return Results.Text(document.ToString(SaveOptions.DisableFormatting), "application/xml");
+});
+
+app.MapGet("/llms.txt", (HttpContext context) =>
+{
+    var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}".TrimEnd('/');
+    var content = $"""
+# Enigma
+
+Enigma is a puzzle maze game with solo runs, co-op expeditions, collectible maps, and a player-driven marketplace.
+
+Public pages:
+- {baseUrl}/
+- {baseUrl}/about
+- {baseUrl}/how-enigma-works
+- {baseUrl}/enigma-game-mechanics
+- {baseUrl}/enigma-multiplayer
+""";
+    return Results.Text(content, "text/plain");
+});
 
 app.MapGet("/api/auth/multiplayer/session/ws/{sessionId}", async (HttpContext context, string sessionId) =>
 {

@@ -289,7 +289,7 @@ public sealed class SymbolLogicPuzzle : RoomPuzzle
     }
 }
 
-public sealed class FadingPathMemoryPuzzle : RoomPuzzle
+public sealed class FadingPathMemoryPuzzle : RoomPuzzle, IRevealOnOpenPuzzle
 {
     private GridPoint? _lastVisitedCell;
     private bool _pathFadeAnnounced;
@@ -314,11 +314,22 @@ public sealed class FadingPathMemoryPuzzle : RoomPuzzle
     public double RevealDurationSeconds { get; }
     public double ElapsedSeconds { get; private set; }
     public int ProgressIndex { get; private set; }
-    public bool IsPathVisible => IsCompleted || ElapsedSeconds < RevealDurationSeconds;
+    public bool RevealStarted { get; private set; }
+    public bool IsPathVisible => IsCompleted || !RevealStarted || ElapsedSeconds < RevealDurationSeconds;
+
+    public void BeginReveal()
+    {
+        RevealStarted = true;
+    }
 
     public override void Update(PuzzleUpdateContext context)
     {
         if (IsCompleted)
+        {
+            return;
+        }
+
+        if (!RevealStarted)
         {
             return;
         }
@@ -548,7 +559,7 @@ public enum DirectionTransformKind
     RotateHalfTurn,
 }
 
-public sealed class DirectionalEchoPuzzle : RoomPuzzle
+public sealed class DirectionalEchoPuzzle : RoomPuzzle, IRevealOnOpenPuzzle
 {
     private readonly List<PlayerDirection> _entered = [];
 
@@ -567,7 +578,8 @@ public sealed class DirectionalEchoPuzzle : RoomPuzzle
     public IReadOnlyList<PlayerDirection> Entered => _entered;
     public double RevealDurationSeconds { get; }
     public double ElapsedSeconds { get; private set; }
-    public bool IsPatternVisible => IsCompleted || ElapsedSeconds < RevealDurationSeconds;
+    public bool RevealStarted { get; private set; }
+    public bool IsPatternVisible => IsCompleted || !RevealStarted || ElapsedSeconds < RevealDurationSeconds;
     public bool AcceptsInput => !IsCompleted && !IsPatternVisible;
     public string RuleDescription => TransformKind switch
     {
@@ -579,9 +591,14 @@ public sealed class DirectionalEchoPuzzle : RoomPuzzle
         _ => "Transform the pattern before you answer.",
     };
 
+    public void BeginReveal()
+    {
+        RevealStarted = true;
+    }
+
     public override void Update(PuzzleUpdateContext context)
     {
-        if (IsCompleted || !IsPatternVisible)
+        if (IsCompleted || !RevealStarted || !IsPatternVisible)
         {
             return;
         }
@@ -1345,7 +1362,7 @@ public sealed class LogicalParadoxPuzzle : RoomPuzzle
     }
 }
 
-public sealed class MemoryInterferencePuzzle : RoomPuzzle
+public sealed class MemoryInterferencePuzzle : RoomPuzzle, IRevealOnOpenPuzzle
 {
     private readonly List<string> _entered = [];
 
@@ -1368,13 +1385,19 @@ public sealed class MemoryInterferencePuzzle : RoomPuzzle
     public double PrimaryRevealSeconds { get; }
     public double InterferenceRevealSeconds { get; }
     public double ElapsedSeconds { get; private set; }
-    public bool ShowingPrimary => ElapsedSeconds < PrimaryRevealSeconds;
-    public bool ShowingInterference => !ShowingPrimary && ElapsedSeconds < PrimaryRevealSeconds + InterferenceRevealSeconds;
+    public bool RevealStarted { get; private set; }
+    public bool ShowingPrimary => !RevealStarted || ElapsedSeconds < PrimaryRevealSeconds;
+    public bool ShowingInterference => RevealStarted && !ShowingPrimary && ElapsedSeconds < PrimaryRevealSeconds + InterferenceRevealSeconds;
     public IReadOnlyList<string> DisplayedSequence => ShowingPrimary ? PrimarySequence : InterferenceSequence;
+
+    public void BeginReveal()
+    {
+        RevealStarted = true;
+    }
 
     public override void Update(PuzzleUpdateContext context)
     {
-        if (IsCompleted || (!ShowingPrimary && !ShowingInterference))
+        if (IsCompleted || !RevealStarted || (!ShowingPrimary && !ShowingInterference))
         {
             return;
         }
@@ -1390,7 +1413,7 @@ public sealed class MemoryInterferencePuzzle : RoomPuzzle
 
     public void Press(string rune)
     {
-        if (IsCompleted || ShowingPrimary || ShowingInterference)
+        if (IsCompleted || !RevealStarted || ShowingPrimary || ShowingInterference)
         {
             return;
         }
@@ -1470,7 +1493,7 @@ public sealed class RotationalCipherGridPuzzle : RoomPuzzle
     }
 }
 
-public sealed class DimensionalPatternShiftPuzzle : RoomPuzzle
+public sealed class DimensionalPatternShiftPuzzle : RoomPuzzle, IRevealOnOpenPuzzle
 {
     private readonly List<PlayerDirection> _entered = [];
 
@@ -1489,12 +1512,18 @@ public sealed class DimensionalPatternShiftPuzzle : RoomPuzzle
     public string RuleDescription { get; }
     public double RevealDurationSeconds { get; }
     public double ElapsedSeconds { get; private set; }
-    public bool IsPatternVisible => IsCompleted || ElapsedSeconds < RevealDurationSeconds;
+    public bool RevealStarted { get; private set; }
+    public bool IsPatternVisible => IsCompleted || !RevealStarted || ElapsedSeconds < RevealDurationSeconds;
     public bool AcceptsInput => !IsCompleted && !IsPatternVisible;
+
+    public void BeginReveal()
+    {
+        RevealStarted = true;
+    }
 
     public override void Update(PuzzleUpdateContext context)
     {
-        if (IsCompleted || !IsPatternVisible)
+        if (IsCompleted || !RevealStarted || !IsPatternVisible)
         {
             return;
         }

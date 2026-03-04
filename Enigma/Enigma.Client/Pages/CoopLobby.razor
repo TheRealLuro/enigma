@@ -8,7 +8,11 @@
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable
 
-<PageTitle>Co-op Lobby</PageTitle>
+<SeoHead Title="Enigma Co-op Lobby | Create a Shared Maze Session"
+         Description="Create or join a two-player Enigma co-op session, invite a friend, and prepare a synchronized maze expedition."
+         Robots="noindex,follow"
+         OpenGraphType="website"
+         SchemaType="WebPage" />
 
 @if (IsLoading && !HasLoadedOnce)
 {
@@ -153,8 +157,11 @@ else
                                     <h3>Load an Existing Maze</h3>
                                 </div>
                                 <div>
-                                    <label class="form-label">Saved Map Name</label>
-                                    <InputText class="form-control" @bind-Value="LoadRequest.MapName" />
+                                    <MapSearchBox Label="Saved Map Name"
+                                                  InputId="coop-map-search"
+                                                  Placeholder="type a saved maze name"
+                                                  Value="@LoadRequest.MapName"
+                                                  ValueChanged="OnCoopMapNameChanged" />
                                     <ValidationMessage For="() => LoadRequest.MapName" />
                                 </div>
                                 <div>
@@ -435,6 +442,12 @@ else
 
             await CreateSessionAsync(seedResponse.Seed, LoadRequest.MapName, "load");
         });
+    }
+
+    private Task OnCoopMapNameChanged(string mapName)
+    {
+        LoadRequest.MapName = mapName;
+        return InvokeAsync(StateHasChanged);
     }
 
     private async Task CreateSessionAsync(string seed, string? mapName, string source)

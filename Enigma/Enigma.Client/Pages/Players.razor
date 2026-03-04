@@ -1,7 +1,11 @@
 @page "/players"
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
-<PageTitle>Players</PageTitle>
+<SeoHead Title="Enigma Players | Search Explorer Profiles"
+         Description="Search Enigma players, open explorer profiles, and review top discoverers."
+         Robots="noindex,follow"
+         OpenGraphType="website"
+         SchemaType="WebPage" />
 
 @if (IsLoading)
 {

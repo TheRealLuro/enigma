@@ -2,7 +2,11 @@
 @page "/profile/{ViewedUsername}"
 @using Enigma.Client.Models
 
-<PageTitle>Profile</PageTitle>
+<SeoHead Title="Enigma Profile | Maps, Inventory, and Account Settings"
+         Description="Manage your Enigma profile, owned maps, discovered maps, inventory, and account settings."
+         Robots="noindex,follow"
+         OpenGraphType="profile"
+         SchemaType="ProfilePage" />
 
 @if (IsLoading)
 {
