@@ -9,6 +9,12 @@ var backendBaseUrl =
     builder.Configuration["Backend:BaseUrl"]
     ?? Environment.GetEnvironmentVariable("ENIGMA_BACKEND_URL")
     ?? "https://nonelastic-prorailroad-gillian.ngrok-free.dev/";
+var enableWasmDebugging =
+    builder.Environment.IsDevelopment() &&
+    string.Equals(
+        builder.Configuration["EnableWasmDebugging"] ?? Environment.GetEnvironmentVariable("ENABLE_WASM_DEBUGGING"),
+        "true",
+        StringComparison.OrdinalIgnoreCase);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -64,11 +70,12 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (enableWasmDebugging)
 {
     app.UseWebAssemblyDebugging();
 }
-else
+
+if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
