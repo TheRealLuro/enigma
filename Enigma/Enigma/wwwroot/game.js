@@ -22,6 +22,7 @@
     let tutorialRequestHandler = null;
     let audioContext = null;
     let pageHideHandler = null;
+    const dropdownClosers = new Map();
     let coopSocket = null;
     let coopSocketSessionId = null;
     let coopSocketDotNetRef = null;
@@ -119,6 +120,39 @@
             window.dispatchEvent(event);
         } catch {
         }
+    }
+
+    function unregisterDropdownOutsideClick(dropdownId) {
+        const entry = dropdownClosers.get(dropdownId);
+        if (!entry) {
+            return;
+        }
+
+        document.removeEventListener("mousedown", entry.mouseHandler, true);
+        document.removeEventListener("touchstart", entry.touchHandler, true);
+        dropdownClosers.delete(dropdownId);
+    }
+
+    function registerDropdownOutsideClick(dropdownId, element, helper) {
+        unregisterDropdownOutsideClick(dropdownId);
+        if (!dropdownId || !element || !helper) {
+            return;
+        }
+
+        const closeIfOutside = function (event) {
+            if (!element.contains(event.target)) {
+                helper.invokeMethodAsync("CloseDropdownAsync").catch(() => {});
+            }
+        };
+
+        const entry = {
+            mouseHandler: closeIfOutside,
+            touchHandler: closeIfOutside
+        };
+
+        dropdownClosers.set(dropdownId, entry);
+        document.addEventListener("mousedown", closeIfOutside, true);
+        document.addEventListener("touchstart", closeIfOutside, true);
     }
 
     function getNormalizedCode(event) {
@@ -665,6 +699,14 @@
 
         disposeTutorialListener: function () {
             removeTutorialListener();
+        },
+
+        registerDropdownOutsideClick: function (dropdownId, element, helper) {
+            registerDropdownOutsideClick(dropdownId, element, helper);
+        },
+
+        unregisterDropdownOutsideClick: function (dropdownId) {
+            unregisterDropdownOutsideClick(dropdownId);
         },
 
         consumeTutorialRequest: function () {

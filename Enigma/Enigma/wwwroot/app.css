@@ -281,15 +281,13 @@ select.form-select {
     -webkit-appearance: none;
     -moz-appearance: none;
     cursor: pointer;
-    padding-right: 48px;
+    padding-right: 16px;
     color-scheme: dark;
     border-color: rgba(118, 156, 232, 0.18);
-    background-image:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='M4.5 6.75L9 11.25L13.5 6.75' stroke='%23D8E9FF' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat, no-repeat;
-    background-position: center, right 16px center;
-    background-size: 100% 100%, 18px 18px;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 100% 100%;
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.035),
         0 10px 24px rgba(0, 0, 0, 0.12);
@@ -304,15 +302,16 @@ select.form-select:hover {
 select.form-control:focus,
 select.form-select:focus {
     border-color: rgba(116, 176, 255, 0.72);
-    background-image:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02)),
-        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18' fill='none'%3E%3Cpath d='M4.5 6.75L9 11.25L13.5 6.75' stroke='%23FFFFFF' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02));
 }
 
 input[type="number"].form-control,
 input[type="number"].form-select {
+    appearance: textfield;
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
     color-scheme: dark;
-    padding-right: 18px;
+    padding-right: 16px;
     border-color: rgba(118, 156, 232, 0.18);
 }
 
@@ -320,24 +319,191 @@ input[type="number"].form-control::-webkit-inner-spin-button,
 input[type="number"].form-control::-webkit-outer-spin-button,
 input[type="number"].form-select::-webkit-inner-spin-button,
 input[type="number"].form-select::-webkit-outer-spin-button {
-    opacity: 1;
+    -webkit-appearance: none;
+    appearance: none;
     margin: 0;
-    min-height: 44px;
-    width: 18px;
-    cursor: pointer;
-    filter: brightness(1.32) saturate(0.28) contrast(1.12);
+    opacity: 0;
+    width: 0;
+    display: none;
 }
 
 input[type="number"].form-control:hover::-webkit-inner-spin-button,
 input[type="number"].form-control:hover::-webkit-outer-spin-button,
 input[type="number"].form-select:hover::-webkit-inner-spin-button,
 input[type="number"].form-select:hover::-webkit-outer-spin-button {
-    filter: brightness(1.5) saturate(0.42) contrast(1.16);
+    opacity: 0;
 }
 
-select.form-control::-ms-expand,
-select.form-select::-ms-expand {
-    display: none;
+.enigma-dropdown.form-control,
+.enigma-stepper.form-control {
+    padding: 0;
+    overflow: visible;
+}
+
+.enigma-dropdown {
+    position: relative;
+}
+
+.enigma-dropdown-trigger {
+    width: 100%;
+    min-height: 50px;
+    border: 0;
+    border-radius: 14px;
+    padding: 12px 46px 12px 16px;
+    background: transparent;
+    color: var(--epic-text);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.enigma-dropdown-trigger:focus-visible {
+    outline: none;
+}
+
+.enigma-dropdown-trigger-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.enigma-dropdown-trigger-icon {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    border-right: 2px solid rgba(235, 241, 255, 0.9);
+    border-bottom: 2px solid rgba(235, 241, 255, 0.9);
+    transform: translateY(-65%) rotate(45deg);
+    pointer-events: none;
+    transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.enigma-dropdown-trigger.open .enigma-dropdown-trigger-icon {
+    transform: translateY(-35%) rotate(225deg);
+}
+
+.enigma-dropdown:hover {
+    border-color: rgba(126, 184, 255, 0.28);
+    background-color: rgba(255, 255, 255, 0.045);
+}
+
+.enigma-dropdown:focus-within {
+    border-color: rgba(116, 176, 255, 0.72);
+    box-shadow: 0 0 0 3px rgba(0, 120, 242, 0.2);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+        var(--epic-elevated);
+}
+
+.enigma-dropdown-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 8px);
+    padding: 8px;
+    border-radius: 18px;
+    border: 1px solid rgba(122, 170, 255, 0.26);
+    background:
+        linear-gradient(180deg, rgba(15, 22, 35, 0.98), rgba(10, 15, 24, 0.98)),
+        var(--epic-card-bg);
+    box-shadow:
+        0 24px 48px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    z-index: 1200;
+    max-height: 280px;
+    overflow-y: auto;
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+}
+
+.enigma-dropdown-option {
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--epic-text);
+    font-family: 'Inter', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: left;
+    padding: 11px 14px;
+    cursor: pointer;
+    transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.enigma-dropdown-option:hover,
+.enigma-dropdown-option:focus-visible {
+    outline: none;
+    background: rgba(78, 132, 224, 0.18);
+    color: #f7fbff;
+}
+
+.enigma-dropdown-option.selected {
+    background: linear-gradient(135deg, rgba(53, 118, 214, 0.9), rgba(77, 140, 237, 0.78));
+    color: #ffffff;
+}
+
+.enigma-stepper {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+}
+
+.enigma-stepper-button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(133, 176, 255, 0.18);
+    border-radius: 11px;
+    background:
+        linear-gradient(180deg, rgba(29, 40, 62, 0.92), rgba(14, 20, 32, 0.92));
+    color: var(--epic-text);
+    font-size: 1.05rem;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+}
+
+.enigma-stepper-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(143, 192, 255, 0.42);
+    background:
+        linear-gradient(180deg, rgba(41, 58, 90, 0.98), rgba(17, 25, 40, 0.98));
+}
+
+.enigma-stepper-button:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+}
+
+.enigma-stepper-input {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--epic-text);
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: center;
+    outline: none;
+    box-shadow: none;
+}
+
+.enigma-stepper-input::placeholder {
+    color: var(--epic-text-dim);
 }
 
 .form-label, label {
@@ -814,7 +980,7 @@ a:hover, .btn-link:hover {
 
 .form-control option,
 .form-select option {
-    background: #171b24;
+    background: #111722;
     color: #eef5ff;
     font-family: 'Inter', sans-serif;
     font-size: 0.95rem;
@@ -824,13 +990,13 @@ a:hover, .btn-link:hover {
 
 .form-control option:checked,
 .form-select option:checked {
-    background: linear-gradient(135deg, rgba(61, 123, 231, 0.98), rgba(42, 93, 184, 0.98));
+    background: #2f63c8;
     color: #ffffff;
 }
 
 .form-control option:hover,
 .form-select option:hover {
-    background: rgba(57, 88, 140, 0.96);
+    background: #1f355d;
     color: #ffffff;
 }
 

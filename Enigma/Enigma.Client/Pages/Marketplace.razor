@@ -35,7 +35,7 @@ else
     <div class="content marketplace-shell">
         <section class="marketplace-banner">
             <div>
-                <h1>The Market-Plaza</h1>
+                <h1>Marketplace</h1>
             </div>
 
             <div class="marketplace-banner-metrics">
@@ -85,17 +85,18 @@ else
 
                             <div>
                                 <label class="form-label">Owned Map</label>
-                                <InputSelect class="form-control" @bind-Value="SellRequest.MapName">
-                                    @foreach (var map in AvailableOwnedMaps)
-                                    {
-                                        <option value="@map.MapName">@map.MapName</option>
-                                    }
-                                </InputSelect>
+                                <EnigmaDropdown TValue="string"
+                                                Class="form-control"
+                                                Options="AvailableOwnedMapOptions"
+                                                @bind-Value="SellRequest.MapName" />
                             </div>
 
                             <div>
                                 <label class="form-label">Listing Price</label>
-                                <InputNumber class="form-control" @bind-Value="SellRequest.Price" />
+                                <EnigmaIntStepper Class="form-control"
+                                                  Min="1"
+                                                  Max="100000000"
+                                                  @bind-Value="SellRequest.Price" />
                                 <ValidationMessage For="() => SellRequest.Price" />
                             </div>
 
@@ -283,6 +284,8 @@ else
             .OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase)
             .ToList()
         ?? [];
+    private IReadOnlyList<SelectOption<string>> AvailableOwnedMapOptions =>
+        AvailableOwnedMaps.Select(static map => new SelectOption<string>(map.MapName, map.MapName)).ToArray();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

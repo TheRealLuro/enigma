@@ -31,17 +31,18 @@
 
                     <div class="mb-3">
                         <label class="form-label">Difficulty</label>
-                        <InputSelect class="form-select" @bind-Value="newMazeRequest.Difficulty">
-                            @foreach (var difficulty in Enum.GetValues<Difficulty>())
-                            {
-                                <option value="@difficulty">@difficulty</option>
-                            }
-                        </InputSelect>
+                        <EnigmaDropdown TValue="Difficulty"
+                                        Class="form-control"
+                                        Options="DifficultyOptions"
+                                        @bind-Value="newMazeRequest.Difficulty" />
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Size</label>
-                        <InputNumber @bind-Value="newMazeRequest.Size" class="form-control" />
+                        <EnigmaIntStepper Class="form-control"
+                                          Min="2"
+                                          Max="10"
+                                          @bind-Value="newMazeRequest.Size" />
                         <ValidationMessage For="() => newMazeRequest.Size" />
                     </div>
 
@@ -156,6 +157,10 @@
     private LoginUserSummary? Session { get; set; }
     private List<ItemCatalogEntry> Inventory { get; set; } = [];
     private Dictionary<string, int> SelectedItems { get; set; } = [];
+    private static readonly IReadOnlyList<SelectOption<Difficulty>> DifficultyOptions =
+        Enum.GetValues<Difficulty>()
+            .Select(static difficulty => new SelectOption<Difficulty>(difficulty, difficulty.ToString()))
+            .ToArray();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

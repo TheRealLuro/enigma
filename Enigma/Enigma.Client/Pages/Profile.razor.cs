@@ -75,6 +75,11 @@ public partial class Profile
             .OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+    private IReadOnlyList<SelectOption<string>> AvatarSourceDropdownOptions =>
+        AvatarSourceOptions
+            .Select(static map => new SelectOption<string>(map.MapName, map.MapName))
+            .ToArray();
+
     private MapSummary? SelectedAvatarSource =>
         AvatarSourceOptions.FirstOrDefault(map => EqualsIgnoreCase(map.MapName, AvatarMapName))
         ?? AvatarSourceOptions.FirstOrDefault();

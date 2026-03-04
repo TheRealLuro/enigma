@@ -115,7 +115,10 @@ else
 
             <div class="enigma-form-block">
                 <label class="form-label">Rating</label>
-                <InputNumber class="form-control" @bind-Value="Rating" />
+                <EnigmaIntStepper Class="form-control"
+                                  Min="1"
+                                  Max="10"
+                                  @bind-Value="Rating" />
                 <small class="enigma-helper">Required by the backend when submitting or updating a map.</small>
             </div>
 

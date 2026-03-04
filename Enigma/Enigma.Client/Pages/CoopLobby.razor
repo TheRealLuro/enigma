@@ -116,29 +116,27 @@ else
                                 <div class="coop-form-grid">
                                     <div>
                                         <label class="form-label">Difficulty</label>
-                                        <InputSelect class="form-control" @bind-Value="CreateRequest.Difficulty">
-                                            @foreach (var difficulty in Enum.GetValues<Difficulty>())
-                                            {
-                                                <option value="@difficulty">@difficulty</option>
-                                            }
-                                        </InputSelect>
+                                        <EnigmaDropdown TValue="Difficulty"
+                                                        Class="form-control"
+                                                        Options="DifficultyOptions"
+                                                        @bind-Value="CreateRequest.Difficulty" />
                                     </div>
                                     <div>
                                         <label class="form-label">Size</label>
-                                        <InputNumber class="form-control" @bind-Value="CreateRequest.Size" />
+                                        <EnigmaIntStepper Class="form-control"
+                                                          Min="2"
+                                                          Max="10"
+                                                          @bind-Value="CreateRequest.Size" />
                                     </div>
                                 </div>
                                 <ValidationMessage For="() => CreateRequest.Size" />
                                 <div class="coop-form-grid coop-form-grid-single">
                                     <div>
                                         <label class="form-label">Invite Friend</label>
-                                        <InputSelect class="form-control" @bind-Value="SelectedInviteFriend">
-                                            <option value="">Choose later</option>
-                                            @foreach (var friend in AvailableFriends)
-                                            {
-                                                <option value="@friend">@friend</option>
-                                            }
-                                        </InputSelect>
+                                        <EnigmaDropdown TValue="string"
+                                                        Class="form-control"
+                                                        Options="AvailableFriendOptions"
+                                                        @bind-Value="SelectedInviteFriend" />
                                     </div>
                                 </div>
                                 <button class="btn btn-primary w-100" type="submit" disabled="@IsActionBusy">
@@ -166,13 +164,10 @@ else
                                 </div>
                                 <div>
                                     <label class="form-label">Invite Friend</label>
-                                    <InputSelect class="form-control" @bind-Value="SelectedInviteFriend">
-                                        <option value="">Choose later</option>
-                                        @foreach (var friend in AvailableFriends)
-                                        {
-                                            <option value="@friend">@friend</option>
-                                        }
-                                    </InputSelect>
+                                    <EnigmaDropdown TValue="string"
+                                                    Class="form-control"
+                                                    Options="AvailableFriendOptions"
+                                                    @bind-Value="SelectedInviteFriend" />
                                 </div>
                                 <button class="btn btn-secondary w-100" type="submit" disabled="@IsActionBusy">
                                     @(IsActionBusy ? "Loading..." : "Load Map Into Co-op")
@@ -251,13 +246,10 @@ else
                     @if (IsOwner && !HasGuest && InviteCandidates.Count > 0)
                     {
                         <div class="coop-inline-form">
-                            <InputSelect class="form-control" @bind-Value="InvitePendingFriend">
-                                <option value="">Invite a friend</option>
-                                @foreach (var friend in InviteCandidates)
-                                {
-                                    <option value="@friend">@friend</option>
-                                }
-                            </InputSelect>
+                            <EnigmaDropdown TValue="string"
+                                            Class="form-control"
+                                            Options="InvitePendingFriendOptions"
+                                            @bind-Value="InvitePendingFriend" />
                             <button class="btn btn-secondary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(InvitePendingFriend)" @onclick="InviteFriendAsync">
                                 Invite
                             </button>
@@ -345,6 +337,14 @@ else
     private DotNetObjectReference<CoopLobby>? LobbySocketRef { get; set; }
 
     private IReadOnlyList<string> AvailableFriends => Session?.Friends.OrderBy(static friend => friend, StringComparer.OrdinalIgnoreCase).ToList() ?? [];
+    private static readonly IReadOnlyList<SelectOption<Difficulty>> DifficultyOptions =
+        Enum.GetValues<Difficulty>()
+            .Select(static difficulty => new SelectOption<Difficulty>(difficulty, difficulty.ToString()))
+            .ToArray();
+    private IReadOnlyList<SelectOption<string>> AvailableFriendOptions =>
+        [new(string.Empty, "Choose later"), .. AvailableFriends.Select(static friend => new SelectOption<string>(friend, friend))];
+    private IReadOnlyList<SelectOption<string>> InvitePendingFriendOptions =>
+        [new(string.Empty, "Invite a friend"), .. InviteCandidates.Select(static friend => new SelectOption<string>(friend, friend))];
     private bool IsOwner => CurrentSession is not null && string.Equals(CurrentSession.OwnerUsername, Session?.Username, StringComparison.OrdinalIgnoreCase);
     private bool HasGuest => !string.IsNullOrWhiteSpace(CurrentSession?.GuestUsername);
     private bool CanEnterGame => CurrentSession is not null && string.Equals(CurrentSession.Status, "active", StringComparison.OrdinalIgnoreCase);

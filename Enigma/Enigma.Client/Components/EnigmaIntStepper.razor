@@ -1,0 +1,85 @@
+@using System.Globalization
+
+<div class="enigma-stepper @Class">
+    <button type="button"
+            class="enigma-stepper-button"
+            @onclick="DecreaseAsync"
+            disabled="@Disabled || Value <= Min"
+            aria-label="Decrease value">
+        <span aria-hidden="true">-</span>
+    </button>
+    <input class="enigma-stepper-input"
+           type="text"
+           inputmode="numeric"
+           value="@_draftValue"
+           @oninput="HandleInputAsync"
+           @onblur="CommitAsync"
+           disabled="@Disabled" />
+    <button type="button"
+            class="enigma-stepper-button"
+            @onclick="IncreaseAsync"
+            disabled="@Disabled || Value >= Max"
+            aria-label="Increase value">
+        <span aria-hidden="true">+</span>
+    </button>
+</div>
+
+@code {
+    [Parameter] public int Value { get; set; }
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+    [Parameter] public int Min { get; set; } = int.MinValue;
+    [Parameter] public int Max { get; set; } = int.MaxValue;
+    [Parameter] public int Step { get; set; } = 1;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string Class { get; set; } = string.Empty;
+
+    private string _draftValue = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        _draftValue = Value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private async Task HandleInputAsync(ChangeEventArgs args)
+    {
+        _draftValue = args.Value?.ToString() ?? string.Empty;
+        if (int.TryParse(_draftValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            await SetValueAsync(parsed);
+        }
+    }
+
+    private Task CommitAsync(FocusEventArgs _)
+    {
+        if (!int.TryParse(_draftValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            parsed = Value;
+        }
+
+        return SetValueAsync(parsed);
+    }
+
+    private Task IncreaseAsync()
+    {
+        return SetValueAsync(Value + Math.Max(1, Step));
+    }
+
+    private Task DecreaseAsync()
+    {
+        return SetValueAsync(Value - Math.Max(1, Step));
+    }
+
+    private async Task SetValueAsync(int nextValue)
+    {
+        nextValue = Math.Clamp(nextValue, Min, Max);
+        _draftValue = nextValue.ToString(CultureInfo.InvariantCulture);
+
+        if (nextValue == Value)
+        {
+            return;
+        }
+
+        Value = nextValue;
+        await ValueChanged.InvokeAsync(nextValue);
+    }
+}

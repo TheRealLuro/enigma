@@ -25,20 +25,18 @@
         <div class="leaderboard-controls-grid">
             <div>
                 <label class="form-label">Sort By</label>
-                <InputSelect class="form-control" @bind-Value="SortBy">
-                    @foreach (var option in CurrentSortOptions)
-                    {
-                        <option value="@option.Value">@option.Label</option>
-                    }
-                </InputSelect>
+                <EnigmaDropdown TValue="string"
+                                Class="form-control"
+                                Options="CurrentSortDropdownOptions"
+                                @bind-Value="SortBy" />
             </div>
 
             <div>
                 <label class="form-label">Order</label>
-                <InputSelect class="form-control" @bind-Value="Order">
-                    <option value="desc">Descending</option>
-                    <option value="asc">Ascending</option>
-                </InputSelect>
+                <EnigmaDropdown TValue="string"
+                                Class="form-control"
+                                Options="OrderOptions"
+                                @bind-Value="Order" />
             </div>
 
             <div class="leaderboard-actions">
@@ -366,6 +364,13 @@
     ];
 
     private IReadOnlyList<(string Value, string Label)> CurrentSortOptions => IsPlayerMode ? PlayerSortOptions : MapSortOptions;
+    private IReadOnlyList<SelectOption<string>> CurrentSortDropdownOptions =>
+        CurrentSortOptions.Select(static option => new SelectOption<string>(option.Value, option.Label)).ToArray();
+    private static readonly IReadOnlyList<SelectOption<string>> OrderOptions =
+    [
+        new("desc", "Descending"),
+        new("asc", "Ascending"),
+    ];
 
     protected override async Task OnInitializedAsync()
     {

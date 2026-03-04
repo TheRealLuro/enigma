@@ -293,7 +293,13 @@ else
                             }
                             else
                             {
-                                <div><label class="form-label">Source Map</label><InputSelect class="form-control" @bind-Value="AvatarMapName">@foreach (var map in AvatarSourceOptions){<option value="@map.MapName">@map.MapName</option>}</InputSelect></div>
+                                <div>
+                                    <label class="form-label">Source Map</label>
+                                    <EnigmaDropdown TValue="string"
+                                                    Class="form-control"
+                                                    Options="AvatarSourceDropdownOptions"
+                                                    @bind-Value="AvatarMapName" />
+                                </div>
                                 <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="UpdateAvatarAsync">@(IsActionBusy ? "Saving..." : "Save Profile Picture")</button>
                             }
                         </div>

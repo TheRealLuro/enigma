@@ -1,0 +1,136 @@
+@typeparam TValue
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="enigma-dropdown @Class" @ref="_root">
+    <button type="button"
+            class="enigma-dropdown-trigger @(IsOpen ? "open" : string.Empty)"
+            @onclick="ToggleOpenAsync"
+            disabled="@Disabled"
+            aria-expanded="@IsOpen"
+            aria-haspopup="listbox">
+        <span class="enigma-dropdown-trigger-label">@SelectedLabel</span>
+        <span class="enigma-dropdown-trigger-icon" aria-hidden="true"></span>
+    </button>
+
+    @if (IsOpen)
+    {
+        <div class="enigma-dropdown-menu" role="listbox">
+            @foreach (var option in OptionList)
+            {
+                var isSelected = IsSelected(option);
+                <button type="button"
+                        class="enigma-dropdown-option @(isSelected ? "selected" : string.Empty)"
+                        @onclick="(() => SelectOptionAsync(option.Value))"
+                        role="option"
+                        aria-selected="@isSelected">
+                    @option.Label
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public TValue Value { get; set; } = default!;
+    [Parameter] public EventCallback<TValue> ValueChanged { get; set; }
+    [Parameter] public IEnumerable<SelectOption<TValue>>? Options { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Choose an option";
+    [Parameter] public string Class { get; set; } = string.Empty;
+    [Parameter] public bool Disabled { get; set; }
+
+    private readonly string _dropdownId = $"enigma-dropdown-{Guid.NewGuid():N}";
+    private readonly EqualityComparer<TValue> _comparer = EqualityComparer<TValue>.Default;
+    private readonly List<SelectOption<TValue>> _optionCache = [];
+    private ElementReference _root;
+    private DotNetObjectReference<EnigmaDropdown<TValue>>? _dotNetRef;
+    private bool _outsideClickRegistered;
+    private bool IsOpen { get; set; }
+
+    private IReadOnlyList<SelectOption<TValue>> OptionList
+    {
+        get
+        {
+            _optionCache.Clear();
+            if (Options is not null)
+            {
+                _optionCache.AddRange(Options);
+            }
+
+            return _optionCache;
+        }
+    }
+
+    private string SelectedLabel
+    {
+        get
+        {
+            var selected = OptionList.FirstOrDefault(IsSelected);
+            return selected?.Label ?? Placeholder;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsOpen && !_outsideClickRegistered)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("enigmaGame.registerDropdownOutsideClick", _dropdownId, _root, _dotNetRef);
+            _outsideClickRegistered = true;
+        }
+        else if (!IsOpen && _outsideClickRegistered)
+        {
+            await JS.InvokeVoidAsync("enigmaGame.unregisterDropdownOutsideClick", _dropdownId);
+            _outsideClickRegistered = false;
+        }
+    }
+
+    private bool IsSelected(SelectOption<TValue> option)
+    {
+        return _comparer.Equals(option.Value, Value);
+    }
+
+    private async Task ToggleOpenAsync()
+    {
+        if (Disabled)
+        {
+            return;
+        }
+
+        IsOpen = !IsOpen;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SelectOptionAsync(TValue nextValue)
+    {
+        IsOpen = false;
+        Value = nextValue;
+        await ValueChanged.InvokeAsync(nextValue);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task CloseDropdownAsync()
+    {
+        if (!IsOpen)
+        {
+            return Task.CompletedTask;
+        }
+
+        IsOpen = false;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.unregisterDropdownOutsideClick", _dropdownId);
+        }
+        catch (JSException)
+        {
+        }
+
+        _dotNetRef?.Dispose();
+    }
+}
