@@ -79,16 +79,14 @@
             <span class="profile-kicker">@CurrentTutorialStep.Eyebrow</span>
             <h2>@CurrentTutorialStep.Title</h2>
             <p>@CurrentTutorialStep.Description</p>
-            <p class="tutorial-helper-copy">
-                @if (_tutorialIndex == _tutorialSteps.Count - 1)
-                {
-                    <span>Inactive for 60 consecutive days means permanent deletion of this account and all owned maps.</span>
-                }
-                else
-                {
-                    <span>Keep exploring the live page underneath. Use Next when you are ready to move on.</span>
-                }
-            </p>
+            @if (!string.IsNullOrWhiteSpace(CurrentTutorialStep.HelperText))
+            {
+                <p class="tutorial-helper-copy">@CurrentTutorialStep.HelperText</p>
+            }
+            @if (_tutorialIndex == _tutorialSteps.Count - 1)
+            {
+                <p class="tutorial-helper-copy">Inactive for 60 consecutive days means permanent deletion of this account and all owned maps.</p>
+            }
             <div class="tutorial-progress-row">
                 <span>Step @(_tutorialIndex + 1) of @_tutorialSteps.Count</span>
                 <span>@GetTutorialRouteLabel()</span>
@@ -114,7 +112,7 @@
         "",
         "register",
     };
-    private const string TutorialDemoSeed = "easy-0,0BpS-1,0JqR-2,0HrF";
+    private const string TutorialDemoSeed = "easy-0,0BrS-1,0JqR-2,0HrF";
 
     private LoginUserSummary? Session { get; set; }
     private bool AuthCheckComplete { get; set; }
@@ -128,15 +126,16 @@
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
-        new() { Eyebrow = "Home", Title = "Main Menu", Description = "This is the central hub. Use it to jump into runs, rankings, players, your profile, and the marketplace.", Path = "/home" },
-        new() { Eyebrow = "Play", Title = "Run Setup", Description = "Generate or load a maze here, select your item loadout, and confirm fullscreen before entering.", Path = "/play" },
-        new() { Eyebrow = "Game Demo", Title = "Live Maze", Description = "This is a safe demo run. Walk between rooms, inspect the HUD, and open a puzzle without risking a real maze.", Path = "/game?tutorial=true" },
-        new() { Eyebrow = "Leaderboard", Title = "Rankings", Description = "Switch between top maps and top players. Founder names and record holders link directly to profiles.", Path = "/leaderboard" },
-        new() { Eyebrow = "Marketplace", Title = "Trading Floor", Description = "Buy maps, list your owned maps, and purchase support items from the item shop.", Path = "/marketplace" },
-        new() { Eyebrow = "Players", Title = "Explorer Search", Description = "Find other explorers, inspect their public stats, and jump straight to their profiles.", Path = "/players" },
-        new() { Eyebrow = "Profile", Title = "Your Profile", Description = "Review your collection, private social graph, inventory, and public-facing explorer stats.", Path = "/profile" },
-        new() { Eyebrow = "Settings", Title = "Account Controls", Description = "Update email, password, avatar, tutorial state, and account-level settings from here.", Path = "/profile?tab=settings" },
-        new() { Eyebrow = "Retention Rule", Title = "60-Day Inactivity Deletion", Description = "Two consecutive inactive months permanently delete your account and all owned maps. This is shown again in your profile settings so it stays visible.", Path = "/profile?tab=settings&tutorialstep=policy" },
+        new() { Eyebrow = "Home", Title = "Main Menu", Description = "This is the hub for every major system: runs, rankings, player search, your profile, and the trading floor.", HelperText = "Use the menu cards to move around the app. The top header stays with you on normal pages so navigation is always one click away.", Path = "/home" },
+        new() { Eyebrow = "Play", Title = "Run Setup", Description = "Generate a new maze or load a saved one here, then choose up to three items before you enter.", HelperText = "The fullscreen choice is remembered. If you lock in fullscreen once, future runs will try to use that mode on the next start click.", Path = "/play" },
+        new() { Eyebrow = "Co-op", Title = "Co-op Lobby", Description = "Create a shared session, invite exactly one friend, ready up together, and enter the maze once both players are locked in.", HelperText = "This page is for session setup only. Co-op runs stay synchronized once both players enter, and leaving the run abandons it for the team.", Path = "/play/coop" },
+        new() { Eyebrow = "Game Demo", Title = "Live Maze", Description = "This safe demo shows the real run layout: move through rooms, watch the in-room HUD, walk up to the console, and press E to open a puzzle overlay.", HelperText = "Some rooms use the console, and some puzzles resolve directly on the stage itself. Leaving a real maze is permanent; this demo is exempt so you can learn the flow safely.", Path = "/game?tutorial=true" },
+        new() { Eyebrow = "Leaderboard", Title = "Rankings", Description = "Switch between map rankings and player rankings. Founder names, record holders, and ranked players all link directly into profiles or maps.", HelperText = "Map mode is for ratings, plays, records, and founding date. Player mode ranks explorers by collection, winnings, and performance.", Path = "/leaderboard" },
+        new() { Eyebrow = "Marketplace", Title = "Trading Floor", Description = "The marketplace is split into Map Shop and Item Shop. Trade owned maps in one tab and buy run items in the other.", HelperText = "Map sales transfer ownership. Item purchases go straight into inventory and are equipped later from the Play page.", Path = "/marketplace" },
+        new() { Eyebrow = "Players", Title = "Explorer Search", Description = "Search live explorer accounts, open exact profiles directly, and review the current top discoverers from the player index.", HelperText = "Search updates as you type. The featured players here are the current top three by discovered maps, not just a generic popularity list.", Path = "/players" },
+        new() { Eyebrow = "Profile", Title = "Your Profile", Description = "Your profile is split into Overview, Maps, Inventory, and Settings. Public visitors only see the public-facing sections.", HelperText = "Owned maps, discovered maps, stats, and social state all live here. If you are viewing someone else, their private account controls stay hidden.", Path = "/profile" },
+        new() { Eyebrow = "Settings", Title = "Account Controls", Description = "Settings now hold password changes, email updates, tutorial replay, and avatar selection from owned map art.", HelperText = "Profile pictures use your owned map art with the default crop already applied. There is no manual crop step anymore.", Path = "/profile?tab=settings" },
+        new() { Eyebrow = "Retention Rule", Title = "60-Day Inactivity Deletion", Description = "If the account is inactive for 60 consecutive days, it and all owned maps are deleted permanently.", HelperText = "This warning is repeated in profile settings because it affects both your account and the maps you currently own.", Path = "/profile?tab=settings&tutorialstep=policy" },
     ];
 
     private TutorialStepDefinition? CurrentTutorialStep =>
@@ -408,39 +407,44 @@
             return 1;
         }
 
-        if (path == "game" && (query.Contains("tutorial=1", StringComparison.Ordinal) || query.Contains("tutorial=true", StringComparison.Ordinal)))
+        if (path == "play/coop")
         {
             return 2;
         }
 
-        if (path == "leaderboard")
+        if (path == "game" && (query.Contains("tutorial=1", StringComparison.Ordinal) || query.Contains("tutorial=true", StringComparison.Ordinal)))
         {
             return 3;
         }
 
-        if (path == "marketplace")
+        if (path == "leaderboard")
         {
             return 4;
         }
 
-        if (path == "players")
+        if (path == "marketplace")
         {
             return 5;
         }
 
+        if (path == "players")
+        {
+            return 6;
+        }
+
         if (path == "profile" && query.Contains("tutorialstep=policy", StringComparison.Ordinal))
         {
-            return 8;
+            return 9;
         }
 
         if (path == "profile" && query.Contains("tab=settings", StringComparison.Ordinal))
         {
-            return 7;
+            return 8;
         }
 
         if (path == "profile")
         {
-            return 6;
+            return 7;
         }
 
         return 0;

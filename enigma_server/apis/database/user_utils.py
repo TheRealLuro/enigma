@@ -118,17 +118,17 @@ def serialize_profile_image(profile_image: Any, map_docs: Iterable[dict[str, Any
         return None
 
     map_name = str(profile_image.get("map_name") or "").strip()
-    image_url = str(profile_image.get("image_url") or "").strip() or None
+    stored_image_url = str(profile_image.get("image_url") or "").strip() or None
+    image_url = stored_image_url
     crop = profile_image.get("crop") if isinstance(profile_image.get("crop"), dict) else {}
 
     if not map_name:
         return None
 
-    if not image_url:
-        for map_doc in map_docs:
-            if str(map_doc.get("map_name") or "").strip().lower() == map_name.lower():
-                image_url = map_doc.get("map_image") or None
-                break
+    for map_doc in map_docs:
+        if str(map_doc.get("map_name") or "").strip().lower() == map_name.lower():
+            image_url = map_doc.get("map_image") or stored_image_url
+            break
 
     return {
         "map_name": map_name,

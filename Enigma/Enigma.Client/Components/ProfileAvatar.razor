@@ -2,10 +2,14 @@
 @using Enigma.Client.Models
 
 <div class="profile-avatar-frame @Class">
-    @if (!string.IsNullOrWhiteSpace(Image?.ImageUrl))
+    @if (ShouldRenderImage)
     {
-        <div class="profile-avatar-crop-shell">
-            <img src="@Image!.ImageUrl" alt="@AltText" class="profile-avatar-image" style="@BuildImageStyle()" />
+        <div class="profile-avatar-crop-shell" style="@BuildCropShellStyle()">
+            <img src="@Image!.ImageUrl"
+                 alt="@AltText"
+                 class="profile-avatar-image"
+                 loading="eager"
+                 @onerror="HandleImageError" />
         </div>
     }
     else
@@ -20,7 +24,26 @@
     [Parameter] public string FallbackText { get; set; } = "??";
     [Parameter] public string Class { get; set; } = string.Empty;
 
-    private string BuildImageStyle()
+    private bool _imageFailed;
+    private string? _lastImageUrl;
+
+    private bool ShouldRenderImage => !_imageFailed && !string.IsNullOrWhiteSpace(Image?.ImageUrl);
+
+    protected override void OnParametersSet()
+    {
+        if (!string.Equals(_lastImageUrl, Image?.ImageUrl, StringComparison.Ordinal))
+        {
+            _lastImageUrl = Image?.ImageUrl;
+            _imageFailed = false;
+        }
+    }
+
+    private void HandleImageError()
+    {
+        _imageFailed = true;
+    }
+
+    private string BuildCropShellStyle()
     {
         var crop = Image?.Crop ?? new ImageCropState();
         var size = Math.Clamp(crop.Size, 1d, 100d);
@@ -34,6 +57,6 @@
         var leftText = left.ToString("F4", CultureInfo.InvariantCulture);
         var topText = top.ToString("F4", CultureInfo.InvariantCulture);
 
-        return $"position:absolute;width:{scaleText}%;height:{scaleText}%;max-width:none;max-height:none;left:{leftText}%;top:{topText}%;object-fit:cover;";
+        return $"--avatar-scale:{scaleText};--avatar-left:{leftText}%;--avatar-top:{topText}%;";
     }
 }

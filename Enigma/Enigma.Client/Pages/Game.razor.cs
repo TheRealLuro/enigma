@@ -1239,13 +1239,13 @@ public partial class Game : ComponentBase, IAsyncDisposable
         yield return CreateWallSegment(isHorizontal, fixedAxisValue, 0d, doorStart, side);
         yield return CreateWallSegment(isHorizontal, fixedAxisValue, doorEnd, RoomSize - doorEnd, side);
         yield return new WallSegment($"door-glow {side}", isHorizontal
-            ? $"left: {ToPositionPercentX(doorStart, DoorWidth)}%; top: {ToPercentY(edge)}%; width: {ToLengthPercentX(DoorWidth)}%; height: {ToPercentY(WallThickness)}%;"
+            ? $"left: {ToMappedPercentX(doorStart)}%; top: {ToPercentY(edge)}%; width: {ToMappedSpanPercentX(DoorWidth)}%; height: {ToPercentY(WallThickness)}%;"
             : $"left: {ToPositionPercentX(edge, WallThickness)}%; top: {ToPercentY(doorStart)}%; width: {ToLengthPercentX(WallThickness)}%; height: {ToPercentY(DoorWidth)}%;");
     }
 
     private static WallSegment CreateWallSegment(bool isHorizontal, double fixedAxisValue, double start, double length, string side) =>
         isHorizontal
-            ? new WallSegment(side, $"left: {ToPositionPercentX(start, length)}%; top: {ToPercentY(fixedAxisValue)}%; width: {ToLengthPercentX(length)}%; height: {ToPercentY(WallThickness)}%;")
+            ? new WallSegment(side, $"left: {ToMappedPercentX(start)}%; top: {ToPercentY(fixedAxisValue)}%; width: {ToMappedSpanPercentX(length)}%; height: {ToPercentY(WallThickness)}%;")
             : new WallSegment(side, $"left: {ToPositionPercentX(fixedAxisValue, WallThickness)}%; top: {ToPercentY(start)}%; width: {ToLengthPercentX(WallThickness)}%; height: {ToPercentY(length)}%;");
 
     private bool IsWithinDoorway(PlayerDirection direction)
@@ -1352,6 +1352,10 @@ public partial class Game : ComponentBase, IAsyncDisposable
     }
 
     protected static double ToPointPercentX(double value) => Math.Round((Math.Clamp(value, 0d, RoomSize) / RoomSize) * 100d, 4);
+
+    protected static double ToMappedPercentX(double value) => Math.Round((Math.Clamp(value, 0d, RoomSize) / RoomSize) * 100d, 4);
+
+    protected static double ToMappedSpanPercentX(double value) => Math.Round((Math.Clamp(value, 0d, RoomSize) / RoomSize) * 100d, 4);
 
     protected static double ToPositionPercentX(double value, double width)
     {

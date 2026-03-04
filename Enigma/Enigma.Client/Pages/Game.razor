@@ -25,22 +25,14 @@ else if (!IsLoaded || !CanShowRoom)
 }
 else
 {
-    <div class="enigma-game-page content">
+    <div class="enigma-game-page">
         <NavigationLock OnBeforeInternalNavigation="HandleBeforeInternalNavigation" ConfirmExternalNavigation="true" />
         <section class="enigma-game-shell">
-            <div class="enigma-room-shell">
-                <div class="enigma-room-meta">
-                    <div class="enigma-room-meta-copy">
-                        <h1>@CurrentMapLabel</h1>
-                        <p class="enigma-game-subline">Leaving this maze ends the run permanently.</p>
-                    </div>
-                </div>
-
-                <div class="enigma-room-stage-wrap">
-                    <div id="@GameSurfaceId"
-                         tabindex="0"
-                         class="enigma-room-stage @(UsePlaceholderGraphics ? "placeholder-mode" : string.Empty)"
-                         style="@GetRoomStageStyle()">
+            <div class="enigma-room-stage-wrap">
+                <div id="@GameSurfaceId"
+                     tabindex="0"
+                     class="enigma-room-stage @(UsePlaceholderGraphics ? "placeholder-mode" : string.Empty)"
+                     style="@GetRoomStageStyle()">
                         @foreach (var segment in GetWallSegments())
                         {
                             <div class="enigma-wall @segment.CssClass" style="@segment.Style"></div>
@@ -241,74 +233,58 @@ else
                             </div>
                         }
 
-                        <div class="enigma-stage-run-status">
-                            <div class="enigma-stage-run-head">
-                                <span class="enigma-kicker">Run Status</span>
-                                <span class="enigma-stage-goal">@(PortalReady ? "Enter the black hole" : "Solve and move")</span>
+                    <div class="enigma-stage-run-status">
+                        <div class="enigma-stage-run-head">
+                            <span class="enigma-kicker">Run Status</span>
+                            <span class="enigma-stage-goal">@(PortalReady ? "Enter the black hole" : "Solve and move")</span>
+                        </div>
+                        <div class="enigma-stage-run-grid">
+                            <div>
+                                <span>Difficulty</span>
+                                <strong>@DifficultyLabel</strong>
                             </div>
-                            <div class="enigma-stage-run-grid">
-                                <div>
-                                    <span>Difficulty</span>
-                                    <strong>@DifficultyLabel</strong>
-                                </div>
-                                <div>
-                                    <span>Size</span>
-                                    <strong>@ParsedSeed!.Size x @ParsedSeed.Size</strong>
-                                </div>
-                                <div>
-                                    <span>Elapsed</span>
-                                    <strong class="mono-numeric">@ElapsedTimeLabel</strong>
-                                </div>
-                                <div>
-                                    <span>Run Total</span>
-                                    <strong class="mono-numeric">@TotalGold.ToString("N0") MN</strong>
-                                </div>
-                                <div>
-                                    <span>Solved</span>
-                                    <strong>@SolvedRoomCount / @TotalRoomCount</strong>
-                                </div>
-                                <div>
-                                    <span>State</span>
-                                    <strong>@(IsCurrentPuzzleSolved ? "Unlocked" : "Locked")</strong>
-                                </div>
+                            <div>
+                                <span>Size</span>
+                                <strong>@ParsedSeed!.Size x @ParsedSeed.Size</strong>
                             </div>
-                            <div class="enigma-stage-run-items">
-                                <span class="enigma-stage-run-items-label">Equipped</span>
-                                @if (EquippedLoadout.Count == 0)
-                                {
-                                    <div class="enigma-stage-run-empty">No items equipped.</div>
-                                }
-                                else
-                                {
-                                    <div class="enigma-stage-run-pill-list">
-                                        @foreach (var item in EquippedLoadout)
-                                        {
-                                            <div class="enigma-stage-run-pill">
-                                                <strong>@item.Name</strong>
-                                                <span>x@item.Quantity</span>
-                                            </div>
-                                        }
-                                    </div>
-                                }
+                            <div>
+                                <span>Elapsed</span>
+                                <strong class="mono-numeric">@ElapsedTimeLabel</strong>
                             </div>
+                            <div>
+                                <span>Run Total</span>
+                                <strong class="mono-numeric">@TotalGold.ToString("N0") MN</strong>
+                            </div>
+                            <div>
+                                <span>Solved</span>
+                                <strong>@SolvedRoomCount / @TotalRoomCount</strong>
+                            </div>
+                            <div>
+                                <span>State</span>
+                                <strong>@(IsCurrentPuzzleSolved ? "Unlocked" : "Locked")</strong>
+                            </div>
+                        </div>
+                        <div class="enigma-stage-run-items">
+                            <span class="enigma-stage-run-items-label">Equipped</span>
+                            @if (EquippedLoadout.Count == 0)
+                            {
+                                <div class="enigma-stage-run-empty">No items equipped.</div>
+                            }
+                            else
+                            {
+                                <div class="enigma-stage-run-pill-list">
+                                    @foreach (var item in EquippedLoadout)
+                                    {
+                                        <div class="enigma-stage-run-pill">
+                                            <strong>@item.Name</strong>
+                                            <span>x@item.Quantity</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         </div>
                     </div>
                 </div>
-
-                <div class="enigma-room-footer">
-                    <span>@MovementHintText</span>
-                    <span>@((IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState.Puzzle.IsCompleted) ? (IsCoopRun ? "Room solved. Both players can now vote to leave." : "Room solved. Exit doors unlocked.") : "Room locked until this puzzle is solved.")</span>
-                </div>
-
-                @if (IsCoopRun)
-                {
-                    <div class="enigma-coop-inline-strip">
-                        <div><span>Partner</span><strong>@CoopPartnerName</strong></div>
-                        <div><span>Status</span><strong>@CoopStatusLabel</strong></div>
-                        <div><span>Transport</span><strong>@(IsCoopSocketOpen ? "Socket" : "HTTP fallback")</strong></div>
-                        <div><span>Vote</span><strong>@GetCoopVoteLabel()</strong></div>
-                    </div>
-                }
             </div>
 
             @if (IsPuzzleOverlayOpen)

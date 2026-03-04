@@ -8,11 +8,6 @@
         <div>
             <span class="profile-kicker">Global Rankings</span>
             <h1>@(IsPlayerMode ? "Top Players" : "Top Maps")</h1>
-            <p>
-                @(IsPlayerMode
-                    ? "Rank explorers by wealth, collection size, wins, and losses."
-                    : "Browse the strongest maps by rating, play count, record time, and founding date.")
-            </p>
         </div>
         <button class="btn btn-secondary" @onclick="GoHome">Back to Main Menu</button>
     </section>

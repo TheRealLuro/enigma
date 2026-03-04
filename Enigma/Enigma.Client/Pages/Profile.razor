@@ -28,7 +28,6 @@ else
             <div class="profile-banner-main">
                 <ProfileAvatar Image="@ProfileData.ProfileImage" AltText="@($"{ProfileData.Username} profile picture")" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-hero" />
                 <div class="profile-banner-copy">
-                    <span class="profile-kicker">Explorer Ledger</span>
                     <h1>@ProfileData.Username</h1>
                     <div class="profile-banner-tags">
                         <span class="profile-chip">@ProfileData.MazeNuggets.ToString("N0") Maze Nuggets</span>

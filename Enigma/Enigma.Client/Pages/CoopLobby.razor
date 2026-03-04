@@ -38,8 +38,7 @@ else
         <section class="coop-banner">
             <div>
                 <span class="profile-kicker">Co-op Lobby</span>
-                <h1>Dual Explorer Sessions</h1>
-                <p>Create a shared maze session, invite one friend, ready up together, and enter the maze once both players lock in.</p>
+                <h1>Dual Expedition</h1>
             </div>
             <div class="play-header-actions">
                 <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="RefreshSessionSummaryAsync">Refresh Lobby</button>
@@ -105,23 +104,59 @@ else
                     <div class="coop-form-stack">
                         <EditForm FormName="CoopGenerateForm" Model="CreateRequest" OnValidSubmit="CreateGeneratedSessionAsync">
                             <DataAnnotationsValidator />
-                            <div class="coop-form-grid">
-                                <div>
-                                    <label class="form-label">Difficulty</label>
-                                    <InputSelect class="form-control" @bind-Value="CreateRequest.Difficulty">
-                                        @foreach (var difficulty in Enum.GetValues<Difficulty>())
-                                        {
-                                            <option value="@difficulty">@difficulty</option>
-                                        }
-                                    </InputSelect>
+                            <div class="coop-create-block">
+                                <div class="coop-create-block-head">
+                                    <span class="profile-eyebrow">Fresh Run</span>
+                                    <h3>Generate a New Co-op Maze</h3>
                                 </div>
-                                <div>
-                                    <label class="form-label">Size</label>
-                                    <InputNumber class="form-control" @bind-Value="CreateRequest.Size" />
+                                <div class="coop-form-grid">
+                                    <div>
+                                        <label class="form-label">Difficulty</label>
+                                        <InputSelect class="form-control" @bind-Value="CreateRequest.Difficulty">
+                                            @foreach (var difficulty in Enum.GetValues<Difficulty>())
+                                            {
+                                                <option value="@difficulty">@difficulty</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Size</label>
+                                        <InputNumber class="form-control" @bind-Value="CreateRequest.Size" />
+                                    </div>
                                 </div>
+                                <ValidationMessage For="() => CreateRequest.Size" />
+                                <div class="coop-form-grid coop-form-grid-single">
+                                    <div>
+                                        <label class="form-label">Invite Friend</label>
+                                        <InputSelect class="form-control" @bind-Value="SelectedInviteFriend">
+                                            <option value="">Choose later</option>
+                                            @foreach (var friend in AvailableFriends)
+                                            {
+                                                <option value="@friend">@friend</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary w-100" type="submit" disabled="@IsActionBusy">
+                                    @(IsActionBusy ? "Creating..." : "Generate Co-op Maze")
+                                </button>
                             </div>
-                            <ValidationMessage For="() => CreateRequest.Size" />
-                            <div class="coop-form-grid">
+                        </EditForm>
+
+                        <div class="coop-divider"><span>or</span></div>
+
+                        <EditForm FormName="CoopLoadForm" Model="LoadRequest" OnValidSubmit="CreateLoadedSessionAsync">
+                            <DataAnnotationsValidator />
+                            <div class="coop-create-block">
+                                <div class="coop-create-block-head">
+                                    <span class="profile-eyebrow">Saved Map</span>
+                                    <h3>Load an Existing Maze</h3>
+                                </div>
+                                <div>
+                                    <label class="form-label">Saved Map Name</label>
+                                    <InputText class="form-control" @bind-Value="LoadRequest.MapName" />
+                                    <ValidationMessage For="() => LoadRequest.MapName" />
+                                </div>
                                 <div>
                                     <label class="form-label">Invite Friend</label>
                                     <InputSelect class="form-control" @bind-Value="SelectedInviteFriend">
@@ -132,34 +167,10 @@ else
                                         }
                                     </InputSelect>
                                 </div>
+                                <button class="btn btn-secondary w-100" type="submit" disabled="@IsActionBusy">
+                                    @(IsActionBusy ? "Loading..." : "Load Map Into Co-op")
+                                </button>
                             </div>
-                            <button class="btn btn-primary w-100" type="submit" disabled="@IsActionBusy">
-                                @(IsActionBusy ? "Creating..." : "Generate Co-op Maze")
-                            </button>
-                        </EditForm>
-
-                        <div class="coop-divider"><span>or</span></div>
-
-                        <EditForm FormName="CoopLoadForm" Model="LoadRequest" OnValidSubmit="CreateLoadedSessionAsync">
-                            <DataAnnotationsValidator />
-                            <div>
-                                <label class="form-label">Saved Map Name</label>
-                                <InputText class="form-control" @bind-Value="LoadRequest.MapName" />
-                                <ValidationMessage For="() => LoadRequest.MapName" />
-                            </div>
-                            <div>
-                                <label class="form-label">Invite Friend</label>
-                                <InputSelect class="form-control" @bind-Value="SelectedInviteFriend">
-                                    <option value="">Choose later</option>
-                                    @foreach (var friend in AvailableFriends)
-                                    {
-                                        <option value="@friend">@friend</option>
-                                    }
-                                </InputSelect>
-                            </div>
-                            <button class="btn btn-secondary w-100" type="submit" disabled="@IsActionBusy">
-                                @(IsActionBusy ? "Loading..." : "Load Map Into Co-op")
-                            </button>
                         </EditForm>
                     </div>
                 </section>
@@ -613,7 +624,7 @@ else
 
         if (CanEnterGame && !HasEnteredActiveSession && !IsEnteringActiveSession)
         {
-            StatusMessage = "Both players are ready. Enter the maze when you're ready.";
+            StatusMessage = "Both players are ready. Enter the unknown when you're ready.";
             HasError = false;
         }
     }
@@ -766,7 +777,7 @@ else
         }
 
         return string.IsNullOrWhiteSpace(CurrentSession.MapName)
-            ? "Generated Co-op Run"
+            ? "Found an Uncharted Maze"
             : CurrentSession.MapName;
     }
 
