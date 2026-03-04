@@ -22,6 +22,8 @@
   <a href="https://buymeacoffee.com/enigmamaze">
     <img alt="😴 Buy us an Energy Drink" src="https://img.shields.io/badge/%F0%9F%98%B4%20Buy%20us%20an-Energy%20Drink-ffdd57?logo=buymeacoffee&logoColor=000000" />
   </a>
+</p>
+<p align="center">
   helps keep it running and is very appreciated, but not required😛
 </p>
 
