@@ -76,6 +76,9 @@ public class ItemCatalogEntry
     [JsonPropertyName("kind")]
     public string Kind { get; set; } = string.Empty;
 
+    [JsonPropertyName("category")]
+    public string Category { get; set; } = string.Empty;
+
     [JsonPropertyName("slot_kind")]
     public string SlotKind { get; set; } = string.Empty;
 

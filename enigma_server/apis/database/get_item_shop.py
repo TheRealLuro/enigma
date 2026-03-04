@@ -37,6 +37,8 @@ def get_item_shop(username: str | None = None):
         owned_count = 0
         if user:
             owned_count = int((user.get("item_counts", {}) or {}).get(item_id, 0) or 0)
+            if serialized.get("category") == "cosmetic" and item_id in (user.get("owned_cosmetics", []) or []):
+                owned_count = max(owned_count, 1)
 
         serialized["is_owned"] = owned_count > 0
         serialized["can_purchase"] = serialized["stock"] > 0

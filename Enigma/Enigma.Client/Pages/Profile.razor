@@ -244,12 +244,81 @@ else
                 }
                 else
                 {
-                    <div class="profile-inventory-grid">
-                        @foreach (var item in InventoryItems.OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase))
-                        {
-                            <article class="profile-item-card"><div class="profile-item-top"><div><span class="catalog-card-kicker">@item.Rarity @item.SlotKind</span><h3>@item.Name</h3></div><span class="section-count section-count-small">@item.Count</span></div><p>@item.Description</p><div class="profile-item-meta"><span>Kind: @item.Kind</span><span>Max per run: @item.MaxPerRun</span><span>Price: @item.Price.ToString("N0") MN</span></div></article>
-                        }
-                    </div>
+                    @if (OwnedGearItems.Count > 0)
+                    {
+                        <div class="profile-inventory-group">
+                            <div class="panel-heading maps-heading profile-inventory-subheading">
+                                <div>
+                                    <span class="profile-eyebrow">Loadout</span>
+                                    <h3>Utility Items</h3>
+                                </div>
+                                <span class="section-count section-count-small">@OwnedGearItems.Count</span>
+                            </div>
+                            <div class="profile-inventory-grid">
+                                @foreach (var item in OwnedGearItems)
+                                {
+                                    var ownershipLimit = FormatPurchaseLimit(item);
+                                    <article class="profile-item-card">
+                                        <div class="profile-item-top">
+                                            <div>
+                                                <span class="catalog-card-kicker">@item.Rarity @item.SlotKind</span>
+                                                <h3>@item.Name</h3>
+                                            </div>
+                                            <span class="section-count section-count-small">@item.Count</span>
+                                        </div>
+                                        <p>@item.Description</p>
+                                        <div class="profile-item-meta">
+                                            <span>Kind: @item.Kind</span>
+                                            <span>Uses: @FormatItemUses(item)</span>
+                                            <span>Price: @item.Price.ToString("N0") MN</span>
+                                            @if (!string.IsNullOrWhiteSpace(ownershipLimit))
+                                            {
+                                                <span>@ownershipLimit</span>
+                                            }
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (OwnedCosmeticItems.Count > 0)
+                    {
+                        <div class="profile-inventory-group">
+                            <div class="panel-heading maps-heading profile-inventory-subheading">
+                                <div>
+                                    <span class="profile-eyebrow">Collection</span>
+                                    <h3>Owned Cosmetics</h3>
+                                </div>
+                                <span class="section-count section-count-small">@OwnedCosmeticItems.Count</span>
+                            </div>
+                            <div class="profile-inventory-grid">
+                                @foreach (var item in OwnedCosmeticItems)
+                                {
+                                    var ownershipLimit = FormatPurchaseLimit(item);
+                                    <article class="profile-item-card">
+                                        <div class="profile-item-top">
+                                            <div>
+                                                <span class="catalog-card-kicker">@item.Rarity @item.SlotKind</span>
+                                                <h3>@item.Name</h3>
+                                            </div>
+                                            <span class="section-count section-count-small">@item.Count</span>
+                                        </div>
+                                        <p>@item.Description</p>
+                                        <div class="profile-item-meta">
+                                            <span>Kind: @item.Kind</span>
+                                            <span>Uses: @FormatItemUses(item)</span>
+                                            <span>Price: @item.Price.ToString("N0") MN</span>
+                                            @if (!string.IsNullOrWhiteSpace(ownershipLimit))
+                                            {
+                                                <span>@ownershipLimit</span>
+                                            }
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                    }
                 }
             </section>
         }

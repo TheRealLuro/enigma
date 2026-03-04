@@ -43,6 +43,9 @@ public class ProfileUserData
     [JsonPropertyName("maps_discovered")]
     public List<MapSummary> MapsDiscovered { get; set; } = [];
 
+    [JsonPropertyName("owned_cosmetics")]
+    public List<string> OwnedCosmetics { get; set; } = [];
+
     [JsonPropertyName("owned_maps_count")]
     public int OwnedMapsCount { get; set; }
 

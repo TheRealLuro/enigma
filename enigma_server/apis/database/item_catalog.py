@@ -175,6 +175,7 @@ def serialize_shop_item(item: dict) -> dict:
         "name": normalized.get("name", normalized.get("item_id", "")),
         "description": normalized.get("description", ""),
         "kind": normalized.get("kind", "utility"),
+        "category": normalized.get("category", normalized.get("kind", "utility")),
         "slot_kind": normalized.get("slot_kind", "support"),
         "rarity": normalized.get("rarity", "common"),
         "price": int(normalized.get("price", 0) or 0),

@@ -138,8 +138,70 @@ else
             }
             else
             {
+                <section class="panel marketplace-browse-panel">
+                    <div class="panel-heading maps-heading">
+                        <div>
+                            <span class="profile-eyebrow">Browse Maps</span>
+                            <h2>Find a Listing</h2>
+                        </div>
+                        <span class="section-count">@MapListingSummary</span>
+                    </div>
+
+                    <div class="marketplace-filter-grid">
+                        <div>
+                            <label class="form-label">Search</label>
+                            <input class="form-control"
+                                   type="text"
+                                   placeholder="Search by map or seller"
+                                   @bind="MapSearchQuery"
+                                   @bind:event="oninput" />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Difficulty</label>
+                            <EnigmaDropdown TValue="string"
+                                            Class="form-control"
+                                            Options="MapDifficultyOptions"
+                                            @bind-Value="MapDifficultyFilter" />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Theme</label>
+                            <EnigmaDropdown TValue="string"
+                                            Class="form-control"
+                                            Options="MapThemeOptions"
+                                            @bind-Value="MapThemeFilter" />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Sort By</label>
+                            <EnigmaDropdown TValue="string"
+                                            Class="form-control"
+                                            Options="MapSortOptions"
+                                            @bind-Value="MapSortBy" />
+                        </div>
+
+                        <div>
+                            <label class="form-label">Order</label>
+                            <EnigmaDropdown TValue="string"
+                                            Class="form-control"
+                                            Options="SortOrderOptions"
+                                            @bind-Value="MapSortOrder" />
+                        </div>
+                    </div>
+                </section>
+
+                @if (FilteredListings.Count == 0)
+                {
+                    <section class="panel leaderboard-empty-panel">
+                        <h2>No matching listings</h2>
+                        <p>Adjust the current map search or filter settings.</p>
+                    </section>
+                }
+                else
+                {
                 <section class="catalog-card-grid marketplace-grid">
-                    @foreach (var listing in Listings)
+                    @foreach (var listing in FilteredListings)
                     {
                         <article class="catalog-card marketplace-card">
                             <MapImageFrame ImageUrl="@listing.MapImage" AltText="@($"{listing.MapName} artwork")" FallbackText="@listing.MapName" Class="poster" />
@@ -178,6 +240,7 @@ else
                         </article>
                     }
                 </section>
+                }
             }
         }
         else
@@ -203,8 +266,67 @@ else
                 }
                 else
                 {
+                    <section class="panel marketplace-browse-panel marketplace-item-filter-panel">
+                        <div class="panel-heading maps-heading">
+                            <div>
+                                <span class="profile-eyebrow">Browse Items</span>
+                                <h2>Find Merchant Stock</h2>
+                            </div>
+                            <span class="section-count">@ItemListingSummary</span>
+                        </div>
+
+                        <div class="marketplace-filter-grid">
+                            <div>
+                                <label class="form-label">Search</label>
+                                <input class="form-control"
+                                       type="text"
+                                       placeholder="Search by item name"
+                                       @bind="ItemSearchQuery"
+                                       @bind:event="oninput" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Kind</label>
+                                <EnigmaDropdown TValue="string"
+                                                Class="form-control"
+                                                Options="ItemKindOptions"
+                                                @bind-Value="ItemKindFilter" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Rarity</label>
+                                <EnigmaDropdown TValue="string"
+                                                Class="form-control"
+                                                Options="ItemRarityOptions"
+                                                @bind-Value="ItemRarityFilter" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Sort By</label>
+                                <EnigmaDropdown TValue="string"
+                                                Class="form-control"
+                                                Options="ItemSortOptions"
+                                                @bind-Value="ItemSortBy" />
+                            </div>
+
+                            <div>
+                                <label class="form-label">Order</label>
+                                <EnigmaDropdown TValue="string"
+                                                Class="form-control"
+                                                Options="SortOrderOptions"
+                                                @bind-Value="ItemSortOrder" />
+                            </div>
+                        </div>
+                    </section>
+
+                    @if (FilteredShopItems.Count == 0)
+                    {
+                        <div class="empty-state-inline">No merchant items match your current search or filters.</div>
+                    }
+                    else
+                    {
                     <div class="catalog-card-grid marketplace-shop-grid">
-                        @foreach (var item in ShopItems.OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase))
+                        @foreach (var item in FilteredShopItems)
                         {
                             <article class="catalog-card marketplace-item-card">
                                 <div class="catalog-card-body">
@@ -222,7 +344,11 @@ else
                                         <span class="catalog-card-meta-pill">Stock @item.Stock</span>
                                         <span class="catalog-card-meta-pill">Owned @GetOwnedCount(item.ItemId)</span>
                                         <span class="catalog-card-meta-pill">@item.Kind</span>
-                                        <span class="catalog-card-meta-pill">Max @item.MaxPerRun</span>
+                                        <span class="catalog-card-meta-pill">Uses @GetUsesLabel(item)</span>
+                                        @if (!string.IsNullOrWhiteSpace(GetOwnershipLimitLabel(item)))
+                                        {
+                                            <span class="catalog-card-meta-pill">@GetOwnershipLimitLabel(item)</span>
+                                        }
                                     </div>
                                     @if (item.Requirements.Count > 0)
                                     {
@@ -252,6 +378,7 @@ else
                             </article>
                         }
                     </div>
+                    }
                 }
             </section>
         }
@@ -274,6 +401,40 @@ else
     private MarketplaceSellForm SellRequest { get; set; } = new();
     private const string MapShopTab = "maps";
     private const string ItemShopTab = "items";
+    private string MapSearchQuery { get; set; } = string.Empty;
+    private string MapDifficultyFilter { get; set; } = "all";
+    private string MapThemeFilter { get; set; } = "all";
+    private string MapSortBy { get; set; } = "listed_at";
+    private string MapSortOrder { get; set; } = "desc";
+    private string ItemSearchQuery { get; set; } = string.Empty;
+    private string ItemKindFilter { get; set; } = "all";
+    private string ItemRarityFilter { get; set; } = "all";
+    private string ItemSortBy { get; set; } = "name";
+    private string ItemSortOrder { get; set; } = "asc";
+
+    private static readonly IReadOnlyList<SelectOption<string>> SortOrderOptions =
+    [
+        new("asc", "Ascending"),
+        new("desc", "Descending"),
+    ];
+
+    private static readonly IReadOnlyList<SelectOption<string>> MapSortOptions =
+    [
+        new("listed_at", "Recently Listed"),
+        new("price", "Price"),
+        new("value", "Map Value"),
+        new("size", "Size"),
+        new("name", "Map Name"),
+    ];
+
+    private static readonly IReadOnlyList<SelectOption<string>> ItemSortOptions =
+    [
+        new("name", "Item Name"),
+        new("price", "Price"),
+        new("rarity", "Rarity"),
+        new("stock", "Stock"),
+        new("owned", "Owned Count"),
+    ];
 
     private List<MapSummary> AvailableOwnedMaps =>
         Session?.MapsOwned
@@ -286,6 +447,55 @@ else
         ?? [];
     private IReadOnlyList<SelectOption<string>> AvailableOwnedMapOptions =>
         AvailableOwnedMaps.Select(static map => new SelectOption<string>(map.MapName, map.MapName)).ToArray();
+    private IReadOnlyList<SelectOption<string>> MapDifficultyOptions =>
+        BuildOptionsWithAll(
+            Listings.Select(static listing => listing.Difficulty)
+                .Where(static difficulty => !string.IsNullOrWhiteSpace(difficulty))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static difficulty => difficulty, StringComparer.OrdinalIgnoreCase),
+            "All difficulties");
+    private IReadOnlyList<SelectOption<string>> MapThemeOptions =>
+        BuildOptionsWithAll(
+            Listings.Select(static listing => listing.Theme)
+                .Where(static theme => !string.IsNullOrWhiteSpace(theme))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static theme => theme, StringComparer.OrdinalIgnoreCase),
+            "All themes",
+            FormatThemeLabel);
+    private IReadOnlyList<SelectOption<string>> ItemKindOptions =>
+        BuildOptionsWithAll(
+            ShopItems.Select(static item => item.Kind)
+                .Where(static kind => !string.IsNullOrWhiteSpace(kind))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static kind => kind, StringComparer.OrdinalIgnoreCase),
+            "All kinds");
+    private IReadOnlyList<SelectOption<string>> ItemRarityOptions =>
+        BuildOptionsWithAll(
+            ShopItems.Select(static item => item.Rarity)
+                .Where(static rarity => !string.IsNullOrWhiteSpace(rarity))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static rarity => GetRarityOrder(rarity))
+                .ThenBy(static rarity => rarity, StringComparer.OrdinalIgnoreCase),
+            "All rarities");
+
+    private List<MarketplaceListing> FilteredListings =>
+        ApplyMapSort(
+            Listings.Where(listing =>
+                    MatchesMapSearch(listing)
+                    && MatchesFilter(listing.Difficulty, MapDifficultyFilter)
+                    && MatchesFilter(listing.Theme, MapThemeFilter))
+                .ToList())
+        .ToList();
+    private List<ItemCatalogEntry> FilteredShopItems =>
+        ApplyItemSort(
+            ShopItems.Where(item =>
+                    MatchesItemSearch(item)
+                    && MatchesFilter(item.Kind, ItemKindFilter)
+                    && MatchesFilter(item.Rarity, ItemRarityFilter))
+                .ToList())
+        .ToList();
+    private string MapListingSummary => $"Showing {FilteredListings.Count} of {Listings.Count}";
+    private string ItemListingSummary => $"Showing {FilteredShopItems.Count} of {ShopItems.Count}";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -477,6 +687,104 @@ else
         return ActiveMarketplaceTab == tab ? "profile-tab active" : "profile-tab";
     }
 
+    private IEnumerable<MarketplaceListing> ApplyMapSort(IEnumerable<MarketplaceListing> listings)
+    {
+        var descending = string.Equals(MapSortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        return MapSortBy switch
+        {
+            "price" => OrderByWithDirection(listings, static listing => listing.Price, descending)
+                .ThenBy(static listing => listing.MapName, StringComparer.OrdinalIgnoreCase),
+            "value" => OrderByWithDirection(listings, static listing => listing.Value, descending)
+                .ThenBy(static listing => listing.MapName, StringComparer.OrdinalIgnoreCase),
+            "size" => OrderByWithDirection(listings, static listing => listing.Size, descending)
+                .ThenBy(static listing => listing.MapName, StringComparer.OrdinalIgnoreCase),
+            "name" => descending
+                ? listings.OrderByDescending(static listing => listing.MapName, StringComparer.OrdinalIgnoreCase)
+                : listings.OrderBy(static listing => listing.MapName, StringComparer.OrdinalIgnoreCase),
+            _ => OrderByWithDirection(listings, static listing => listing.ListedAt ?? string.Empty, descending)
+                .ThenBy(static listing => listing.MapName, StringComparer.OrdinalIgnoreCase),
+        };
+    }
+
+    private IEnumerable<ItemCatalogEntry> ApplyItemSort(IEnumerable<ItemCatalogEntry> items)
+    {
+        var descending = string.Equals(ItemSortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+        return ItemSortBy switch
+        {
+            "price" => OrderByWithDirection(items, static item => item.Price, descending)
+                .ThenBy(static item => item.Name, StringComparer.OrdinalIgnoreCase),
+            "rarity" => descending
+                ? items.OrderByDescending(static item => GetRarityOrder(item.Rarity)).ThenBy(static item => item.Name, StringComparer.OrdinalIgnoreCase)
+                : items.OrderBy(static item => GetRarityOrder(item.Rarity)).ThenBy(static item => item.Name, StringComparer.OrdinalIgnoreCase),
+            "stock" => OrderByWithDirection(items, static item => item.Stock, descending)
+                .ThenBy(static item => item.Name, StringComparer.OrdinalIgnoreCase),
+            "owned" => OrderByWithDirection(items, item => GetOwnedCount(item.ItemId), descending)
+                .ThenBy(static item => item.Name, StringComparer.OrdinalIgnoreCase),
+            _ => descending
+                ? items.OrderByDescending(static item => item.Name, StringComparer.OrdinalIgnoreCase)
+                : items.OrderBy(static item => item.Name, StringComparer.OrdinalIgnoreCase),
+        };
+    }
+
+    private static IOrderedEnumerable<T> OrderByWithDirection<T, TKey>(IEnumerable<T> source, Func<T, TKey> selector, bool descending)
+    {
+        return descending ? source.OrderByDescending(selector) : source.OrderBy(selector);
+    }
+
+    private bool MatchesMapSearch(MarketplaceListing listing)
+    {
+        if (string.IsNullOrWhiteSpace(MapSearchQuery))
+        {
+            return true;
+        }
+
+        var query = MapSearchQuery.Trim();
+        return listing.MapName.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || listing.Seller.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || FormatThemeLabel(listing.Theme).Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesItemSearch(ItemCatalogEntry item)
+    {
+        if (string.IsNullOrWhiteSpace(ItemSearchQuery))
+        {
+            return true;
+        }
+
+        var query = ItemSearchQuery.Trim();
+        return item.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || item.Description.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || item.Kind.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || item.Rarity.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MatchesFilter(string? value, string activeFilter)
+    {
+        return string.IsNullOrWhiteSpace(activeFilter)
+            || string.Equals(activeFilter, "all", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value?.Trim(), activeFilter.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<SelectOption<string>> BuildOptionsWithAll(IEnumerable<string> values, string allLabel, Func<string, string>? labelSelector = null)
+    {
+        var options = new List<SelectOption<string>> { new("all", allLabel) };
+        options.AddRange(values.Select(value => new SelectOption<string>(value, labelSelector?.Invoke(value) ?? value)));
+        return options;
+    }
+
+    private static int GetRarityOrder(string? rarity)
+    {
+        return rarity?.Trim().ToLowerInvariant() switch
+        {
+            "common" => 1,
+            "uncommon" => 2,
+            "rare" => 3,
+            "epic" => 4,
+            "legendary" => 5,
+            _ => 99,
+        };
+    }
+
     private static bool EqualsIgnoreCase(string? left, string? right)
     {
         return string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
@@ -484,7 +792,34 @@ else
 
     private int GetOwnedCount(string itemId)
     {
-        return Session?.ItemCounts.TryGetValue(itemId, out var count) == true ? count : 0;
+        if (Session is null)
+        {
+            return 0;
+        }
+
+        if (Session.ItemCounts.TryGetValue(itemId, out var count))
+        {
+            return count;
+        }
+
+        return Session.OwnedCosmetics.Any(ownedItemId => EqualsIgnoreCase(ownedItemId, itemId)) ? 1 : 0;
+    }
+
+    private static string GetUsesLabel(ItemCatalogEntry item)
+    {
+        return item.MaxPerRun <= 0 ? "Permanent" : item.MaxPerRun.ToString();
+    }
+
+    private static string? GetOwnershipLimitLabel(ItemCatalogEntry item)
+    {
+        if (item.PurchaseLimit <= 0)
+        {
+            return null;
+        }
+
+        return item.PurchaseLimit == 1
+            ? "1 per person"
+            : $"{item.PurchaseLimit} per person";
     }
 
     private string GetBuyLabel(MarketplaceListing listing)

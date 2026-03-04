@@ -242,6 +242,7 @@ def serialize_public_profile(
         "maps_lost": normalize_int(normalized_user.get("maps_lost")),
         "maps_owned": serialize_user_map_documents(maps_owned_docs),
         "maps_discovered": serialize_user_map_documents(maps_discovered_docs),
+        "owned_cosmetics": list(normalized_user.get("owned_cosmetics", [])) if is_self else [],
         "owned_maps_count": len(serialize_user_map_documents(maps_owned_docs)),
         "discovered_maps_count": len(serialize_user_map_documents(maps_discovered_docs)),
         "profile_image": serialize_profile_image(normalized_user.get("profile_image"), maps_owned_docs),

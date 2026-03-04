@@ -110,12 +110,24 @@ def _sync_user(username: str) -> dict[str, Any]:
     return user
 
 
-def _serialize_inventory_items(item_counts: dict[str, Any]) -> list[dict[str, Any]]:
-    item_ids = [item_id for item_id, count in (item_counts or {}).items() if int(count or 0) > 0]
+def _serialize_inventory_items(user: dict[str, Any]) -> list[dict[str, Any]]:
+    item_counts = user.get("item_counts", {}) or {}
+    owned_cosmetics = {
+        str(item_id).strip()
+        for item_id in user.get("owned_cosmetics", []) or []
+        if str(item_id).strip()
+    }
+    item_ids = {
+        str(item_id).strip()
+        for item_id, count in item_counts.items()
+        if str(item_id).strip() and int(count or 0) > 0
+    }
+    item_ids.update(owned_cosmetics)
+
     if not item_ids:
         return []
 
-    docs = list(item_inventory.find({"item_id": {"$in": item_ids}}))
+    docs = list(item_inventory.find({"item_id": {"$in": list(item_ids)}}))
     doc_lookup = {doc.get("item_id"): doc for doc in docs}
     inventory: list[dict[str, Any]] = []
     for item_id in sorted(item_ids):
@@ -124,7 +136,8 @@ def _serialize_inventory_items(item_counts: dict[str, Any]) -> list[dict[str, An
             continue
 
         serialized = serialize_shop_item(doc)
-        serialized["count"] = int(item_counts.get(item_id, 0) or 0)
+        serialized["count"] = max(int(item_counts.get(item_id, 0) or 0), 1 if item_id in owned_cosmetics else 0)
+        serialized["is_owned"] = serialized["count"] > 0
         inventory.append(serialized)
 
     return inventory
@@ -275,7 +288,7 @@ def get_inventory(request: Request, username: str):
     return {
         "status": "success",
         "username": username,
-        "items": _serialize_inventory_items(user.get("item_counts", {})),
+        "items": _serialize_inventory_items(user),
     }
 
 

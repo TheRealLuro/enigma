@@ -5,6 +5,8 @@
             class="enigma-stepper-button"
             @onclick="DecreaseAsync"
             @onclick:stopPropagation="true"
+            @onpointerdown:preventDefault="true"
+            @onpointerdown:stopPropagation="true"
             disabled="@Disabled || Value <= Min"
             aria-label="Decrease value">
         <span aria-hidden="true">-</span>
@@ -20,6 +22,8 @@
             class="enigma-stepper-button"
             @onclick="IncreaseAsync"
             @onclick:stopPropagation="true"
+            @onpointerdown:preventDefault="true"
+            @onpointerdown:stopPropagation="true"
             disabled="@Disabled || Value >= Max"
             aria-label="Increase value">
         <span aria-hidden="true">+</span>

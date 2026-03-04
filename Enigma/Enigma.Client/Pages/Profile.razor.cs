@@ -51,6 +51,16 @@ public partial class Profile
     private LoginUserSummary? Session { get; set; }
     private ProfileUserData? ProfileData { get; set; }
     private List<ItemCatalogEntry> InventoryItems { get; set; } = [];
+    private List<ItemCatalogEntry> OwnedGearItems =>
+        InventoryItems
+            .Where(item => !IsCosmeticItem(item))
+            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    private List<ItemCatalogEntry> OwnedCosmeticItems =>
+        InventoryItems
+            .Where(IsCosmeticItem)
+            .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private EmailFormModel EmailForm { get; set; } = new();
     private PasswordFormModel PasswordForm { get; set; } = new();
@@ -613,6 +623,33 @@ public partial class Profile
     {
         var value = !string.IsNullOrWhiteSpace(themeLabel) ? themeLabel : theme;
         return string.IsNullOrWhiteSpace(value) ? "Cartoon" : value.Replace('_', ' ').Trim();
+    }
+
+    private bool IsCosmeticItem(ItemCatalogEntry item)
+    {
+        if (string.Equals(item.Category, "cosmetic", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return ProfileData?.OwnedCosmetics.Any(itemId => EqualsIgnoreCase(itemId, item.ItemId)) == true;
+    }
+
+    private static string FormatItemUses(ItemCatalogEntry item)
+    {
+        return item.MaxPerRun <= 0 ? "Permanent" : item.MaxPerRun.ToString();
+    }
+
+    private static string? FormatPurchaseLimit(ItemCatalogEntry item)
+    {
+        if (item.PurchaseLimit <= 0)
+        {
+            return null;
+        }
+
+        return item.PurchaseLimit == 1
+            ? "1 per person"
+            : $"{item.PurchaseLimit} per person";
     }
 
     private static string GetDifficultyClass(string difficulty)
