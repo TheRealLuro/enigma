@@ -465,7 +465,7 @@ else
                                 }
                             </div>
                             <p class="enigma-helper">Entered: @(GetCoopMemoryInput().Count == 0 ? "none" : string.Join(" ", GetCoopMemoryInput()))</p>
-                            <p class="enigma-helper">Turn: @GetCoopMemoryNextRole()</p>
+                            <p class="enigma-helper">Turn: @GetCoopMemoryNextRole() side</p>
                             <div class="enigma-option-grid compact">
                                 @foreach (var symbol in GetCoopMemorySymbols())
                                 {
@@ -483,8 +483,8 @@ else
                                         <strong>@(GetCoopBoardRotation() == 0 ? "Aligned" : $"Rotated {GetCoopBoardRotation() * 90} deg")</strong>
                                     </div>
                                     <div class="enigma-mini-stat">
-                                        <span>Control</span>
-                                        <strong>@CurrentCoopPuzzle.Role</strong>
+                                        <span>Palette</span>
+                                        <strong>Blue / Red</strong>
                                     </div>
                                 </div>
                                 <div class="coop-rotation-board" style="grid-template-columns: repeat(@GetCoopRotationCols(), minmax(0, 1fr));">
@@ -497,7 +497,7 @@ else
                                         </button>
                                     }
                                 </div>
-                                <p class="enigma-helper">Blue tiles are yours. Match every tile to its target orientation to complete the shared circuit.</p>
+                                <p class="enigma-helper">Blue tiles are yours. Red tiles belong to your partner. Match every tile to its target orientation to complete the shared circuit.</p>
                             </div>
                         }
                         else if (string.Equals(CurrentCoopPuzzle.ViewType, "opposing_pattern_input", StringComparison.OrdinalIgnoreCase))

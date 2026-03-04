@@ -230,20 +230,18 @@ else
                                     <strong>@CurrentSession.You.Username</strong>
                                 </div>
                                 <div class="coop-player-meta">
-                                    <span>@CurrentSession.You.Role</span>
                                     <span>@(CurrentSession.You.Ready ? "Ready" : "Not ready")</span>
                                     <span>Team MN @CurrentSession.TeamGold</span>
                                 </div>
                             </article>
                         }
 
-                        <article class="coop-player-card">
+                        <article class="coop-player-card partner">
                             <div>
                                 <span class="profile-eyebrow">Partner</span>
                                 <strong>@(CurrentSession.OtherPlayer?.Username ?? CurrentSession.GuestUsername ?? "Waiting for invited friend")</strong>
                             </div>
                             <div class="coop-player-meta">
-                                <span>@(CurrentSession.OtherPlayer?.Role ?? "guest")</span>
                                 <span>@(CurrentSession.OtherPlayer?.Ready == true ? "Ready" : "Not ready")</span>
                                 <span>@GetPartnerRoomLabel()</span>
                             </div>

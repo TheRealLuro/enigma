@@ -14,58 +14,70 @@ public partial class Game
     protected bool HasCoopPuzzle => IsCoopRun && CurrentCoopPuzzle is not null;
     protected bool HasCoopStageElements => GetCoopStageElements().Count > 0;
 
+    private bool IsGuestPerspective =>
+        string.Equals(CurrentCoopPuzzle?.Role, "guest", StringComparison.OrdinalIgnoreCase);
+
+    private string GetCoopRoleAccent(string? role)
+    {
+        if (string.IsNullOrWhiteSpace(role))
+        {
+            return "Blue";
+        }
+
+        return string.Equals(role, IsGuestPerspective ? "guest" : "owner", StringComparison.OrdinalIgnoreCase) ? "Blue" : "Red";
+    }
+
     private PuzzleGuide GetCurrentCoopPuzzleGuide()
     {
-        var role = string.IsNullOrWhiteSpace(CurrentCoopPuzzle?.Role) ? "your side" : CurrentCoopPuzzle.Role;
         return CurrentCoopPuzzle?.ViewType switch
         {
             "pressure_systems" => new(
                 "Lock the shared plate pattern together.",
-                $"Move both players onto the correct plates and keep them there for the full hold. {role} only controls their own position.",
+                "Move both players onto the correct plates and keep them there for the full hold. Blue marks your side and red marks your partner.",
                 "Every required plate phase locks in sequence."),
             "sync_reaction" => new(
                 "Lock both players under the timing rule for this room.",
-                $"Use the information visible on {role}'s side and press Lock Now only when your side's timing condition is satisfied.",
+                "Use the timing information on the blue side and lock only when your lane is valid. The red lane belongs to your partner.",
                 "Both players are locked in a valid state at the same time."),
             "deduction_riddle" => new(
                 "Combine both players' clues into one consistent answer.",
-                $"Share the prompt, clue fragments, and options with your partner, then commit to the same answer from {role}'s side.",
+                "Share the prompt, clue fragments, and options with your partner, then commit to the same answer. Blue marks your side and red marks theirs.",
                 "The selected answer matches the combined clue set."),
             "split_memory" => new(
                 "Rebuild one full sequence from split information.",
-                $"Memorize your visible symbols, wait for {GetCoopMemoryNextRole()}, and enter only one symbol at a time from {role}'s side.",
+                "Memorize the blue-side symbols, wait for the next turn callout, and enter one symbol at a time. The red side belongs to your partner.",
                 "The team enters the full shared sequence without a mistake."),
             "dual_rotation" => new(
                 "Align every shared tile to its target orientation.",
-                $"Rotate only the blue tiles that belong to {role}. Locked tiles are controlled by your partner.",
+                "Rotate only the blue tiles. Red tiles are controlled by your partner.",
                 "Every tile arrow matches its target arrow."),
             "opposing_pattern_input" => new(
                 "Apply the hidden transformation to the shared pattern.",
-                $"Use the arrow controls for {role}'s side and enter the transformed pattern, not the literal preview.",
+                "Use the blue-side arrow controls and enter the transformed pattern, not the literal preview. Red belongs to your partner.",
                 "Both players finish the correct transformed pattern."),
             "flow_transfer" => new(
                 "Move shared flow into the exact target distribution.",
-                $"Pulse the valves available to {role}. Each pulse changes the whole system, not just your side.",
+                "Pulse the blue controls. Every pulse changes the whole system, including the red side your partner is reading.",
                 "Every output reaches its target value simultaneously."),
             "distributed_weight" => new(
                 "Reach the combined weighted total together.",
-                $"Adjust only the pad allocations available to {role} and account for each multiplier before you add or remove weight.",
+                "Adjust only the blue pads and account for each multiplier before you add or remove weight. Red pads belong to your partner.",
                 "The shared weighted total equals the target exactly."),
             "binary_echo" => new(
                 "Transform the shared bit state into the target state.",
-                $"Use only the operations exposed to {role}. Your partner sees a different piece of the binary system.",
+                "Use only the blue-side operations. Your partner sees a different red-side piece of the binary system.",
                 "Current bits match target bits before the move budget or rule set rejects the attempt."),
             "signal_lines" => new(
                 "Route every signal to the correct destination without violating blocked paths.",
-                $"Assign routes only for the nodes controlled by {role}. Compare notes with your partner because some route information is asymmetric.",
+                "Assign routes only for the blue source nodes. Compare notes with your partner because the red-side information is asymmetric.",
                 "All signals form a valid non-conflicting network."),
             "spatial_sync" => new(
                 "Stand in the correct zones together and hold them in sync.",
-                $"Move both players into the active zones at the same time and stay there for the required hold. {role} still controls only one character.",
+                "Move both players into the active zones at the same time and stay there for the required hold. Blue is your side and red is your partner.",
                 "All sync steps lock in order."),
             _ => new(
                 "Solve the co-op room together.",
-                "Use the controls shown on your side of the board and communicate with your partner.",
+                "Use the blue controls shown on your side of the board and communicate with your partner on the red side.",
                 "The shared puzzle reports complete and the room unlocks.")
         };
     }
@@ -210,7 +222,7 @@ public partial class Game
             .Select(option => option.GetString() ?? string.Empty)
             .ToArray();
 
-    protected string GetCoopMemoryNextRole() => GetCoopViewString("next_role");
+    protected string GetCoopMemoryNextRole() => GetCoopRoleAccent(GetCoopViewString("next_role"));
 
     private IReadOnlyList<CoopRotationTile> GetCoopRotationTiles()
     {
@@ -281,12 +293,12 @@ public partial class Game
 
     private string GetCoopFlowControlDetail(JsonElement control)
     {
-        var role = string.Equals(CurrentCoopPuzzle?.Role, "guest", StringComparison.OrdinalIgnoreCase) ? "guest" : "owner";
+        var role = IsGuestPerspective ? "guest" : "owner";
         var selfKey = role == "owner" ? "owner_delta" : "guest_delta";
         var partnerKey = role == "owner" ? "guest_delta" : "owner_delta";
         var selfEffects = FormatCoopDeltaList(control, selfKey);
         var partnerEffects = FormatCoopDeltaList(control, partnerKey);
-        return $"You: {selfEffects} | Partner: {partnerEffects}";
+        return $"Blue: {selfEffects} | Red: {partnerEffects}";
     }
 
     private static string FormatCoopDeltaList(JsonElement control, string propertyName)
@@ -310,12 +322,12 @@ public partial class Game
     {
         if (GetCoopIntList("allocations").Count < 4)
         {
-            return "Only the pads on your side can be changed from this panel.";
+            return "Only the blue pads can be changed from this panel.";
         }
 
-        return string.Equals(CurrentCoopPuzzle?.Role, "guest", StringComparison.OrdinalIgnoreCase)
-            ? "Cross-link rule: your pads 1 and 3 each add +1 to the shared total, while the owner's pads 2 and 4 each subtract 1."
-            : "Cross-link rule: the guest's pads 1 and 3 each add +1 to the shared total, while your pads 2 and 4 each subtract 1.";
+        return IsGuestPerspective
+            ? "Cross-link rule: blue pads 1 and 3 each add +1 to the shared total, while red pads 2 and 4 each subtract 1."
+            : "Cross-link rule: red pads 1 and 3 each add +1 to the shared total, while blue pads 2 and 4 each subtract 1.";
     }
 
     protected IReadOnlyList<int> GetCoopIntList(string propertyName) =>

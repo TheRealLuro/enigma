@@ -89,8 +89,14 @@ else
                         <strong>@(string.IsNullOrWhiteSpace(Summary.PartnerUsername) ? "Unknown" : Summary.PartnerUsername)</strong>
                     </div>
                     <div>
-                        <span>Role</span>
-                        <strong>@(Summary.IsSessionOwner ? "Owner" : "Discoverer")</strong>
+                        <span>Ownership</span>
+                        <strong>@((Summary.Source != "load" && !Summary.SeedExisted)
+                            ? (Summary.IsSessionOwner ? "Host owns the saved maze" : "Host becomes owner when saved")
+                            : "Map ownership unchanged")</strong>
+                    </div>
+                    <div>
+                        <span>Discovery</span>
+                        <strong>Both explorers are recorded</strong>
                     </div>
                 </div>
             }

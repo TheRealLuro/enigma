@@ -1697,7 +1697,12 @@ h1:focus {
 }
 
 .co-op-tile-locked {
-    opacity: 0.56;
+    opacity: 0.84;
+    border-color: rgba(255, 102, 102, 0.62);
+    background:
+        radial-gradient(circle at top, rgba(255, 116, 116, 0.16), transparent 60%),
+        rgba(34, 12, 18, 0.9);
+    box-shadow: inset 0 0 0 1px rgba(255, 102, 102, 0.08);
 }
 
 .coop-rotation-shell {
@@ -1786,7 +1791,8 @@ h1:focus {
 }
 
 .coop-signal-line.active.partner {
-    stroke: rgba(178, 214, 255, 0.56);
+    stroke: rgba(255, 114, 114, 0.82);
+    filter: drop-shadow(0 0 8px rgba(255, 114, 114, 0.18));
 }
 
 .coop-signal-node {
@@ -1811,7 +1817,10 @@ h1:focus {
 }
 
 .coop-signal-node.left.partner {
-    opacity: 0.7;
+    opacity: 1;
+    border-color: rgba(255, 114, 114, 0.48);
+    background: rgba(34, 12, 18, 0.94);
+    box-shadow: 0 0 18px rgba(255, 114, 114, 0.1);
 }
 
 .coop-signal-node small {
@@ -5109,6 +5118,11 @@ h1:focus {
     background: linear-gradient(135deg, rgba(19, 47, 88, 0.5), rgba(18, 25, 39, 0.8));
 }
 
+.coop-player-card.partner {
+    border-color: rgba(255, 114, 114, 0.24);
+    background: linear-gradient(135deg, rgba(66, 18, 18, 0.42), rgba(24, 17, 24, 0.82));
+}
+
 .coop-invite-card {
     padding: 18px 20px;
     border-radius: 18px;
@@ -5170,15 +5184,15 @@ h1:focus {
 }
 
 .enigma-player.co-op-peer {
-    background: linear-gradient(180deg, #d8fff7, #7bcfc0);
-    border-color: rgba(142, 255, 233, 0.58);
-    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(54, 185, 166, 0.18);
+    background: linear-gradient(180deg, #ffd8d8, #df6f7f);
+    border-color: rgba(255, 151, 151, 0.6);
+    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(189, 72, 102, 0.22);
     opacity: 0.94;
     transition: left 0.03s linear, top 0.03s linear, box-shadow 0.12s ease;
 }
 
 .enigma-player.co-op-peer::after {
-    background: #07211e;
+    background: #2b0c18;
 }
 
 .enigma-player-tag {
@@ -5197,6 +5211,12 @@ h1:focus {
     transform: translateY(-100%);
     white-space: nowrap;
     transition: left 0.045s linear, top 0.045s linear, opacity 0.12s ease;
+}
+
+.enigma-player-tag.partner-tag {
+    border-color: rgba(255, 114, 114, 0.32);
+    color: #ffe3e3;
+    background: rgba(22, 7, 12, 0.92);
 }
 
 .play-page-shell {

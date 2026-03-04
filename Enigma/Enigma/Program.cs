@@ -1,11 +1,25 @@
 using Enigma;
 using Enigma.Client.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using System.Net.WebSockets;
 using System.Security.Claims;
+using System.IO;
 using System.Xml.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
+var renderPort = Environment.GetEnvironmentVariable("PORT");
+var isManagedProxyHost =
+    !string.IsNullOrWhiteSpace(renderPort) ||
+    !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RENDER")) ||
+    !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RENDER_EXTERNAL_URL"));
+
+if (int.TryParse(renderPort, out var parsedPort) && parsedPort > 0)
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{parsedPort}");
+}
+
 var backendBaseUrl =
     builder.Configuration["Backend:BaseUrl"]
     ?? Environment.GetEnvironmentVariable("ENIGMA_BACKEND_URL")
@@ -28,6 +42,40 @@ builder.Services.AddScoped(sp =>
 });
 builder.Services.AddScoped<EnigmaApiClient>();
 builder.Services.AddControllers();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+var dataProtectionBuilder = builder.Services
+    .AddDataProtection()
+    .SetApplicationName("Enigma");
+
+var dataProtectionKeysPath =
+    builder.Configuration["DataProtection:KeysPath"]
+    ?? Environment.GetEnvironmentVariable("ENIGMA_DATA_PROTECTION_KEYS_PATH");
+
+if (string.IsNullOrWhiteSpace(dataProtectionKeysPath) && Directory.Exists("/var/data"))
+{
+    dataProtectionKeysPath = "/var/data/enigma-dp-keys";
+}
+
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    Directory.CreateDirectory(dataProtectionKeysPath);
+    dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
+
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = "Enigma.Antiforgery";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
+
 builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -82,8 +130,12 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+app.UseForwardedHeaders();
 app.UseStatusCodePagesWithReExecute("/not-found");
-app.UseHttpsRedirection();
+if (!isManagedProxyHost)
+{
+    app.UseHttpsRedirection();
+}
 app.UseRouting();
 app.UseWebSockets();
 app.UseAuthentication();
@@ -151,6 +203,8 @@ Public pages:
 """;
     return Results.Text(content, "text/plain");
 });
+
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" }));
 
 app.MapGet("/api/auth/multiplayer/session/ws/{sessionId}", async (HttpContext context, string sessionId) =>
 {
