@@ -76,7 +76,8 @@ public partial class Profile
             .ToList();
 
     private MapSummary? SelectedAvatarSource =>
-        AvatarSourceOptions.FirstOrDefault(map => EqualsIgnoreCase(map.MapName, AvatarMapName));
+        AvatarSourceOptions.FirstOrDefault(map => EqualsIgnoreCase(map.MapName, AvatarMapName))
+        ?? AvatarSourceOptions.FirstOrDefault();
 
     private bool CanSaveAvatar => SelectedAvatarSource is not null && !string.IsNullOrWhiteSpace(SelectedAvatarSource.MapImage);
 
@@ -199,6 +200,11 @@ public partial class Profile
             return;
         }
 
+        if (tab == SettingsTab && IsOwnProfile && string.IsNullOrWhiteSpace(AvatarMapName) && AvatarSourceOptions.Count > 0)
+        {
+            AvatarMapName = AvatarSourceOptions[0].MapName;
+        }
+
         ActiveTab = tab;
         var basePath = IsOwnProfile ? "/profile" : $"/profile/{Uri.EscapeDataString(ProfileData?.Username ?? string.Empty)}";
         var target = tab == OverviewTab ? basePath : $"{basePath}?tab={Uri.EscapeDataString(tab)}";
@@ -296,6 +302,11 @@ public partial class Profile
 
     private async Task UpdateAvatarAsync()
     {
+        if (string.IsNullOrWhiteSpace(AvatarMapName) && AvatarSourceOptions.Count > 0)
+        {
+            AvatarMapName = AvatarSourceOptions[0].MapName;
+        }
+
         if (string.IsNullOrWhiteSpace(AvatarMapName) || SelectedAvatarSource is null)
         {
             HasError = true;

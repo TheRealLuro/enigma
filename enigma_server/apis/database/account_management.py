@@ -25,6 +25,12 @@ from .user_utils import (
 
 router = APIRouter(prefix="/database/users")
 
+DEFAULT_AVATAR_CROP = {
+    "x": 11.0,
+    "y": 17.0,
+    "size": 73.0,
+}
+
 
 class UpdateEmailPayload(BaseModel):
     username: str
@@ -190,6 +196,7 @@ def update_avatar(request: Request, payload: UpdateAvatarPayload):
     profile_image = {
         "map_name": payload.map_name,
         "image_url": owned_map.get("map_image"),
+        "crop": dict(DEFAULT_AVATAR_CROP),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 

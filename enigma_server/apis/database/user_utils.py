@@ -8,6 +8,11 @@ from .redis_store import load_user_invites
 
 SYSTEM_BANK_USERNAME = "enigma_bank"
 TUTORIAL_VERSION = 1
+DEFAULT_PROFILE_IMAGE_CROP = {
+    "x": 11.0,
+    "y": 17.0,
+    "size": 73.0,
+}
 
 
 def normalize_email(value: str | None) -> str:
@@ -129,9 +134,9 @@ def serialize_profile_image(profile_image: Any, map_docs: Iterable[dict[str, Any
         "map_name": map_name,
         "image_url": image_url,
         "crop": {
-            "x": float(crop.get("x", 0)),
-            "y": float(crop.get("y", 0)),
-            "size": float(crop.get("size", 100)),
+            "x": float(crop.get("x", DEFAULT_PROFILE_IMAGE_CROP["x"])),
+            "y": float(crop.get("y", DEFAULT_PROFILE_IMAGE_CROP["y"])),
+            "size": float(crop.get("size", DEFAULT_PROFILE_IMAGE_CROP["size"])),
         },
         "updated_at": profile_image.get("updated_at"),
     }

@@ -955,8 +955,8 @@ h1:focus {
 }
 
 .enigma-game-page.content {
-    max-width: 2500px;
-    padding-inline: clamp(8px, 1vw, 18px);
+    max-width: 2700px;
+    padding-inline: clamp(6px, 0.8vw, 14px);
 }
 
 .enigma-game-shell {
@@ -4369,11 +4369,11 @@ h1:focus {
     align-items: center;
     justify-content: center;
     border-radius: 28px;
-    background: linear-gradient(135deg, rgba(17, 33, 55, 0.9), rgba(12, 20, 33, 0.96));
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: transparent;
 }
 
 .profile-avatar-crop-shell {
+    position: relative;
     width: 100%;
     height: 100%;
     aspect-ratio: 1 / 1;
@@ -4381,15 +4381,12 @@ h1:focus {
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    padding: 10px;
-    background: rgba(255, 255, 255, 0.03);
+    padding: 0;
 }
 
 .profile-avatar-crop-shell img,
 .profile-avatar-image {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
+    display: block;
 }
 
 .profile-avatar-fallback {
@@ -5269,11 +5266,11 @@ h1:focus {
     width: min(300px, calc(100% - 28px));
     padding: 12px;
     border-radius: 18px;
-    background: linear-gradient(180deg, rgba(12, 18, 28, 0.90), rgba(8, 12, 18, 0.94));
+    background: linear-gradient(180deg, rgba(12, 18, 28, 0.72), rgba(8, 12, 18, 0.78));
     border: 1px solid rgba(122, 181, 255, 0.16);
     box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
 }
 
 .enigma-stage-run-head {
@@ -5308,7 +5305,7 @@ h1:focus {
     min-height: 68px;
     padding: 10px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.035);
+    background: rgba(255, 255, 255, 0.022);
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -5342,7 +5339,7 @@ h1:focus {
 .enigma-stage-run-empty {
     padding: 10px 12px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.018);
     border: 1px solid rgba(255, 255, 255, 0.06);
     color: var(--epic-text-secondary);
 }
@@ -5568,4 +5565,3 @@ h1:focus {
         max-height: calc(100vh - 36px);
     }
 }
-

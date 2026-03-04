@@ -20,13 +20,13 @@ public class ProfileImageState
 public class ImageCropState
 {
     [JsonPropertyName("x")]
-    public double X { get; set; }
+    public double X { get; set; } = 11;
 
     [JsonPropertyName("y")]
-    public double Y { get; set; }
+    public double Y { get; set; } = 17;
 
     [JsonPropertyName("size")]
-    public double Size { get; set; } = 100;
+    public double Size { get; set; } = 73;
 }
 
 public class TutorialState

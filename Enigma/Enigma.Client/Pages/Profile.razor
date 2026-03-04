@@ -283,7 +283,6 @@ else
                             @if (!string.IsNullOrWhiteSpace(AvatarMapName))
                             {
                                 <strong>@AvatarMapName</strong>
-                                <small>@(AvatarPreview?.ImageUrl is null ? "Image required" : "Using the full map image")</small>
                             }
                         </div>
                         <div class="profile-avatar-controls">
@@ -294,8 +293,7 @@ else
                             else
                             {
                                 <div><label class="form-label">Source Map</label><InputSelect class="form-control" @bind-Value="AvatarMapName">@foreach (var map in AvatarSourceOptions){<option value="@map.MapName">@map.MapName</option>}</InputSelect></div>
-                                <p class="profile-settings-copy">Profile pictures now use the full selected map image directly. No crop step is required.</p>
-                                <button class="btn btn-primary" type="button" disabled="@IsActionBusy || !CanSaveAvatar" @onclick="UpdateAvatarAsync">@(IsActionBusy ? "Saving..." : "Save Profile Picture")</button>
+                                <button class="btn btn-primary" type="button" disabled="@IsActionBusy || AvatarSourceOptions.Count == 0" @onclick="UpdateAvatarAsync">@(IsActionBusy ? "Saving..." : "Save Profile Picture")</button>
                             }
                         </div>
                     </div>

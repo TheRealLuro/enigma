@@ -1,10 +1,11 @@
+@using System.Globalization
 @using Enigma.Client.Models
 
 <div class="profile-avatar-frame @Class">
     @if (!string.IsNullOrWhiteSpace(Image?.ImageUrl))
     {
         <div class="profile-avatar-crop-shell">
-            <img src="@Image!.ImageUrl" alt="@AltText" class="profile-avatar-image" />
+            <img src="@Image!.ImageUrl" alt="@AltText" class="profile-avatar-image" style="@BuildImageStyle()" />
         </div>
     }
     else
@@ -18,4 +19,20 @@
     [Parameter] public string AltText { get; set; } = "Profile picture";
     [Parameter] public string FallbackText { get; set; } = "??";
     [Parameter] public string Class { get; set; } = string.Empty;
+
+    private string BuildImageStyle()
+    {
+        var crop = Image?.Crop ?? new ImageCropState();
+        var size = Math.Clamp(crop.Size, 1d, 100d);
+        var maxOffset = Math.Max(0d, 100d - size);
+        var x = Math.Clamp(crop.X, 0d, maxOffset);
+        var y = Math.Clamp(crop.Y, 0d, maxOffset);
+        var scale = 100d / size;
+        var left = -(x / size) * 100d;
+        var top = -(y / size) * 100d;
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"position:absolute;width:{scale:F4}%;height:{scale:F4}%;max-width:none;left:{left:F4}%;top:{top:F4}%;");
+    }
 }
