@@ -242,6 +242,7 @@ else
             </div>
 
             <aside class="enigma-sidebar">
+                <div class="enigma-sidebar-summary">
                 <div class="card enigma-sidebar-card">
                     <span class="enigma-kicker">Run Status</span>
                     <div class="enigma-stat-grid">
@@ -319,14 +320,17 @@ else
                         </div>
                     </div>
                 }
+                </div>
 
                 <div class="card enigma-sidebar-card enigma-puzzle-card">
                     @if (HasCoopPuzzle)
                     {
                         var coopGuide = GetCurrentCoopPuzzleGuide();
-                        <span class="enigma-kicker">Co-op Puzzle</span>
-                        <h2>@CurrentCoopPuzzle!.Name</h2>
-                        <p class="enigma-puzzle-copy">@CurrentCoopPuzzle.Instruction</p>
+                        <div class="enigma-puzzle-head">
+                            <span class="enigma-kicker">Co-op Puzzle</span>
+                            <h2>@CurrentCoopPuzzle!.Name</h2>
+                            <p class="enigma-puzzle-copy">@CurrentCoopPuzzle.Instruction</p>
+                        </div>
                         <div class="enigma-puzzle-guide">
                             <div class="enigma-puzzle-guide-row">
                                 <span>Goal</span>
@@ -348,6 +352,7 @@ else
                             <p class="enigma-helper">@GetCoopClueText()</p>
                         }
 
+                        <div class="enigma-puzzle-surface">
                         @if (string.Equals(CurrentCoopPuzzle.ViewType, "pressure_systems", StringComparison.OrdinalIgnoreCase))
                         {
                             <div class="enigma-mini-stat-grid">
@@ -425,7 +430,7 @@ else
                                 <div class="enigma-mini-stat-grid">
                                     <div class="enigma-mini-stat">
                                         <span>Perspective</span>
-                                        <strong>@(GetCoopBoardRotation() == 0 ? "Aligned" : $"Rotated {GetCoopBoardRotation() * 90}°")</strong>
+                                        <strong>@(GetCoopBoardRotation() == 0 ? "Aligned" : $"Rotated {GetCoopBoardRotation() * 90} deg")</strong>
                                     </div>
                                     <div class="enigma-mini-stat">
                                         <span>Control</span>
@@ -472,17 +477,34 @@ else
                                     </div>
                                 }
                             </div>
-                            <div class="enigma-option-grid compact">
+                            <div class="enigma-option-grid compact enigma-flow-control-grid">
                                 @foreach (var control in GetCoopFlowControls())
                                 {
                                     var controlIndex = control.Index;
-                                    <button class="btn btn-secondary" @onclick="(() => PulseCoopFlowAsync(controlIndex))">@control.Label</button>
+                                    <button class="btn btn-secondary enigma-control-button" @onclick="(() => PulseCoopFlowAsync(controlIndex))">
+                                        <strong>@control.Label</strong>
+                                        <small>@control.Detail</small>
+                                    </button>
                                 }
                             </div>
                         }
                         else if (string.Equals(CurrentCoopPuzzle.ViewType, "distributed_weight", StringComparison.OrdinalIgnoreCase))
                         {
-                            <div class="enigma-option-grid compact">
+                            <div class="enigma-mini-stat-grid">
+                                <div class="enigma-mini-stat">
+                                    <span>Current Total</span>
+                                    <strong>@GetCoopViewInt("current_total", 0)</strong>
+                                </div>
+                                <div class="enigma-mini-stat">
+                                    <span>Target</span>
+                                    <strong>@GetCoopViewInt("target", 0)</strong>
+                                </div>
+                                <div class="enigma-mini-stat">
+                                    <span>Pad Limit</span>
+                                    <strong>@GetCoopViewInt("limit_per_pad", 3)</strong>
+                                </div>
+                            </div>
+                            <div class="enigma-option-grid compact enigma-weight-grid">
                                 @for (var index = 0; index < GetCoopIntList("allocations").Count; index++)
                                 {
                                     var padIndex = index;
@@ -496,7 +518,7 @@ else
                                     </div>
                                 }
                             </div>
-                            <p class="enigma-helper">Current total: @GetCoopViewInt("current_total", 0) / @GetCoopViewInt("target", 0). Pad limit: @GetCoopViewInt("limit_per_pad", 3)</p>
+                            <p class="enigma-helper">@GetCoopWeightRuleText()</p>
                         }
                         else if (string.Equals(CurrentCoopPuzzle.ViewType, "binary_echo", StringComparison.OrdinalIgnoreCase))
                         {
@@ -596,13 +618,16 @@ else
                             </div>
                             <p class="enigma-helper">Move together into the highlighted zones and hold until the sync locks.</p>
                         }
+                        </div>
                     }
                     else
                     {
                     var puzzleGuide = GetCurrentPuzzleGuide();
-                    <span class="enigma-kicker">Current Puzzle</span>
-                    <h2>@CurrentRoomState.Puzzle.Title</h2>
-                    <p class="enigma-puzzle-copy">@CurrentRoomState.Puzzle.Instruction</p>
+                    <div class="enigma-puzzle-head">
+                        <span class="enigma-kicker">Current Puzzle</span>
+                        <h2>@CurrentRoomState.Puzzle.Title</h2>
+                        <p class="enigma-puzzle-copy">@CurrentRoomState.Puzzle.Instruction</p>
+                    </div>
                     <div class="enigma-puzzle-guide">
                         <div class="enigma-puzzle-guide-row">
                             <span>Goal</span>
@@ -619,6 +644,7 @@ else
                     </div>
                     <div class="enigma-puzzle-status">@CurrentRoomState.Puzzle.StatusText</div>
 
+                    <div class="enigma-puzzle-surface">
                     @if (CurrentRoomState.Puzzle is PressurePlatePuzzle pressure)
                     {
                         <div class="enigma-progress-shell">
@@ -1285,12 +1311,14 @@ else
                     {
                         <p class="enigma-helper reward-copy">Once this puzzle is solved, touch the black hole to finish the run.</p>
                     }
+                    </div>
                     }
                 </div>
             </aside>
         </section>
     </div>
 }
+
 
 
 

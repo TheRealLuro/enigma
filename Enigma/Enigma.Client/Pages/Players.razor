@@ -34,21 +34,6 @@ else
                 <h1>Find Players</h1>
                 <p>Search exact usernames, browse high-performing explorers, and jump straight into their profiles.</p>
             </div>
-
-            <div class="players-banner-metrics">
-                <div>
-                    <span>Signed In</span>
-                    <strong>@Session.Username</strong>
-                </div>
-                <div>
-                    <span>Maze Nuggets</span>
-                    <strong>@Session.MazeNuggets.ToString("N0") MN</strong>
-                </div>
-                <div>
-                    <span>Friends</span>
-                    <strong>@Session.Friends.Count</strong>
-                </div>
-            </div>
         </section>
 
         @if (!string.IsNullOrWhiteSpace(StatusMessage))

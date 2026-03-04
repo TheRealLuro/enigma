@@ -16,19 +16,6 @@
         <div class="play-header-actions">
             <button class="btn btn-secondary" type="button" @onclick="OpenCoopLobby">Co-op Lobby</button>
         </div>
-        @if (Session is not null)
-        {
-            <div class="play-header-metrics">
-                <div>
-                    <span>Maze Nuggets</span>
-                    <strong>@Session.MazeNuggets.ToString("N0") MN</strong>
-                </div>
-                <div>
-                    <span>Inventory</span>
-                    <strong>@Inventory.Count items</strong>
-                </div>
-            </div>
-        }
     </section>
 
     <div class="play-setup-grid">

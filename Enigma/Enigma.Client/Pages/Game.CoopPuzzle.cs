@@ -7,7 +7,7 @@ public partial class Game
 {
     private sealed record CoopStageElement(double X, double Y, double Width, double Height, string Label, string State, bool IsTarget);
     private sealed record CoopRotationTile(int Id, int Row, int Col, int Rotation, int Target, int DisplayRotation, bool Controllable);
-    private sealed record CoopNamedControl(int Index, string Label);
+    private sealed record CoopNamedControl(int Index, string Label, string Detail);
     private sealed record CoopSignalNode(int Index, string Label, double X, double Y, bool Controllable, int? RouteTo);
     private sealed record CoopSignalLine(double StartX, double StartY, double EndX, double EndY, string CssClass);
 
@@ -272,8 +272,50 @@ public partial class Game
     private IReadOnlyList<CoopNamedControl> GetCoopFlowControls()
     {
         return GetCoopViewArray("controls")
-            .Select((control, index) => new CoopNamedControl(index, control.TryGetProperty("label", out var label) ? label.GetString() ?? $"Valve {index + 1}" : $"Valve {index + 1}"))
+            .Select((control, index) => new CoopNamedControl(
+                index,
+                control.TryGetProperty("label", out var label) ? label.GetString() ?? $"Valve {index + 1}" : $"Valve {index + 1}",
+                GetCoopFlowControlDetail(control)))
             .ToArray();
+    }
+
+    private string GetCoopFlowControlDetail(JsonElement control)
+    {
+        var role = string.Equals(CurrentCoopPuzzle?.Role, "guest", StringComparison.OrdinalIgnoreCase) ? "guest" : "owner";
+        var selfKey = role == "owner" ? "owner_delta" : "guest_delta";
+        var partnerKey = role == "owner" ? "guest_delta" : "owner_delta";
+        var selfEffects = FormatCoopDeltaList(control, selfKey);
+        var partnerEffects = FormatCoopDeltaList(control, partnerKey);
+        return $"You: {selfEffects} | Partner: {partnerEffects}";
+    }
+
+    private static string FormatCoopDeltaList(JsonElement control, string propertyName)
+    {
+        if (!control.TryGetProperty(propertyName, out var deltaArray) || deltaArray.ValueKind != JsonValueKind.Array)
+        {
+            return "no change";
+        }
+
+        var segments = deltaArray
+            .EnumerateArray()
+            .Select((value, index) => new { Index = index + 1, Delta = value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed) ? parsed : 0 })
+            .Where(entry => entry.Delta != 0)
+            .Select(entry => $"O{entry.Index} {(entry.Delta > 0 ? "+" : string.Empty)}{entry.Delta}")
+            .ToArray();
+
+        return segments.Length == 0 ? "no change" : string.Join(", ", segments);
+    }
+
+    protected string GetCoopWeightRuleText()
+    {
+        if (GetCoopIntList("allocations").Count < 4)
+        {
+            return "Only the pads on your side can be changed from this panel.";
+        }
+
+        return string.Equals(CurrentCoopPuzzle?.Role, "guest", StringComparison.OrdinalIgnoreCase)
+            ? "Cross-link rule: your pads 1 and 3 each add +1 to the shared total, while the owner's pads 2 and 4 each subtract 1."
+            : "Cross-link rule: the guest's pads 1 and 3 each add +1 to the shared total, while your pads 2 and 4 each subtract 1.";
     }
 
     protected IReadOnlyList<int> GetCoopIntList(string propertyName) =>
@@ -445,7 +487,7 @@ public partial class Game
             var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
             if (response.IsSuccessStatusCode && payload?.Session is not null)
             {
-                ApplyCoopSession(payload.Session, forcePosition: true);
+                ApplyCoopSession(payload.Session);
                 _playerStateDirty = true;
                 return;
             }

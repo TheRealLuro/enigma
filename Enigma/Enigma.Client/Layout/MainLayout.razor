@@ -28,6 +28,14 @@
             </nav>
 
             <div class="app-shell-account">
+                @if (ShouldShowHeaderBalance)
+                {
+                    <div class="app-shell-balance-chip">
+                        <span>Maze Nuggets</span>
+                        <strong>@Session!.MazeNuggets.ToString("N0") MN</strong>
+                    </div>
+                }
+
                 <button class="app-shell-user-chip" @onclick="ToggleAccountMenu">
                     <span class="app-shell-user-kicker">Signed in</span>
                     <strong>@(Session?.Username ?? "Explorer")</strong>
@@ -137,6 +145,7 @@
             : null;
 
     private bool ShouldShowHeader => !IsPublicPath() && !IsGamePath() && AuthCheckComplete && IsAuthenticated;
+    private bool ShouldShowHeaderBalance => ShouldShowHeader && !IsMarketplacePath() && Session is not null;
 
     private bool CanRenderCurrentRoute => IsPublicPath() || (AuthCheckComplete && IsAuthenticated);
 
@@ -303,6 +312,12 @@
     {
         var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
         return string.Equals(cleanPath, "lose", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsMarketplacePath(string? uri = null)
+    {
+        var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
+        return string.Equals(cleanPath, "marketplace", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool IsPublicPath(string? uri = null)

@@ -403,10 +403,28 @@ def _create_rotation_state(seed: str, difficulty: str) -> dict[str, Any]:
     rows = 2
     cols = 2 if difficulty == "easy" else 3
     total = rows * cols
-    targets = [_stable_hash(f"{seed}|rotation|target|{index}") % 4 for index in range(total)]
     current = [(_stable_hash(f"{seed}|rotation|current|{index}") % 4) for index in range(total)]
+    owner_controls = [index for index in range(total) if index % 2 == 0]
+    guest_controls = [index for index in range(total) if index % 2 == 1]
+    mirror_pairs = {index: (total - 1 - index) for index in range(total)}
+    targets = list(current)
+    step_count = 3 if difficulty == "easy" else 5 if difficulty == "medium" else 6
+    for step_index in range(step_count):
+        role = "owner" if _roll(f"{seed}|rotation|role|{step_index}", 0, 1) == 0 else "guest"
+        controls = owner_controls if role == "owner" else guest_controls
+        control_index = controls[_roll(f"{seed}|rotation|tile|{step_index}", 0, len(controls) - 1)]
+        targets[control_index] = (int(targets[control_index]) + 1) % 4
+        if difficulty == "medium":
+            mirror_id = mirror_pairs.get(control_index)
+            if mirror_id is not None and 0 <= int(mirror_id) < len(targets):
+                targets[int(mirror_id)] = (int(targets[int(mirror_id)]) + 1) % 4
     if current == targets:
-        current[0] = (current[0] + 1) % 4
+        fallback_index = owner_controls[0]
+        targets[fallback_index] = (int(targets[fallback_index]) + 1) % 4
+        if difficulty == "medium":
+            mirror_id = mirror_pairs.get(fallback_index)
+            if mirror_id is not None and 0 <= int(mirror_id) < len(targets):
+                targets[int(mirror_id)] = (int(targets[int(mirror_id)]) + 1) % 4
     return {
         "key": "t",
         "view_type": "dual_rotation",
@@ -416,9 +434,9 @@ def _create_rotation_state(seed: str, difficulty: str) -> dict[str, Any]:
         "cols": cols,
         "current": current,
         "targets": targets,
-        "owner_controls": [index for index in range(total) if index % 2 == 0],
-        "guest_controls": [index for index in range(total) if index % 2 == 1],
-        "mirror_pairs": {index: (total - 1 - index) for index in range(total)},
+        "owner_controls": owner_controls,
+        "guest_controls": guest_controls,
+        "mirror_pairs": mirror_pairs,
         "board_rotation_owner": 0,
         "board_rotation_guest": 1 if difficulty == "hard" else 0,
         "completed": False,
@@ -452,8 +470,6 @@ def _create_flow_state(seed: str, difficulty: str) -> dict[str, Any]:
     count = 3 if difficulty != "hard" else 4
     owner_values = [_roll(f"{seed}|flow|owner|value|{index}", 0, 3) for index in range(count)]
     guest_values = [_roll(f"{seed}|flow|guest|value|{index}", 0, 3) for index in range(count)]
-    owner_targets = [_roll(f"{seed}|flow|owner|target|{index}", 3, 7) for index in range(count)]
-    guest_targets = [_roll(f"{seed}|flow|guest|target|{index}", 3, 7) for index in range(count)]
     owner_controls = []
     guest_controls = []
     for index in range(count):
@@ -471,6 +487,16 @@ def _create_flow_state(seed: str, difficulty: str) -> dict[str, Any]:
                 "guest_delta": [1 if sub == index else 0 for sub in range(count)],
             }
         )
+    owner_targets = list(owner_values)
+    guest_targets = list(guest_values)
+    sequence_length = 3 if difficulty == "easy" else 4 if difficulty == "medium" else 5
+    for step_index in range(sequence_length):
+        role = "owner" if _roll(f"{seed}|flow|role|{step_index}", 0, 1) == 0 else "guest"
+        controls = owner_controls if role == "owner" else guest_controls
+        control = controls[_roll(f"{seed}|flow|control|{step_index}", 0, len(controls) - 1)]
+        owner_targets, guest_targets = _apply_flow_control_values(owner_targets, guest_targets, control)
+    if owner_targets == owner_values and guest_targets == guest_values:
+        owner_targets, guest_targets = _apply_flow_control_values(owner_targets, guest_targets, owner_controls[0])
     return {
         "key": "v",
         "view_type": "flow_transfer",
@@ -1027,12 +1053,25 @@ def _apply_flow_action(state: dict[str, Any], role: str, args: dict[str, Any]) -
     if index < 0 or index >= len(controls):
         raise HTTPException(status_code=400, detail="Invalid valve index.")
     control = controls[index]
-    state["owner_values"] = _clamp_values([value + int(delta) for value, delta in zip(state.get("owner_values", []), control.get("owner_delta", []), strict=False)])
-    state["guest_values"] = _clamp_values([value + int(delta) for value, delta in zip(state.get("guest_values", []), control.get("guest_delta", []), strict=False)])
+    owner_values, guest_values = _apply_flow_control_values(state.get("owner_values", []), state.get("guest_values", []), control)
+    state["owner_values"] = owner_values
+    state["guest_values"] = guest_values
     if state.get("owner_values") == state.get("owner_targets") and state.get("guest_values") == state.get("guest_targets"):
         _complete(state, "The transfer network balances across both rooms.")
     else:
         state["status"] = "Flow shifted. Keep balancing the shared network."
+
+
+def _apply_flow_control_values(owner_values: list[int], guest_values: list[int], control: dict[str, Any]) -> tuple[list[int], list[int]]:
+    next_owner = _clamp_values([
+        value + int(delta)
+        for value, delta in zip(owner_values, control.get("owner_delta", []), strict=False)
+    ])
+    next_guest = _clamp_values([
+        value + int(delta)
+        for value, delta in zip(guest_values, control.get("guest_delta", []), strict=False)
+    ])
+    return next_owner, next_guest
 
 
 def _apply_weight_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:

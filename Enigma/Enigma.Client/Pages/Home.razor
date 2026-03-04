@@ -7,24 +7,6 @@
         <h1>@($"Welcome to Enigma, {Username}")</h1>
         <p class="hero-subcopy">Pick a destination. Every maze run is now one-way: once you leave, it is lost.</p>
     </div>
-
-    @if (Session is not null)
-    {
-        <div class="hero-metric-ribbon">
-            <div>
-                <span>Maze Nuggets</span>
-                <strong>@Session.MazeNuggets.ToString("N0") MN</strong>
-            </div>
-            <div>
-                <span>Completed</span>
-                <strong>@Session.MapsCompleted</strong>
-            </div>
-            <div>
-                <span>Owned Maps</span>
-                <strong>@Session.OwnedMapsCount</strong>
-            </div>
-        </div>
-    }
 </div>
 
 <div class="grid grid-auto home-tab-grid">
