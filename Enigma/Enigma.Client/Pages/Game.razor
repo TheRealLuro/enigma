@@ -487,7 +487,7 @@ else
                                 {
                                     var padIndex = index;
                                     <div class="enigma-mini-stat coop-weight-card">
-                                        <span>Pad @(padIndex + 1) x@GetCoopIntList("multipliers")[padIndex]</span>
+                                        <span>Pad @(padIndex + 1) x@(GetCoopIntList("multipliers")[padIndex])</span>
                                         <strong>@GetCoopIntList("allocations")[padIndex]</strong>
                                         <div class="enigma-direction-grid">
                                             <button class="btn btn-secondary" @onclick="(() => AdjustCoopWeightAsync(padIndex, -1))">-</button>
@@ -496,7 +496,7 @@ else
                                     </div>
                                 }
                             </div>
-                            <p class="enigma-helper">Current total: @GetCoopViewInt("current_total", 0) / @GetCoopViewInt("target", 0)</p>
+                            <p class="enigma-helper">Current total: @GetCoopViewInt("current_total", 0) / @GetCoopViewInt("target", 0). Pad limit: @GetCoopViewInt("limit_per_pad", 3)</p>
                         }
                         else if (string.Equals(CurrentCoopPuzzle.ViewType, "binary_echo", StringComparison.OrdinalIgnoreCase))
                         {
@@ -1291,5 +1291,6 @@ else
         </section>
     </div>
 }
+
 
 

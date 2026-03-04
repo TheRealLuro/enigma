@@ -219,6 +219,14 @@ public partial class Game : ComponentBase, IAsyncDisposable
             if (!IsTutorialRun && !IsCoopRun)
             {
                 await JS.InvokeVoidAsync("enigmaGame.registerLossUnload", Api.BuildUrl("api/auth/game/abandon"));
+            }
+            else if (!IsTutorialRun && IsCoopRun)
+            {
+                await JS.InvokeVoidAsync("enigmaGame.registerCoopLeaveUnload", Api.BuildUrl("api/auth/multiplayer/session/leave"), CoopSessionId, "page_unload");
+            }
+
+            if (!IsTutorialRun)
+            {
                 await UpdatePendingLossDraftAsync(force: true);
             }
             await SyncLivePlayerStateAsync(force: true);

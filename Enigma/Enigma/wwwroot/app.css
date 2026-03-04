@@ -4469,6 +4469,10 @@ h1:focus {
     align-items: start;
 }
 
+.coop-setup-grid {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 0.9fr);
+}
+
 .coop-form-grid,
 .coop-inline-form {
     display: grid;
@@ -4532,6 +4536,11 @@ h1:focus {
     justify-items: end;
     color: rgba(255, 255, 255, 0.72);
     font-size: 0.86rem;
+}
+
+.coop-setup-grid .coop-join-panel,
+.coop-setup-grid .coop-create-panel {
+    height: 100%;
 }
 
 .coop-move-vote {
@@ -4613,6 +4622,12 @@ h1:focus {
     display: flex;
     align-items: center;
     justify-content: flex-end;
+}
+
+@media (max-width: 1240px) {
+    .coop-setup-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 .play-header-metrics {
@@ -4786,3 +4801,4 @@ h1:focus {
         min-width: 0;
     }
 }
+

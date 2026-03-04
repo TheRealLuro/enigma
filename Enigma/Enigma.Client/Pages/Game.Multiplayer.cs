@@ -7,8 +7,8 @@ namespace Enigma.Client.Pages;
 
 public partial class Game
 {
-    private static readonly TimeSpan CoopStateSyncInterval = TimeSpan.FromMilliseconds(500);
-    private static readonly TimeSpan CoopPollInterval = TimeSpan.FromMilliseconds(1000);
+    private static readonly TimeSpan CoopStateSyncInterval = TimeSpan.FromMilliseconds(120);
+    private static readonly TimeSpan CoopPollInterval = TimeSpan.FromMilliseconds(750);
 
     private DateTime _lastCoopStateSyncUtc = DateTime.MinValue;
     private DateTime _lastCoopPollUtc = DateTime.MinValue;
@@ -497,7 +497,7 @@ public partial class Game
             message.Session.Completion = message.Completion;
         }
 
-        ApplyCoopSession(message.Session, forcePosition: true);
+        ApplyCoopSession(message.Session);
 
         if (string.Equals(message.Session.Status, "completed", StringComparison.OrdinalIgnoreCase) && message.Session.Completion is not null)
         {
@@ -569,6 +569,7 @@ public partial class Game
         await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
         await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
         await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
+        await JS.InvokeVoidAsync("enigmaGame.clearCoopLeaveUnload");
         await JS.InvokeVoidAsync("enigmaGame.disposeCoopSocket");
         await JS.InvokeVoidAsync("enigmaGame.disposeInput");
         await JS.InvokeVoidAsync("enigmaGame.sessionSetJson", CompletionSummaryStorageKey, summary);
@@ -593,6 +594,7 @@ public partial class Game
 
         await JS.InvokeVoidAsync("enigmaGame.setPendingLossSummary", summary);
         await JS.InvokeVoidAsync("enigmaGame.clearPendingLossDraft");
+        await JS.InvokeVoidAsync("enigmaGame.clearCoopLeaveUnload");
 
         if (submitLeave && !string.IsNullOrWhiteSpace(CoopSessionId))
         {
@@ -653,3 +655,4 @@ public partial class Game
             : PlayerDirection.Down;
     }
 }
+

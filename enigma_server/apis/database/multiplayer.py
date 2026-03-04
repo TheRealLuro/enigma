@@ -1123,6 +1123,16 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
             if message_type in {"leave", "finish"}:
                 break
     except WebSocketDisconnect:
-        pass
+        try:
+            with session_lock(session_id):
+                session = _load_session_or_404(session_id)
+                if session.get("status") == "active":
+                    _leave_multiplayer_session_locked(session_id, session, normalized_username, "socket_disconnect")
+                else:
+                    session = None
+        except HTTPException:
+            session = None
+        if session is not None:
+            _broadcast_ws_session_from_thread(session)
     finally:
         _unregister_session_socket(session_id, websocket)

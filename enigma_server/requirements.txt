@@ -4,7 +4,6 @@ pyngrok>=7.2
 python-dotenv>=1.0
 pymongo>=4.6
 bcrypt>=4.1
-slowapi>=0.1.9
 redis>=5.2
 numpy>=1.26,<3
 pillow>=10.2

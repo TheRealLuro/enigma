@@ -15,6 +15,8 @@
     let beforeUnloadHandler = null;
     let livePlayerState = null;
     let currentAbandonUrl = null;
+    let currentCoopLeaveUrl = null;
+    let currentCoopLeavePayload = null;
     let tutorialDotNetRef = null;
     let tutorialRequestHandler = null;
     let audioContext = null;
@@ -310,22 +312,22 @@
         return audioContext;
     }
 
-    function sendAbandonBeacon(summary) {
-        if (!summary || !currentAbandonUrl) {
+    function sendJsonBeacon(url, payloadObject) {
+        if (!url || !payloadObject) {
             return;
         }
 
         try {
-            const body = JSON.stringify(summary);
+            const body = JSON.stringify(payloadObject);
 
             if (navigator.sendBeacon) {
                 const payload = new Blob([body], { type: "application/json" });
-                navigator.sendBeacon(currentAbandonUrl, payload);
+                navigator.sendBeacon(url, payload);
                 return;
             }
 
             if (window.fetch) {
-                window.fetch(currentAbandonUrl, {
+                window.fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: body,
@@ -335,6 +337,14 @@
             }
         } catch {
         }
+    }
+
+    function sendAbandonBeacon(summary) {
+        if (!summary || !currentAbandonUrl) {
+            return;
+        }
+
+        sendJsonBeacon(currentAbandonUrl, summary);
     }
 
     window.enigmaGame = {
@@ -518,6 +528,7 @@
             beforeUnloadHandler = function (event) {
                 const summary = promoteDraftLossSummary();
                 sendAbandonBeacon(summary);
+                sendJsonBeacon(currentCoopLeaveUrl, currentCoopLeavePayload);
                 if (summary) {
                     event.preventDefault();
                     event.returnValue = "";
@@ -527,14 +538,32 @@
             pageHideHandler = function () {
                 const summary = promoteDraftLossSummary();
                 sendAbandonBeacon(summary);
+                sendJsonBeacon(currentCoopLeaveUrl, currentCoopLeavePayload);
             };
             addWindowListener("pagehide", pageHideHandler);
         },
 
         clearLossUnload: function () {
             currentAbandonUrl = null;
+            currentCoopLeaveUrl = null;
+            currentCoopLeavePayload = null;
             removeBeforeUnload();
             removeStorageItem("session", pendingLossDraftKey);
+        },
+
+        registerCoopLeaveUnload: function (leaveUrl, sessionId, reason) {
+            currentCoopLeaveUrl = leaveUrl || null;
+            currentCoopLeavePayload = currentCoopLeaveUrl && sessionId
+                ? {
+                    sessionId: sessionId,
+                    reason: reason || "page_unload"
+                }
+                : null;
+        },
+
+        clearCoopLeaveUnload: function () {
+            currentCoopLeaveUrl = null;
+            currentCoopLeavePayload = null;
         },
 
         setRunLoadout: function (loadout) {
