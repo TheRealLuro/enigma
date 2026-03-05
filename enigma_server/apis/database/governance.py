@@ -291,6 +291,111 @@ def _serialize_session(
     }
 
 
+def _session_result_leader_label(session_doc: dict[str, Any] | None) -> str | None:
+    if not isinstance(session_doc, dict):
+        return None
+
+    tallies = session_doc.get("tallies")
+    if not isinstance(tallies, dict) or not tallies:
+        return None
+
+    best_label: str | None = None
+    best_power = float("-inf")
+    best_spent = int(-1)
+    for entry in tallies.values():
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("label") or "").strip()
+        if not label:
+            continue
+        vote_power = float(entry.get("vote_power", 0.0) or 0.0)
+        mn_spent = int(entry.get("mn_spent", 0) or 0)
+        if vote_power > best_power or (vote_power == best_power and mn_spent > best_spent):
+            best_label = label
+            best_power = vote_power
+            best_spent = mn_spent
+
+    return best_label
+
+
+def _serialize_recent_votes(username: str, limit: int = 20) -> list[dict[str, Any]]:
+    normalized_username = str(username or "").strip()
+    if not normalized_username:
+        return []
+
+    vote_docs = list(
+        governance_votes.find(
+            {"username": normalized_username},
+            {
+                "session_id": 1,
+                "vote_type": 1,
+                "selection_labels": 1,
+                "vote_quantity": 1,
+                "mn_spent": 1,
+                "vote_power": 1,
+                "stake_weight_multiplier": 1,
+                "created_at": 1,
+            },
+        )
+        .sort("created_at", -1)
+        .limit(max(1, min(100, int(limit or 20))))
+    )
+    if not vote_docs:
+        return []
+
+    session_ids = sorted(
+        {
+            str(doc.get("session_id") or "").strip()
+            for doc in vote_docs
+            if str(doc.get("session_id") or "").strip()
+        }
+    )
+    session_lookup: dict[str, dict[str, Any]] = {}
+    if session_ids:
+        session_docs = governance_sessions.find(
+            {"session_id": {"$in": session_ids}},
+            {
+                "session_id": 1,
+                "title": 1,
+                "status": 1,
+                "tallies": 1,
+            },
+        )
+        session_lookup = {
+            str(doc.get("session_id") or "").strip(): doc
+            for doc in session_docs
+            if str(doc.get("session_id") or "").strip()
+        }
+
+    serialized: list[dict[str, Any]] = []
+    for vote_doc in vote_docs:
+        session_id = str(vote_doc.get("session_id") or "").strip()
+        related_session = session_lookup.get(session_id, {})
+        created_at = _parse_utc_datetime(vote_doc.get("created_at"))
+        selections = [
+            str(label).strip()
+            for label in list(vote_doc.get("selection_labels", []) or [])
+            if str(label).strip()
+        ]
+        serialized.append(
+            {
+                "session_id": session_id,
+                "session_title": str(related_session.get("title") or "Governance Session"),
+                "session_status": str(related_session.get("status") or "unknown"),
+                "session_result_leader": _session_result_leader_label(related_session),
+                "vote_type": str(vote_doc.get("vote_type") or ""),
+                "selection_labels": selections,
+                "vote_quantity": int(vote_doc.get("vote_quantity", 0) or 0),
+                "mn_spent": int(vote_doc.get("mn_spent", 0) or 0),
+                "vote_power": float(vote_doc.get("vote_power", 0.0) or 0.0),
+                "stake_weight_multiplier": float(vote_doc.get("stake_weight_multiplier", 1.0) or 1.0),
+                "created_at": created_at.isoformat() if created_at else None,
+            }
+        )
+
+    return serialized
+
+
 def _normalize_unique_ids(raw_ids: list[str]) -> list[str]:
     dedupe: set[str] = set()
     normalized: list[str] = []
@@ -312,6 +417,7 @@ def get_governance_session(request: Request, username: str):
         {"status": "closed"},
         sort=[("closed_at", -1), ("started_at", -1)],
     )
+    recent_votes = _serialize_recent_votes(str(user.get("username") or ""))
 
     return {
         "status": "success",
@@ -319,6 +425,7 @@ def get_governance_session(request: Request, username: str):
         "is_bank_user": _is_bank_user(username),
         "active_session": _serialize_session(active_session, user=user),
         "latest_closed_session": _serialize_session(latest_closed, user=user),
+        "recent_votes": recent_votes,
         "user": serialize_session_user(user, maps_collection),
     }
 
@@ -584,6 +691,10 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
 
     refreshed_user = _sync_user(username)
     refreshed_active = _get_active_session()
+    latest_closed = governance_sessions.find_one(
+        {"status": "closed"},
+        sort=[("closed_at", -1), ("started_at", -1)],
+    )
     return {
         "status": "success",
         "mn_spent": mn_spent,
@@ -594,5 +705,7 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
         "selection_count": selection_count,
         "voting_open": refreshed_active is not None,
         "active_session": _serialize_session(refreshed_active, user=refreshed_user),
+        "latest_closed_session": _serialize_session(latest_closed, user=refreshed_user),
+        "recent_votes": _serialize_recent_votes(username),
         "user": serialize_session_user(refreshed_user, maps_collection),
     }

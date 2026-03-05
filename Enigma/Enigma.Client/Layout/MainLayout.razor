@@ -2,9 +2,11 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject Enigma.Client.Services.UiNotificationService Notifications
 @implements IAsyncDisposable
 @using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
+@using Enigma.Client.Services
 @using Microsoft.JSInterop
 
 <div class="page">
@@ -53,13 +55,17 @@
         </header>
     }
 
-    @if (!string.IsNullOrWhiteSpace(FriendRequestToastMessage) && IsAuthenticated && !IsPublicPath())
+    @if (IsAuthenticated && !IsPublicPath() && _notifications.Count > 0)
     {
-        <div class="global-friend-request-toast" role="status" aria-live="polite">@FriendRequestToastMessage</div>
-    }
-    @if (!string.IsNullOrWhiteSpace(InviteToastMessage) && IsAuthenticated && !IsPublicPath())
-    {
-        <div class="global-invite-toast" role="status" aria-live="polite">@InviteToastMessage</div>
+        <div class="global-notification-stack" role="status" aria-live="polite">
+            @foreach (var notification in _notifications)
+            {
+                <div class="global-notification @GetNotificationCssClass(notification.Level)">
+                    <span class="global-notification-dot" aria-hidden="true"></span>
+                    <span>@notification.Message</span>
+                </div>
+            }
+        </div>
     }
 
     <main>
@@ -126,7 +132,7 @@
         "enigma-multiplayer",
     };
     private const string TutorialDemoSeed = "easy-0,0BrS-1,0JqR-2,0HrF";
-    private static readonly TimeSpan GlobalSessionRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan GlobalSessionRefreshInterval = TimeSpan.FromSeconds(3);
 
     private LoginUserSummary? Session { get; set; }
     private bool AuthCheckComplete { get; set; }
@@ -142,14 +148,16 @@
     private bool _handlingUserSessionUpdate;
     private CancellationTokenSource? _sessionRefreshCancellation;
     private Task? _sessionRefreshTask;
+    private readonly List<UiNotificationMessage> _notifications = [];
+    private bool _sessionDeltaInitialized;
+    private bool _governanceTrackingInitialized;
+    private bool _knownGovernanceVotingOpen;
+    private string _knownGovernanceSessionId = string.Empty;
+    private int _governanceRefreshTick;
     private bool _friendRequestsInitialized;
     private HashSet<string> _knownFriendRequests = new(StringComparer.OrdinalIgnoreCase);
-    private string? FriendRequestToastMessage { get; set; }
-    private CancellationTokenSource? _friendRequestToastCancellation;
     private bool _invitesInitialized;
     private HashSet<string> _knownInviteSessionIds = new(StringComparer.OrdinalIgnoreCase);
-    private string? InviteToastMessage { get; set; }
-    private CancellationTokenSource? _inviteToastCancellation;
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
@@ -248,6 +256,7 @@
     protected override void OnInitialized()
     {
         NavigationManager.LocationChanged += HandleLocationChanged;
+        Notifications.NotificationPublished += HandleNotificationPublished;
         ResetAuthStateForCurrentPath();
     }
 
@@ -279,6 +288,7 @@
 
         try
         {
+            var previousSession = Session;
             var session = await Api.GetSessionAsync();
             if (!string.Equals(Session?.Username, session?.Username, StringComparison.OrdinalIgnoreCase))
             {
@@ -289,10 +299,12 @@
             Session = session;
             UpdateFriendRequestTracking(session);
             UpdateInviteTracking(session);
+            NotifySessionDeltas(previousSession, session);
 
             if (!IsAuthenticated)
             {
                 StopGlobalSessionRefreshLoop();
+                ResetRealtimeTracking();
                 await ClearBrowserSessionAsync();
                 NavigationManager.NavigateTo("/", replace: true);
                 return;
@@ -318,6 +330,7 @@
             IsAuthenticated = false;
             Session = null;
             StopGlobalSessionRefreshLoop();
+            ResetRealtimeTracking();
             await ClearBrowserSessionAsync();
             NavigationManager.NavigateTo("/", replace: true);
         }
@@ -355,6 +368,7 @@
     {
         IsAccountMenuOpen = false;
         StopGlobalSessionRefreshLoop();
+        ResetRealtimeTracking();
         try
         {
             await Api.LogoutAsync();
@@ -515,16 +529,19 @@
         _handlingUserSessionUpdate = true;
         try
         {
+            var previousSession = Session;
             var session = await Api.GetSessionAsync();
             AuthCheckComplete = true;
             IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
             Session = session;
             UpdateFriendRequestTracking(session);
             UpdateInviteTracking(session);
+            NotifySessionDeltas(previousSession, session);
 
             if (!IsAuthenticated)
             {
                 StopGlobalSessionRefreshLoop();
+                ResetRealtimeTracking();
                 await ClearBrowserSessionAsync();
                 NavigationManager.NavigateTo("/", replace: true);
                 return;
@@ -796,15 +813,18 @@
 
                 await InvokeAsync(async () =>
                 {
+                    var previousSession = Session;
                     AuthCheckComplete = true;
                     IsAuthenticated = latestSession is not null && !string.IsNullOrWhiteSpace(latestSession.Username);
                     Session = latestSession;
                     UpdateFriendRequestTracking(latestSession);
                     UpdateInviteTracking(latestSession);
+                    NotifySessionDeltas(previousSession, latestSession);
 
                     if (!IsAuthenticated)
                     {
                         StopGlobalSessionRefreshLoop();
+                        ResetRealtimeTracking();
                         await ClearBrowserSessionAsync();
                         NavigationManager.NavigateTo("/", replace: true);
                         return;
@@ -812,6 +832,13 @@
 
                     await StateHasChangedAsync();
                 });
+
+                _governanceRefreshTick++;
+                if (_governanceRefreshTick >= 5)
+                {
+                    _governanceRefreshTick = 0;
+                    await CheckGovernanceStateAsync(cancellationToken);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -911,118 +938,178 @@
 
     private void ShowFriendRequestToast(string message)
     {
-        CancelFriendRequestToast();
-        FriendRequestToastMessage = message;
-        _friendRequestToastCancellation = new CancellationTokenSource();
-        _ = AutoHideFriendRequestToastAsync(_friendRequestToastCancellation.Token);
-        _ = InvokeAsync(StateHasChanged);
+        Notifications.Info(message, 5);
     }
 
     private void HideFriendRequestToast()
     {
-        CancelFriendRequestToast();
-        FriendRequestToastMessage = null;
-    }
-
-    private void CancelFriendRequestToast()
-    {
-        if (_friendRequestToastCancellation is null)
-        {
-            return;
-        }
-
-        try
-        {
-            _friendRequestToastCancellation.Cancel();
-        }
-        catch
-        {
-        }
-
-        _friendRequestToastCancellation.Dispose();
-        _friendRequestToastCancellation = null;
-    }
-
-    private async Task AutoHideFriendRequestToastAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
-
-            await InvokeAsync(() =>
-            {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    FriendRequestToastMessage = null;
-                    StateHasChanged();
-                }
-            });
-        }
-        catch (OperationCanceledException)
-        {
-        }
+        // No-op: global notifications auto-expire.
     }
 
     private void ShowInviteToast(string message)
     {
-        CancelInviteToast();
-        InviteToastMessage = message;
-        _inviteToastCancellation = new CancellationTokenSource();
-        _ = AutoHideInviteToastAsync(_inviteToastCancellation.Token);
-        _ = InvokeAsync(StateHasChanged);
+        Notifications.Info(message, 5);
     }
 
     private void HideInviteToast()
     {
-        CancelInviteToast();
-        InviteToastMessage = null;
+        // No-op: global notifications auto-expire.
     }
 
-    private void CancelInviteToast()
+    private void HandleNotificationPublished(UiNotificationMessage notification)
     {
-        if (_inviteToastCancellation is null)
+        _ = InvokeAsync(async () =>
+        {
+            _notifications.Insert(0, notification);
+            if (_notifications.Count > 6)
+            {
+                var overflow = _notifications.Skip(6).ToList();
+                _notifications.RemoveRange(6, _notifications.Count - 6);
+                foreach (var extra in overflow)
+                {
+                    Notifications.Remove(extra.Id);
+                }
+            }
+
+            StateHasChanged();
+
+            try
+            {
+                await Task.Delay(notification.Duration);
+            }
+            catch
+            {
+            }
+
+            Notifications.Remove(notification.Id);
+            var removed = _notifications.RemoveAll(entry => string.Equals(entry.Id, notification.Id, StringComparison.Ordinal));
+            if (removed > 0)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private string GetNotificationCssClass(UiNotificationLevel level)
+    {
+        return level switch
+        {
+            UiNotificationLevel.Success => "success",
+            UiNotificationLevel.Warning => "warning",
+            UiNotificationLevel.Error => "error",
+            _ => "info",
+        };
+    }
+
+    private void NotifySessionDeltas(LoginUserSummary? previousSession, LoginUserSummary? latestSession)
+    {
+        if (latestSession is null || string.IsNullOrWhiteSpace(latestSession.Username))
+        {
+            _sessionDeltaInitialized = false;
+            return;
+        }
+
+        if (!_sessionDeltaInitialized
+            || previousSession is null
+            || !string.Equals(previousSession.Username, latestSession.Username, StringComparison.OrdinalIgnoreCase))
+        {
+            _sessionDeltaInitialized = true;
+            return;
+        }
+
+        var mazeNuggetDelta = latestSession.MazeNuggets - previousSession.MazeNuggets;
+        if (mazeNuggetDelta > 0)
+        {
+            Notifications.Success($"Balance updated +{mazeNuggetDelta:N0} MN.");
+        }
+        else if (mazeNuggetDelta < 0)
+        {
+            Notifications.Info($"Balance updated {mazeNuggetDelta:N0} MN.");
+        }
+
+        var friendDelta = latestSession.Friends.Count - previousSession.Friends.Count;
+        if (friendDelta > 0)
+        {
+            Notifications.Success(friendDelta == 1 ? "You have a new friend." : $"{friendDelta} new friends added.");
+        }
+
+        var stakedDelta = latestSession.StakedMapsCount - previousSession.StakedMapsCount;
+        if (stakedDelta > 0)
+        {
+            Notifications.Info(stakedDelta == 1 ? "1 map was added to staking." : $"{stakedDelta} maps were added to staking.");
+        }
+        else if (stakedDelta < 0)
+        {
+            var unstakedCount = Math.Abs(stakedDelta);
+            Notifications.Info(unstakedCount == 1 ? "1 map was removed from staking." : $"{unstakedCount} maps were removed from staking.");
+        }
+    }
+
+    private async Task CheckGovernanceStateAsync(CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested || IsPublicPath() || !IsAuthenticated)
         {
             return;
         }
 
         try
         {
-            _inviteToastCancellation.Cancel();
-        }
-        catch
-        {
-        }
-
-        _inviteToastCancellation.Dispose();
-        _inviteToastCancellation = null;
-    }
-
-    private async Task AutoHideInviteToastAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
-            if (cancellationToken.IsCancellationRequested)
+            var payload = await Api.GetFromJsonAsync<GovernanceSessionResponse>("api/auth/voting/session", cancellationToken);
+            if (payload is null)
             {
                 return;
             }
 
-            await InvokeAsync(() =>
+            var activeSessionId = (payload.ActiveSession?.SessionId ?? string.Empty).Trim();
+            var hasActiveSession = !string.IsNullOrWhiteSpace(activeSessionId);
+            if (!_governanceTrackingInitialized)
             {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    InviteToastMessage = null;
-                    StateHasChanged();
-                }
-            });
+                _governanceTrackingInitialized = true;
+                _knownGovernanceVotingOpen = hasActiveSession;
+                _knownGovernanceSessionId = activeSessionId;
+                return;
+            }
+
+            if (_knownGovernanceVotingOpen && !hasActiveSession)
+            {
+                Notifications.Info("Council voting has ended.");
+            }
+            else if (!_knownGovernanceVotingOpen && hasActiveSession)
+            {
+                var sessionTitle = string.IsNullOrWhiteSpace(payload.ActiveSession?.Title)
+                    ? "New council session"
+                    : payload.ActiveSession!.Title;
+                Notifications.Info($"Council voting is open: {sessionTitle}");
+            }
+            else if (hasActiveSession && !string.Equals(_knownGovernanceSessionId, activeSessionId, StringComparison.OrdinalIgnoreCase))
+            {
+                var sessionTitle = string.IsNullOrWhiteSpace(payload.ActiveSession?.Title)
+                    ? "A new council session"
+                    : payload.ActiveSession!.Title;
+                Notifications.Info($"Council session changed: {sessionTitle}");
+            }
+
+            _knownGovernanceVotingOpen = hasActiveSession;
+            _knownGovernanceSessionId = activeSessionId;
         }
-        catch (OperationCanceledException)
+        catch
         {
+            // Ignore transient polling failures.
         }
+    }
+
+    private void ResetRealtimeTracking()
+    {
+        _sessionDeltaInitialized = false;
+        _governanceTrackingInitialized = false;
+        _knownGovernanceVotingOpen = false;
+        _knownGovernanceSessionId = string.Empty;
+        _governanceRefreshTick = 0;
+        _friendRequestsInitialized = false;
+        _knownFriendRequests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _invitesInitialized = false;
+        _knownInviteSessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _notifications.Clear();
     }
 
     private Task StateHasChangedAsync()
@@ -1034,6 +1121,7 @@
     public async ValueTask DisposeAsync()
     {
         NavigationManager.LocationChanged -= HandleLocationChanged;
+        Notifications.NotificationPublished -= HandleNotificationPublished;
         StopGlobalSessionRefreshLoop();
         HideFriendRequestToast();
         HideInviteToast();

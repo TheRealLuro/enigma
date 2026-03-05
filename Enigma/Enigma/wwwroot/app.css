@@ -932,46 +932,80 @@ tbody tr:last-child td {
     color: var(--epic-primary);
 }
 
-.global-friend-request-toast {
+.global-notification-stack {
     position: fixed;
-    top: 84px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 3200;
-    min-height: 38px;
-    padding: 8px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(128, 186, 255, 0.3);
-    background: rgba(45, 96, 179, 0.16);
-    color: #deefff;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    top: 82px;
+    right: 20px;
+    z-index: 3600;
+    width: min(360px, calc(100vw - 24px));
+    display: grid;
+    gap: 10px;
     pointer-events: none;
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
 }
 
-.global-invite-toast {
-    position: fixed;
-    top: 128px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 3200;
-    min-height: 38px;
-    padding: 8px 14px;
-    border-radius: 999px;
-    border: 1px solid rgba(147, 197, 255, 0.34);
-    background: rgba(58, 113, 202, 0.2);
+.global-notification {
+    min-height: 42px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(147, 197, 255, 0.32);
+    background:
+        linear-gradient(180deg, rgba(20, 35, 61, 0.94), rgba(12, 20, 35, 0.95));
     color: #e6f3ff;
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     font-weight: 700;
     letter-spacing: 0.01em;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
-    pointer-events: none;
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    animation: slideIn 0.22s ease-out;
+}
+
+.global-notification-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    margin-top: 5px;
+    background: #7cc7ff;
+    box-shadow: 0 0 0 3px rgba(124, 199, 255, 0.2);
+}
+
+.global-notification.info {
+    border-color: rgba(117, 173, 255, 0.4);
+}
+
+.global-notification.info .global-notification-dot {
+    background: #7cc7ff;
+}
+
+.global-notification.success {
+    border-color: rgba(98, 225, 170, 0.42);
+}
+
+.global-notification.success .global-notification-dot {
+    background: #7ef1ba;
+    box-shadow: 0 0 0 3px rgba(126, 241, 186, 0.2);
+}
+
+.global-notification.warning {
+    border-color: rgba(249, 201, 122, 0.45);
+}
+
+.global-notification.warning .global-notification-dot {
+    background: #ffd38a;
+    box-shadow: 0 0 0 3px rgba(255, 211, 138, 0.2);
+}
+
+.global-notification.error {
+    border-color: rgba(255, 148, 148, 0.45);
+}
+
+.global-notification.error .global-notification-dot {
+    background: #ff9a9a;
+    box-shadow: 0 0 0 3px rgba(255, 154, 154, 0.2);
 }
 
 .valid.modified:not([type=checkbox]) {

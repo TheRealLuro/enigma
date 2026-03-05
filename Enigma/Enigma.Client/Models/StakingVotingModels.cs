@@ -115,8 +115,47 @@ public sealed class GovernanceSessionResponse
     [JsonPropertyName("closed_session")]
     public GovernanceSessionData? ClosedSession { get; set; }
 
+    [JsonPropertyName("recent_votes")]
+    public List<GovernanceRecentVote> RecentVotes { get; set; } = [];
+
     [JsonPropertyName("user")]
     public LoginUserSummary? User { get; set; }
+}
+
+public sealed class GovernanceRecentVote
+{
+    [JsonPropertyName("session_id")]
+    public string SessionId { get; set; } = string.Empty;
+
+    [JsonPropertyName("session_title")]
+    public string SessionTitle { get; set; } = string.Empty;
+
+    [JsonPropertyName("session_status")]
+    public string SessionStatus { get; set; } = string.Empty;
+
+    [JsonPropertyName("session_result_leader")]
+    public string? SessionResultLeader { get; set; }
+
+    [JsonPropertyName("vote_type")]
+    public string VoteType { get; set; } = string.Empty;
+
+    [JsonPropertyName("selection_labels")]
+    public List<string> SelectionLabels { get; set; } = [];
+
+    [JsonPropertyName("vote_quantity")]
+    public int VoteQuantity { get; set; }
+
+    [JsonPropertyName("mn_spent")]
+    public int MnSpent { get; set; }
+
+    [JsonPropertyName("vote_power")]
+    public double VotePower { get; set; }
+
+    [JsonPropertyName("stake_weight_multiplier")]
+    public double StakeWeightMultiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("created_at")]
+    public string? CreatedAt { get; set; }
 }
 
 public sealed class GovernanceVoteResponse
@@ -147,6 +186,12 @@ public sealed class GovernanceVoteResponse
 
     [JsonPropertyName("active_session")]
     public GovernanceSessionData? ActiveSession { get; set; }
+
+    [JsonPropertyName("latest_closed_session")]
+    public GovernanceSessionData? LatestClosedSession { get; set; }
+
+    [JsonPropertyName("recent_votes")]
+    public List<GovernanceRecentVote> RecentVotes { get; set; } = [];
 
     [JsonPropertyName("user")]
     public LoginUserSummary? User { get; set; }

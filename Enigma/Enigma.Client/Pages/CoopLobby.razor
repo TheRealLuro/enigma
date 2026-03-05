@@ -4,6 +4,7 @@
 @using Enigma.Client.Models.Gameplay
 @using Microsoft.JSInterop
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject Enigma.Client.Services.UiNotificationService Notifications
 @inject IJSRuntime JS
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable
@@ -880,11 +881,19 @@ else
         try
         {
             await operation();
+            if (!string.IsNullOrWhiteSpace(StatusMessage))
+            {
+                Notifications.Success(StatusMessage);
+            }
         }
         catch (Exception ex)
         {
             HasError = true;
             StatusMessage = ex.Message;
+            if (!string.IsNullOrWhiteSpace(StatusMessage))
+            {
+                Notifications.Error(StatusMessage);
+            }
         }
         finally
         {

@@ -1,6 +1,7 @@
 @page "/voting"
 @using Enigma.Client.Models
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject Enigma.Client.Services.UiNotificationService Notifications
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -291,6 +292,89 @@ else
                 </div>
             </section>
         }
+
+        @if (LatestClosedSession is not null)
+        {
+            <section class="panel profile-release-panel voting-results-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Latest Result</span>
+                        <h2>@LatestClosedSession.Title</h2>
+                    </div>
+                    <span class="section-count">@LatestClosedSession.SessionId</span>
+                </div>
+
+                <div class="voting-session-meta">
+                    <span>Closed: @FormatTimestamp(LatestClosedSession.ClosedAt)</span>
+                    <span>Total MN: @LatestClosedSession.TotalMnSpent.ToString("N0")</span>
+                    <span>Total power: @LatestClosedSession.TotalVotePower.ToString("N2")</span>
+                    <span>Total votes: @LatestClosedSession.TotalVotesCast.ToString("N0")</span>
+                    <span>Voters: @LatestClosedSession.UniqueVoterCount</span>
+                </div>
+
+                @if (LatestClosedSession.Options.Count == 0)
+                {
+                    <div class="empty-state-inline">No result tallies were recorded for this session.</div>
+                }
+                else
+                {
+                    <div class="voting-options-grid">
+                        @foreach (var option in LatestClosedSession.Options)
+                        {
+                            <article class="voting-option-card compact">
+                                <div class="voting-option-top">
+                                    <strong>@option.Label</strong>
+                                    <span>@option.VotePower.ToString("N2") power</span>
+                                </div>
+                                <div class="voting-option-meta">
+                                    <span>@option.MnSpent.ToString("N0") MN</span>
+                                    <span>@option.VoteQuantity.ToString("N0") votes</span>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        }
+
+        <section class="panel profile-release-panel voting-results-panel">
+            <div class="panel-heading">
+                <div>
+                    <span class="profile-eyebrow">History</span>
+                    <h2>Your Recent Votes</h2>
+                </div>
+                <span class="section-count">@RecentVotes.Count</span>
+            </div>
+
+            @if (RecentVotes.Count == 0)
+            {
+                <div class="empty-state-inline">No recorded votes yet.</div>
+            }
+            else
+            {
+                <div class="voting-options-grid">
+                    @foreach (var vote in RecentVotes)
+                    {
+                        <article class="voting-option-card compact">
+                            <div class="voting-option-top">
+                                <strong>@vote.SessionTitle</strong>
+                                <span>@GetVoteTypeLabel(vote.VoteType)</span>
+                            </div>
+                            <div class="voting-option-meta">
+                                <span>@vote.MnSpent.ToString("N0") MN spent</span>
+                                <span>@vote.VotePower.ToString("N2") power</span>
+                                <span>@vote.VoteQuantity.ToString("N0") votes</span>
+                            </div>
+                            <div class="voting-option-meta">
+                                <span>Selected: @GetRecentVoteSelectionSummary(vote)</span>
+                                <span>Result: @GetRecentVoteResultSummary(vote)</span>
+                                <span>@FormatTimestamp(vote.CreatedAt)</span>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
     </div>
 }
 
@@ -304,7 +388,12 @@ else
     private string? StatusMessage { get; set; }
     private LoginUserSummary? Session { get; set; }
     private GovernanceSessionData? ActiveSession { get; set; }
+    private GovernanceSessionData? LatestClosedSession { get; set; }
+    private List<GovernanceRecentVote> RecentVotes { get; set; } = [];
     private bool IsBankUser { get; set; }
+    private bool _votingStateInitialized;
+    private bool _knownVotingOpen;
+    private string _knownActiveSessionId = string.Empty;
 
     private string StartTitle { get; set; } = "Weekly Community Decision";
     private string StartDescription { get; set; } = "Vote with MN to decide this cycle's priority.";
@@ -457,9 +546,12 @@ else
 
             IsBankUser = payload.IsBankUser;
             ActiveSession = payload.ActiveSession;
+            LatestClosedSession = payload.LatestClosedSession ?? payload.ClosedSession;
+            RecentVotes = payload.RecentVotes ?? [];
             Session = payload.User ?? await Api.GetSessionAsync();
             await SyncClientSessionAsync(payload.User);
             ApplySessionDefaults();
+            TrackVotingStateTransitions(ActiveSession);
 
             if (!silent)
             {
@@ -473,6 +565,7 @@ else
             {
                 HasError = true;
                 ErrorMessage = ex.Message;
+                Notifications.Warning(ErrorMessage);
             }
         }
         finally
@@ -480,8 +573,9 @@ else
             if (!silent)
             {
                 IsLoading = false;
-                await InvokeAsync(StateHasChanged);
             }
+
+            await InvokeAsync(StateHasChanged);
 
             _loadingSession = false;
         }
@@ -632,15 +726,32 @@ else
 
             IsBankUser = payload.IsBankUser;
             ActiveSession = payload.ActiveSession;
+            if (payload.ClosedSession is not null)
+            {
+                LatestClosedSession = payload.ClosedSession;
+            }
+            else if (payload.LatestClosedSession is not null)
+            {
+                LatestClosedSession = payload.LatestClosedSession;
+            }
+
+            if (payload.RecentVotes is not null && payload.RecentVotes.Count > 0)
+            {
+                RecentVotes = payload.RecentVotes;
+            }
             Session = payload.User ?? Session;
             await SyncClientSessionAsync(payload.User);
             ApplySessionDefaults();
+            TrackVotingStateTransitions(ActiveSession);
             StatusMessage = successMessage;
+            Notifications.Success(StatusMessage);
+            await LoadAsync(silent: true);
         }
         catch (Exception ex)
         {
             HasError = true;
             StatusMessage = ex.Message;
+            Notifications.Error(StatusMessage);
         }
         finally
         {
@@ -672,14 +783,22 @@ else
 
             ActiveSession = payload.ActiveSession ?? ActiveSession;
             Session = payload.User ?? Session;
+            if (payload.RecentVotes is not null && payload.RecentVotes.Count > 0)
+            {
+                RecentVotes = payload.RecentVotes;
+            }
             await SyncClientSessionAsync(payload.User);
             ApplySessionDefaults();
+            TrackVotingStateTransitions(ActiveSession);
             StatusMessage = $"Vote cast: {payload.MnSpent:N0} MN ({payload.VoteQuantity:N0} vote(s)) -> {payload.VotePower:N2} power.";
+            Notifications.Success(StatusMessage);
+            await LoadAsync(silent: true);
         }
         catch (Exception ex)
         {
             HasError = true;
             StatusMessage = ex.Message;
+            Notifications.Error(StatusMessage);
         }
         finally
         {
@@ -745,6 +864,38 @@ else
             || string.Equals(voteType, "multiple_choice", StringComparison.OrdinalIgnoreCase);
     }
 
+    private void TrackVotingStateTransitions(GovernanceSessionData? nextSession)
+    {
+        var nextSessionId = (nextSession?.SessionId ?? string.Empty).Trim();
+        var hasActiveSession = !string.IsNullOrWhiteSpace(nextSessionId);
+
+        if (!_votingStateInitialized)
+        {
+            _votingStateInitialized = true;
+            _knownVotingOpen = hasActiveSession;
+            _knownActiveSessionId = nextSessionId;
+            return;
+        }
+
+        if (_knownVotingOpen && !hasActiveSession)
+        {
+            Notifications.Info("Council voting has ended. Results are now available.");
+        }
+        else if (!_knownVotingOpen && hasActiveSession)
+        {
+            var title = string.IsNullOrWhiteSpace(nextSession?.Title) ? "New council session" : nextSession!.Title;
+            Notifications.Info($"Council voting is open: {title}");
+        }
+        else if (hasActiveSession && !string.Equals(_knownActiveSessionId, nextSessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            var title = string.IsNullOrWhiteSpace(nextSession?.Title) ? "Session updated" : nextSession!.Title;
+            Notifications.Info($"Council session changed: {title}");
+        }
+
+        _knownVotingOpen = hasActiveSession;
+        _knownActiveSessionId = nextSessionId;
+    }
+
     private static string GetVoteTypeLabel(string voteType)
     {
         var normalized = (voteType ?? string.Empty).Trim().ToLowerInvariant();
@@ -756,6 +907,32 @@ else
             "number_selection" => "Number selection",
             _ => string.IsNullOrWhiteSpace(voteType) ? "Unknown" : voteType,
         };
+    }
+
+    private static string GetRecentVoteSelectionSummary(GovernanceRecentVote vote)
+    {
+        if (vote.SelectionLabels.Count == 0)
+        {
+            return "None";
+        }
+
+        if (vote.SelectionLabels.Count == 1)
+        {
+            return vote.SelectionLabels[0];
+        }
+
+        return string.Join(", ", vote.SelectionLabels.Take(3)) + (vote.SelectionLabels.Count > 3 ? "..." : string.Empty);
+    }
+
+    private static string GetRecentVoteResultSummary(GovernanceRecentVote vote)
+    {
+        var leader = (vote.SessionResultLeader ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(leader))
+        {
+            return "Pending tally";
+        }
+
+        return $"{leader} ({vote.SessionStatus})";
     }
 
     private static double ComputeStakeMultiplier(int stakedMapsCount)

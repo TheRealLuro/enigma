@@ -2,6 +2,7 @@
 @using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject Enigma.Client.Services.UiNotificationService Notifications
 @using Microsoft.JSInterop
 
 <SeoHead Title="Create Enigma Account | Join the Puzzle Maze Game"
@@ -139,6 +140,7 @@
         if (password != confirmPassword)
         {
             errorMessage = "Passwords do not match.";
+            Notifications.Warning(errorMessage);
             return;
         }
 
@@ -157,6 +159,10 @@
             if (!httpResponse.IsSuccessStatusCode)
             {
                 errorMessage = await httpResponse.Content.ReadAsStringAsync();
+                if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    Notifications.Warning(errorMessage);
+                }
                 return;
             }
 
@@ -164,16 +170,26 @@
             if (response is null || response.Status != "success" || string.IsNullOrWhiteSpace(response.User?.Username))
             {
                 errorMessage = "Sign up failed.";
+                Notifications.Error(errorMessage);
                 return;
             }
 
             await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = response.User.Username }, rememberMe);
             await JS.InvokeVoidAsync("enigmaGame.setUserSession", response.User, rememberMe);
+            if (response.DailyRewardGranted)
+            {
+                Notifications.Success($"Account created. Daily reward granted: {response.DailyRewardAmount:N0} MN.");
+            }
+            else
+            {
+                Notifications.Success("Account created. Welcome to Enigma.");
+            }
             NavigationManager.NavigateTo("/home");
         }
         catch (Exception ex)
         {
             errorMessage = $"Error: {ex.Message}";
+            Notifications.Error(errorMessage);
         }
         finally
         {

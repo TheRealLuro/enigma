@@ -37,6 +37,7 @@ public partial class Profile : IAsyncDisposable
     };
 
     [Inject] private EnigmaApiClient Api { get; set; } = default!;
+    [Inject] private UiNotificationService Notifications { get; set; } = default!;
     [Inject] private NavigationManager NavigationManager { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
@@ -795,11 +796,19 @@ public partial class Profile : IAsyncDisposable
         {
             using var response = await requestFactory();
             StatusMessage = await onSuccess(response);
+            if (!string.IsNullOrWhiteSpace(StatusMessage))
+            {
+                Notifications.Success(StatusMessage);
+            }
         }
         catch (Exception ex)
         {
             HasError = true;
             StatusMessage = ex.Message;
+            if (!string.IsNullOrWhiteSpace(StatusMessage))
+            {
+                Notifications.Error(StatusMessage);
+            }
         }
         finally
         {

@@ -3,6 +3,7 @@
 @using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject Enigma.Client.Services.UiNotificationService Notifications
 @using Microsoft.JSInterop
 
 <SeoHead Title="Enigma Puzzle Game | Solve Evolving Mazes"
@@ -156,6 +157,14 @@
             StatusMessage = response.DailyRewardGranted
                 ? $"Daily reward granted: {response.DailyRewardAmount}"
                 : "Login successful.";
+            if (response.DailyRewardGranted)
+            {
+                Notifications.Success($"Daily reward granted: {response.DailyRewardAmount:N0} MN.");
+            }
+            else
+            {
+                Notifications.Success("Login successful.");
+            }
 
             NavigationManager.NavigateTo("/home");
         }
@@ -163,6 +172,7 @@
         {
             HasError = true;
             StatusMessage = ex.Message;
+            Notifications.Error(StatusMessage);
         }
         finally
         {

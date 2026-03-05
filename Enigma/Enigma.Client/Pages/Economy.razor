@@ -2,8 +2,10 @@
 @using System.Globalization
 @using Enigma.Client.Models
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject Enigma.Client.Services.UiNotificationService Notifications
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <SeoHead Title="Enigma Economy | Circulation, Marketplace, Staking, and Voting"
          Description="Track MN and map circulation, user activity, and use marketplace, staking, and voting from one economy hub."
@@ -286,10 +288,15 @@ else
     private EconomyOverviewData? Overview { get; set; }
     private LoginUserSummary? Session { get; set; }
     private string ActiveTab { get; set; } = OverviewTab;
+    private CancellationTokenSource? _pollCancellation;
+    private Task? _pollTask;
+    private bool _loadingOverview;
+    private string? _lastOverviewSnapshotAt;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        StartPolling();
     }
 
     protected override void OnParametersSet()
@@ -299,14 +306,55 @@ else
 
     private async Task ReloadAsync()
     {
-        await LoadAsync();
+        await LoadAsync(silent: false);
     }
 
-    private async Task LoadAsync()
+    private void StartPolling()
     {
-        IsLoading = true;
-        ErrorMessage = null;
-        await InvokeAsync(StateHasChanged);
+        if (_pollTask is not null)
+        {
+            return;
+        }
+
+        _pollCancellation = new CancellationTokenSource();
+        _pollTask = PollLoopAsync(_pollCancellation.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (cancellationToken.IsCancellationRequested || !string.Equals(ActiveTab, OverviewTab, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                await LoadAsync(silent: true);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
+    }
+
+    private async Task LoadAsync(bool silent = false)
+    {
+        if (_loadingOverview)
+        {
+            return;
+        }
+
+        _loadingOverview = true;
+        if (!silent)
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+            await InvokeAsync(StateHasChanged);
+        }
 
         try
         {
@@ -319,15 +367,38 @@ else
             Overview = payload.Overview;
             Session = payload.User ?? await Api.GetSessionAsync();
             await SyncClientSessionAsync(payload.User);
+
+            if (!silent)
+            {
+                ErrorMessage = null;
+            }
+            else
+            {
+                var nextSnapshot = (payload.Overview.GeneratedAt ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(nextSnapshot) && !string.Equals(_lastOverviewSnapshotAt, nextSnapshot, StringComparison.Ordinal))
+                {
+                    _lastOverviewSnapshotAt = nextSnapshot;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
         }
         catch (Exception ex)
         {
-            ErrorMessage = ex.Message;
+            if (!silent)
+            {
+                ErrorMessage = ex.Message;
+                Notifications.Warning(ErrorMessage);
+            }
         }
         finally
         {
             IsLoading = false;
-            await InvokeAsync(StateHasChanged);
+            if (!silent)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+
+            _loadingOverview = false;
         }
     }
 
@@ -569,6 +640,38 @@ else
             "Moderate" => "economy-health-status steady",
             _ => "economy-health-status low",
         };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_pollCancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _pollCancellation.CancelAsync();
+        }
+        catch
+        {
+            // ignored
+        }
+
+        if (_pollTask is not null)
+        {
+            try
+            {
+                await _pollTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // ignored
+            }
+        }
+
+        _pollCancellation.Dispose();
+        _pollCancellation = null;
     }
 }
 

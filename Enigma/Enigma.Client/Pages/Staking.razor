@@ -2,6 +2,7 @@
 @using System.Globalization
 @using Enigma.Client.Models
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject Enigma.Client.Services.UiNotificationService Notifications
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -314,6 +315,9 @@ else
     private CancellationTokenSource? _clockCancellation;
     private Task? _clockTask;
     private CancellationTokenSource? _claimBurstCancellation;
+    private CancellationTokenSource? _refreshCancellation;
+    private Task? _refreshTask;
+    private bool _loadingOverview;
 
     private int DailyYield => Math.Max(0, Overview?.TotalDailyReward ?? 0);
     private int EstimatedMonthlyYield => DailyYield * 30;
@@ -323,6 +327,7 @@ else
     {
         await LoadAsync();
         StartClockLoop();
+        StartRefreshLoop();
     }
 
     private void StartClockLoop()
@@ -358,14 +363,56 @@ else
         await LoadAsync();
     }
 
-    private async Task LoadAsync()
+    private void StartRefreshLoop()
     {
-        IsLoading = true;
-        HasError = false;
-        ErrorMessage = null;
-        StatusMessage = null;
+        if (_refreshTask is not null)
+        {
+            return;
+        }
+
+        _refreshCancellation = new CancellationTokenSource();
+        _refreshTask = RefreshLoopAsync(_refreshCancellation.Token);
+    }
+
+    private async Task RefreshLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (cancellationToken.IsCancellationRequested || IsBusy)
+                {
+                    continue;
+                }
+
+                await LoadAsync(silent: true);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
+    }
+
+    private async Task LoadAsync(bool silent = false)
+    {
+        if (_loadingOverview)
+        {
+            return;
+        }
+
+        _loadingOverview = true;
+        if (!silent)
+        {
+            IsLoading = true;
+            HasError = false;
+            ErrorMessage = null;
+            StatusMessage = null;
+            await InvokeAsync(StateHasChanged);
+        }
+
         CurrentClientTime = DateTimeOffset.UtcNow;
-        await InvokeAsync(StateHasChanged);
 
         try
         {
@@ -378,16 +425,33 @@ else
             Overview = payload.Overview;
             Session = payload.User ?? await Api.GetSessionAsync();
             await SyncClientSessionAsync(payload.User);
+            if (!silent)
+            {
+                HasError = false;
+                ErrorMessage = null;
+            }
+            else
+            {
+                await InvokeAsync(StateHasChanged);
+            }
         }
         catch (Exception ex)
         {
-            HasError = true;
-            ErrorMessage = ex.Message;
+            if (!silent)
+            {
+                HasError = true;
+                ErrorMessage = ex.Message;
+                Notifications.Warning(ErrorMessage);
+            }
         }
         finally
         {
-            IsLoading = false;
-            await InvokeAsync(StateHasChanged);
+            _loadingOverview = false;
+            if (!silent)
+            {
+                IsLoading = false;
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
@@ -405,6 +469,7 @@ else
         {
             HasError = true;
             StatusMessage = $"This map is still stake-locked for {GetStakeLockLabel(selectedMap)}.";
+            Notifications.Warning(StatusMessage);
             return;
         }
 
@@ -450,16 +515,19 @@ else
             {
                 StartClaimBurst(payload.RewardedMn);
                 StatusMessage = $"+{payload.RewardedMn:N0} MN claimed from staking.";
+                Notifications.Success(StatusMessage);
             }
             else
             {
                 StatusMessage = successMessage;
+                Notifications.Success(StatusMessage);
             }
         }
         catch (Exception ex)
         {
             HasError = true;
             StatusMessage = ex.Message;
+            Notifications.Error(StatusMessage);
         }
         finally
         {
@@ -793,5 +861,32 @@ else
         _claimBurstCancellation?.Cancel();
         _claimBurstCancellation?.Dispose();
         _claimBurstCancellation = null;
+
+        if (_refreshCancellation is not null)
+        {
+            try
+            {
+                await _refreshCancellation.CancelAsync();
+            }
+            catch
+            {
+                // ignored
+            }
+
+            if (_refreshTask is not null)
+            {
+                try
+                {
+                    await _refreshTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // ignored
+                }
+            }
+
+            _refreshCancellation.Dispose();
+            _refreshCancellation = null;
+        }
     }
 }
