@@ -44,7 +44,7 @@ else
             </div>
             <div class="voting-banner-meta">
                 <span class="profile-chip">Balance @(Session?.MazeNuggets.ToString("N0") ?? "0") MN</span>
-                <span class="profile-chip">Stake Weight x@CurrentStakeMultiplier.ToString("0.00")</span>
+                <span class="profile-chip">@($"Stake Weight x{CurrentStakeMultiplier:0.00}")</span>
                 <span class="profile-chip">@CurrentStakedCount staked map(s)</span>
             </div>
         </section>
@@ -77,12 +77,10 @@ else
                         </div>
                         <div>
                             <label class="form-label">Vote Type</label>
-                            <select class="form-control" @bind="StartVoteType">
-                                <option value="one_choice">One Choice Selection</option>
-                                <option value="multiple_choice">Multiple Choice</option>
-                                <option value="text_entry">Text Entry</option>
-                                <option value="number_selection">Number Selection</option>
-                            </select>
+                            <EnigmaDropdown TValue="string"
+                                            Class="form-control"
+                                            Options="VoteTypeOptions"
+                                            @bind-Value="StartVoteType" />
                         </div>
                         <div>
                             <label class="form-label">Vote Cost (MN each)</label>
@@ -92,11 +90,10 @@ else
                             <label class="form-label">Duration</label>
                             <div class="voting-duration-row">
                                 <input class="form-control" type="number" min="1" max="9999" @bind="StartDurationValue" />
-                                <select class="form-control" @bind="StartDurationUnit">
-                                    <option value="hours">Hours</option>
-                                    <option value="days">Days</option>
-                                    <option value="weeks">Weeks</option>
-                                </select>
+                                <EnigmaDropdown TValue="string"
+                                                Class="form-control"
+                                                Options="DurationUnitOptions"
+                                                @bind-Value="StartDurationUnit" />
                             </div>
                         </div>
                         <div class="voting-form-span">
@@ -321,6 +318,21 @@ else
     private string OptionB { get; set; } = "Boost item drops";
     private string OptionC { get; set; } = string.Empty;
     private string OptionD { get; set; } = string.Empty;
+
+    private static readonly IReadOnlyList<SelectOption<string>> VoteTypeOptions =
+    [
+        new("one_choice", "One Choice Selection"),
+        new("multiple_choice", "Multiple Choice"),
+        new("text_entry", "Text Entry"),
+        new("number_selection", "Number Selection"),
+    ];
+
+    private static readonly IReadOnlyList<SelectOption<string>> DurationUnitOptions =
+    [
+        new("hours", "Hours"),
+        new("days", "Days"),
+        new("weeks", "Weeks"),
+    ];
 
     private int VoteQuantity { get; set; } = 1;
     private string? SelectedOptionId { get; set; }

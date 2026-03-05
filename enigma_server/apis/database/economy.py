@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 
+from bson.decimal128 import Decimal128
 from fastapi import APIRouter, HTTPException, Request
 
 from main import limiter
 
 from .db import governance_sessions, governance_votes, maps_collection, marketplace_collection, users_collection
+from .map_utils import normalize_int
 from .staking_rules import normalize_staked_map_ids
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
@@ -84,6 +87,29 @@ def _active_within_window(user: dict[str, Any], now: datetime, window: timedelta
     return (now - latest) <= window
 
 
+def _normalize_float(value: Any, default: float = 0.0) -> float:
+    if isinstance(value, Decimal128):
+        try:
+            value = value.to_decimal()
+        except (ArithmeticError, ValueError):
+            return default
+
+    if isinstance(value, Decimal):
+        try:
+            parsed = float(value)
+        except (ArithmeticError, ValueError):
+            return default
+    else:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return default
+
+    if parsed != parsed:  # NaN guard
+        return default
+    return parsed
+
+
 def _get_listing_value_stats() -> tuple[int, float]:
     aggregate = list(
         marketplace_collection.aggregate(
@@ -100,7 +126,10 @@ def _get_listing_value_stats() -> tuple[int, float]:
     )
     if not aggregate:
         return 0, 0.0
-    return int(aggregate[0].get("total_value", 0) or 0), float(aggregate[0].get("avg_value", 0.0) or 0.0)
+    return (
+        normalize_int(aggregate[0].get("total_value", 0), 0),
+        _normalize_float(aggregate[0].get("avg_value", 0.0), 0.0),
+    )
 
 
 def _get_total_governance_mn_spent() -> int:
@@ -113,7 +142,7 @@ def _get_total_governance_mn_spent() -> int:
     )
     if not aggregate:
         return 0
-    return int(aggregate[0].get("total_mn_spent", 0) or 0)
+    return normalize_int(aggregate[0].get("total_mn_spent", 0), 0)
 
 
 def _get_active_governance_session(now: datetime) -> dict[str, Any] | None:
@@ -156,7 +185,7 @@ def get_economy_overview(request: Request, username: str):
 
     for raw_user in projected_users:
         user = apply_user_defaults(raw_user)
-        maze_nuggets = int(user.get("maze_nuggets", 0) or 0)
+        maze_nuggets = normalize_int(user.get("maze_nuggets", 0), 0)
 
         if _is_system_account(user):
             bank_reserve_mn_total += maze_nuggets
@@ -192,20 +221,20 @@ def get_economy_overview(request: Request, username: str):
             "mn_player_wallets_total": player_wallet_mn_total,
             "mn_bank_reserve_total": bank_reserve_mn_total,
             "mn_total_known": player_wallet_mn_total + bank_reserve_mn_total,
-            "maps_total": int(maps_total),
-            "maps_listed": int(maps_listed),
-            "maps_staked": int(maps_staked),
+            "maps_total": normalize_int(maps_total, 0),
+            "maps_listed": normalize_int(maps_listed, 0),
+            "maps_staked": normalize_int(maps_staked, 0),
             "maps_staked_percent": maps_staked_pct,
             "maps_listed_percent": maps_listed_pct,
-            "users_total": int(users_total),
-            "users_online_now": int(users_online_now),
-            "users_active_24h": int(users_active_24h),
-            "stakers_total": int(stakers_total),
-            "marketplace_listing_value_total": int(listings_total_value),
+            "users_total": normalize_int(users_total, 0),
+            "users_online_now": normalize_int(users_online_now, 0),
+            "users_active_24h": normalize_int(users_active_24h, 0),
+            "stakers_total": normalize_int(stakers_total, 0),
+            "marketplace_listing_value_total": normalize_int(listings_total_value, 0),
             "marketplace_listing_price_avg": round(average_listing_price, 2),
             "governance_voting_open": active_governance_session is not None,
             "governance_active_title": str(active_governance_session.get("title") or "").strip() if active_governance_session else None,
-            "governance_total_mn_spent": int(governance_mn_spent_total),
+            "governance_total_mn_spent": normalize_int(governance_mn_spent_total, 0),
         },
         "user": serialize_session_user(current_user, maps_collection),
     }
