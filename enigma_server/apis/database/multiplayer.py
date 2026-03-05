@@ -42,6 +42,10 @@ router = APIRouter(prefix="/database/multiplayer")
 _SESSION_SOCKETS: dict[str, list[tuple[str, WebSocket]]] = {}
 _PENDING_SOCKET_ABANDON_TASKS: dict[tuple[str, str], asyncio.Task[None]] = {}
 SOCKET_ABANDON_GRACE_SECONDS = 22.0
+ROOM_SIZE = 1080.0
+PLAYER_SIZE = 60.0
+SPAWN_EDGE_INSET = 6.0
+SPAWN_LANE_OFFSET = 34.0
 
 
 class MultiplayerCreatePayload(BaseModel):
@@ -130,15 +134,58 @@ def _utc_now_iso() -> str:
     return _utc_now().isoformat()
 
 
-def _default_position() -> dict[str, Any]:
+def _position_payload(x: float, y: float) -> dict[str, Any]:
+    clamped_x = max(0.0, min(ROOM_SIZE - PLAYER_SIZE, float(x)))
+    clamped_y = max(0.0, min(ROOM_SIZE - PLAYER_SIZE, float(y)))
+    x_percent = round((clamped_x / ROOM_SIZE) * 100.0, 3)
+    y_percent = round((clamped_y / ROOM_SIZE) * 100.0, 3)
     return {
-        "x": 46.0,
-        "y": 46.0,
-        "width": 8.0,
-        "height": 8.0,
-        "x_percent": 50.0,
-        "y_percent": 50.0,
+        "x": round(clamped_x, 3),
+        "y": round(clamped_y, 3),
+        "width": PLAYER_SIZE,
+        "height": PLAYER_SIZE,
+        "x_percent": x_percent,
+        "y_percent": y_percent,
     }
+
+
+def _default_position(role: str = "owner") -> dict[str, Any]:
+    center = (ROOM_SIZE - PLAYER_SIZE) / 2.0
+    if str(role).strip().lower() == "guest":
+        return _position_payload(center + SPAWN_LANE_OFFSET, center)
+    return _position_payload(center - SPAWN_LANE_OFFSET, center)
+
+
+def _spawn_position_for_transition(
+    from_room: dict[str, int] | None,
+    to_room: dict[str, int],
+    role: str,
+) -> dict[str, Any]:
+    if not isinstance(from_room, dict):
+        return _default_position(role)
+
+    from_x = int(from_room.get("x", 0) or 0)
+    from_y = int(from_room.get("y", 0) or 0)
+    to_x = int(to_room.get("x", 0) or 0)
+    to_y = int(to_room.get("y", 0) or 0)
+    dx = to_x - from_x
+    dy = to_y - from_y
+
+    center = (ROOM_SIZE - PLAYER_SIZE) / 2.0
+    lane_offset = SPAWN_LANE_OFFSET if str(role).strip().lower() == "guest" else -SPAWN_LANE_OFFSET
+    edge = SPAWN_EDGE_INSET
+    far_edge = ROOM_SIZE - PLAYER_SIZE - SPAWN_EDGE_INSET
+
+    if dx == 1:
+        return _position_payload(edge, center + lane_offset)
+    if dx == -1:
+        return _position_payload(far_edge, center + lane_offset)
+    if dy == 1:
+        return _position_payload(center + lane_offset, edge)
+    if dy == -1:
+        return _position_payload(center + lane_offset, far_edge)
+
+    return _default_position(role)
 
 
 def _stable_hash(value: str) -> int:
@@ -625,7 +672,7 @@ def _create_player_state(username: str, role: str, room: dict[str, int]) -> dict
         "ready": False,
         "last_seen_at": _utc_now_iso(),
         "room": {"x": room["x"], "y": room["y"]},
-        "position": _default_position(),
+        "position": _default_position(role),
         "facing": "Down",
         "is_on_black_hole": False,
         "gold_collected": 0,
@@ -740,10 +787,11 @@ def _can_move_to_target(session: dict[str, Any], target_x: int, target_y: int) -
     return False
 
 
-def _reset_players_to_room(session: dict[str, Any], room: dict[str, int]) -> None:
+def _reset_players_to_room(session: dict[str, Any], from_room: dict[str, int] | None, room: dict[str, int]) -> None:
     for player in session.get("players", {}).values():
         player["room"] = {"x": room["x"], "y": room["y"]}
-        player["position"] = _default_position()
+        role = str(player.get("role") or "owner")
+        player["position"] = _spawn_position_for_transition(from_room, room, role)
         player["is_on_black_hole"] = False
         player["last_seen_at"] = _utc_now_iso()
 
@@ -757,7 +805,15 @@ def _update_multiplayer_state_locked(session: dict[str, Any], payload: Multiplay
         raise HTTPException(status_code=409, detail="Players must remain in the same room")
 
     player["room"] = {"x": payload.room_x, "y": payload.room_y}
-    player["position"] = payload.position.model_dump(mode="json")
+    position_payload = payload.position.model_dump(mode="json")
+    width = float(position_payload.get("width", PLAYER_SIZE) or PLAYER_SIZE)
+    height = float(position_payload.get("height", PLAYER_SIZE) or PLAYER_SIZE)
+    # Keep old sessions from collapsing to 8x8 collision centers.
+    if width <= 8.1:
+        position_payload["width"] = PLAYER_SIZE
+    if height <= 8.1:
+        position_payload["height"] = PLAYER_SIZE
+    player["position"] = position_payload
     player["facing"] = payload.facing
     player["is_on_black_hole"] = bool(payload.is_on_black_hole)
     player["last_seen_at"] = _utc_now_iso()
@@ -838,8 +894,9 @@ def _request_room_move_locked(session: dict[str, Any], payload: MultiplayerMoveP
 
     room_moved = False
     if len(move_vote["votes"]) == 2:
+        previous_room = dict(session.get("current_room") or {})
         session["current_room"] = target_room
-        _reset_players_to_room(session, target_room)
+        _reset_players_to_room(session, previous_room, target_room)
         move_vote = None
         room_moved = True
 

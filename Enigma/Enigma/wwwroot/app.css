@@ -953,6 +953,27 @@ tbody tr:last-child td {
     backdrop-filter: blur(8px);
 }
 
+.global-invite-toast {
+    position: fixed;
+    top: 128px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1500;
+    min-height: 38px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(147, 197, 255, 0.34);
+    background: rgba(58, 113, 202, 0.2);
+    color: #e6f3ff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+
 .valid.modified:not([type=checkbox]) {
     border-color: var(--epic-success);
     box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.2);
@@ -5488,6 +5509,11 @@ h1:focus {
     gap: 24px;
 }
 
+.coop-session-panel {
+    display: grid;
+    gap: 20px;
+}
+
 .coop-banner,
 .coop-session-panel,
 .coop-create-panel,
@@ -5561,7 +5587,7 @@ h1:focus {
 .coop-active-grid {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
-    max-width: 1240px;
+    max-width: 1360px;
 }
 
 .coop-setup-grid {
@@ -5642,15 +5668,15 @@ h1:focus {
 .coop-session-meta-compact {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 14px;
 }
 
 .coop-meta-pill {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    min-height: 42px;
-    padding: 4px 14px;
+    gap: 10px;
+    min-height: 50px;
+    padding: 8px 16px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -5671,7 +5697,7 @@ h1:focus {
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--epic-text);
-    font-size: 0.92rem;
+    font-size: 0.98rem;
     line-height: 1;
 }
 
@@ -5680,14 +5706,14 @@ h1:focus {
 }
 
 .coop-player-stack {
-    gap: 14px;
+    gap: 18px;
 }
 
 .coop-player-card {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 16px;
-    padding: 18px 20px;
+    gap: 22px;
+    padding: 22px 24px;
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -5711,7 +5737,7 @@ h1:focus {
 .coop-player-main strong {
     margin: 0;
     color: #f7f9ff;
-    font-size: 1.05rem;
+    font-size: 1.16rem;
     line-height: 1.12;
 }
 
@@ -5739,10 +5765,12 @@ h1:focus {
 }
 
 .coop-player-meta {
+    min-width: 150px;
     justify-items: end;
-    gap: 8px;
+    gap: 10px;
     color: rgba(255, 255, 255, 0.74);
-    font-size: 0.86rem;
+    font-size: 0.98rem;
+    line-height: 1.1;
 }
 
 .coop-setup-grid .coop-join-panel,
@@ -5768,12 +5796,14 @@ h1:focus {
 
 .coop-action-row {
     justify-content: flex-start;
-    gap: 14px;
+    gap: 16px;
     flex-wrap: wrap;
+    margin-top: 6px;
 }
 
 .coop-action-row .btn {
-    min-width: 136px;
+    min-width: 150px;
+    min-height: 50px;
 }
 
 .coop-inline-form {
@@ -5787,9 +5817,9 @@ h1:focus {
 .coop-invited-strip {
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-height: 42px;
-    padding: 0 14px;
+    gap: 12px;
+    min-height: 50px;
+    padding: 0 16px;
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.07);
@@ -5811,8 +5841,8 @@ h1:focus {
 
 .coop-invite-section {
     display: grid;
-    gap: 12px;
-    padding: 16px;
+    gap: 16px;
+    padding: 20px;
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -5832,22 +5862,25 @@ h1:focus {
 
 .coop-invite-choice-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
 }
 
 .coop-invite-choice {
     justify-content: flex-start;
-    min-height: 44px;
-    padding: 10px 14px;
+    min-height: 52px;
+    padding: 12px 16px;
+    border-radius: 14px;
 }
 
 .coop-session-note {
-    padding: 16px 18px;
+    margin-top: 6px;
+    padding: 18px 20px;
     border-style: solid;
     border-color: rgba(255, 255, 255, 0.07);
     color: rgba(228, 239, 255, 0.78);
-    line-height: 1.45;
+    line-height: 1.55;
+    font-size: 1.02rem;
 }
 
 .coop-catalog-grid {

@@ -52,8 +52,7 @@ public partial class Game
             return string.Empty;
         }
 
-        var x = Math.Clamp(CoopOtherPlayer.Position.X, 0d, RoomSize - PlayerSize);
-        var y = Math.Clamp(CoopOtherPlayer.Position.Y, 0d, RoomSize - PlayerSize);
+        var (x, y) = NormalizeCoopPosition(CoopOtherPlayer.Position);
         return $"left: {ToPositionPercentX(x, PlayerSize)}%; top: {ToPercentY(y)}%; width: {ToLengthPercentX(PlayerSize)}%; height: {ToPercentY(PlayerSize)}%;";
     }
 
@@ -64,8 +63,8 @@ public partial class Game
             return string.Empty;
         }
 
-        var x = Math.Clamp(CoopOtherPlayer.Position.X, 0d, RoomSize - PlayerSize);
-        var y = Math.Clamp(CoopOtherPlayer.Position.Y - 42d, 0d, RoomSize - PlayerSize);
+        var (x, normalizedY) = NormalizeCoopPosition(CoopOtherPlayer.Position);
+        var y = Math.Clamp(normalizedY - 42d, 0d, RoomSize - PlayerSize);
         return $"left: {ToPositionPercentX(x, PlayerSize)}%; top: {ToPercentY(y)}%;";
     }
 
@@ -372,14 +371,16 @@ public partial class Game
             CurrentRoom = nextRoom;
             CurrentRoomState = _roomStates[nextPoint];
             ClosePuzzleOverlay();
-            PlayerX = Math.Clamp(session.You?.Position.X ?? ((RoomSize - PlayerSize) / 2d), 0d, RoomSize - PlayerSize);
-            PlayerY = Math.Clamp(session.You?.Position.Y ?? ((RoomSize - PlayerSize) / 2d), 0d, RoomSize - PlayerSize);
+            var (nextX, nextY) = NormalizeCoopPosition(session.You?.Position);
+            PlayerX = nextX;
+            PlayerY = nextY;
             ShowBanner($"Both players entered room {nextPoint}", 0.8d);
         }
         else if (forcePosition && session.You is not null)
         {
-            PlayerX = Math.Clamp(session.You.Position.X, 0d, RoomSize - PlayerSize);
-            PlayerY = Math.Clamp(session.You.Position.Y, 0d, RoomSize - PlayerSize);
+            var (nextX, nextY) = NormalizeCoopPosition(session.You.Position);
+            PlayerX = nextX;
+            PlayerY = nextY;
         }
 
         if (session.You is not null)
@@ -389,6 +390,55 @@ public partial class Game
         }
 
         SyncCurrentRoomProgressFromSession();
+    }
+
+    private static (double X, double Y) NormalizeCoopPosition(MultiplayerPlayerPosition? position)
+    {
+        var fallback = (RoomSize - PlayerSize) / 2d;
+        if (position is null)
+        {
+            return (fallback, fallback);
+        }
+
+        var x = position.X;
+        var y = position.Y;
+        var width = position.Width;
+        var height = position.Height;
+        var xPercent = position.XPercent;
+        var yPercent = position.YPercent;
+        var maxCoordinate = RoomSize - PlayerSize;
+        var hasPercentHint = xPercent >= 0d && xPercent <= 100d && yPercent >= 0d && yPercent <= 100d;
+
+        // Legacy sessions used 0-100-ish coordinates with 8x8 avatars.
+        if (width <= 8.1d && height <= 8.1d && x <= 100d && y <= 100d)
+        {
+            // Some legacy payloads carried 0/0 coords but valid percent hints.
+            if (x <= 0.001d && y <= 0.001d && hasPercentHint && (xPercent > 1d || yPercent > 1d))
+            {
+                return (
+                    Math.Clamp((xPercent / 100d) * maxCoordinate, 0d, maxCoordinate),
+                    Math.Clamp((yPercent / 100d) * maxCoordinate, 0d, maxCoordinate)
+                );
+            }
+
+            var scaledX = (Math.Clamp(x, 0d, 100d) / 100d) * (RoomSize - PlayerSize);
+            var scaledY = (Math.Clamp(y, 0d, 100d) / 100d) * (RoomSize - PlayerSize);
+            return (scaledX, scaledY);
+        }
+
+        // Guard against partial payloads that zero out coords but keep percent hints.
+        if (x <= 0.001d && y <= 0.001d && hasPercentHint && (xPercent > 1d || yPercent > 1d))
+        {
+            return (
+                Math.Clamp((xPercent / 100d) * maxCoordinate, 0d, maxCoordinate),
+                Math.Clamp((yPercent / 100d) * maxCoordinate, 0d, maxCoordinate)
+            );
+        }
+
+        return (
+            Math.Clamp(x, 0d, maxCoordinate),
+            Math.Clamp(y, 0d, maxCoordinate)
+        );
     }
 
     private async Task RequestCoopRoomMoveAsync(GridPoint nextPoint)

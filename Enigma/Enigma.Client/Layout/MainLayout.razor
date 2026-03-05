@@ -57,6 +57,10 @@
     {
         <div class="global-friend-request-toast" role="status" aria-live="polite">@FriendRequestToastMessage</div>
     }
+    @if (!string.IsNullOrWhiteSpace(InviteToastMessage) && IsAuthenticated && !IsPublicPath())
+    {
+        <div class="global-invite-toast" role="status" aria-live="polite">@InviteToastMessage</div>
+    }
 
     <main>
         @if (CanRenderCurrentRoute)
@@ -142,6 +146,10 @@
     private HashSet<string> _knownFriendRequests = new(StringComparer.OrdinalIgnoreCase);
     private string? FriendRequestToastMessage { get; set; }
     private CancellationTokenSource? _friendRequestToastCancellation;
+    private bool _invitesInitialized;
+    private HashSet<string> _knownInviteSessionIds = new(StringComparer.OrdinalIgnoreCase);
+    private string? InviteToastMessage { get; set; }
+    private CancellationTokenSource? _inviteToastCancellation;
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
@@ -280,6 +288,7 @@
             IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
             Session = session;
             UpdateFriendRequestTracking(session);
+            UpdateInviteTracking(session);
 
             if (!IsAuthenticated)
             {
@@ -511,6 +520,7 @@
             IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
             Session = session;
             UpdateFriendRequestTracking(session);
+            UpdateInviteTracking(session);
 
             if (!IsAuthenticated)
             {
@@ -790,6 +800,7 @@
                     IsAuthenticated = latestSession is not null && !string.IsNullOrWhiteSpace(latestSession.Username);
                     Session = latestSession;
                     UpdateFriendRequestTracking(latestSession);
+                    UpdateInviteTracking(latestSession);
 
                     if (!IsAuthenticated)
                     {
@@ -845,6 +856,48 @@
             ? $"New friend request received from {addedRequests[0]}."
             : $"{addedRequests.Count} new friend requests received.";
         ShowFriendRequestToast(toastMessage);
+    }
+
+    private void UpdateInviteTracking(LoginUserSummary? session)
+    {
+        if (session is null || string.IsNullOrWhiteSpace(session.Username))
+        {
+            _invitesInitialized = false;
+            _knownInviteSessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HideInviteToast();
+            return;
+        }
+
+        var latest = session.PendingMultiplayerInvites
+            .Select(invite => (invite.SessionId ?? string.Empty).Trim())
+            .Where(static sessionId => !string.IsNullOrWhiteSpace(sessionId))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!_invitesInitialized)
+        {
+            _knownInviteSessionIds = latest;
+            _invitesInitialized = true;
+            return;
+        }
+
+        var addedInviteIds = latest
+            .Where(sessionId => !_knownInviteSessionIds.Contains(sessionId))
+            .OrderBy(sessionId => sessionId, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _knownInviteSessionIds = latest;
+        if (addedInviteIds.Count == 0)
+        {
+            return;
+        }
+
+        var firstInvite = session.PendingMultiplayerInvites
+            .FirstOrDefault(invite => string.Equals(invite.SessionId, addedInviteIds[0], StringComparison.OrdinalIgnoreCase));
+        var sender = string.IsNullOrWhiteSpace(firstInvite?.OwnerUsername) ? "a teammate" : firstInvite!.OwnerUsername.Trim();
+        var toastMessage = addedInviteIds.Count == 1
+            ? $"New co-op invite received from {sender}."
+            : $"{addedInviteIds.Count} new co-op invites received.";
+        ShowInviteToast(toastMessage);
     }
 
     private void ShowFriendRequestToast(string message)
@@ -904,6 +957,63 @@
         }
     }
 
+    private void ShowInviteToast(string message)
+    {
+        CancelInviteToast();
+        InviteToastMessage = message;
+        _inviteToastCancellation = new CancellationTokenSource();
+        _ = AutoHideInviteToastAsync(_inviteToastCancellation.Token);
+    }
+
+    private void HideInviteToast()
+    {
+        CancelInviteToast();
+        InviteToastMessage = null;
+    }
+
+    private void CancelInviteToast()
+    {
+        if (_inviteToastCancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _inviteToastCancellation.Cancel();
+        }
+        catch
+        {
+        }
+
+        _inviteToastCancellation.Dispose();
+        _inviteToastCancellation = null;
+    }
+
+    private async Task AutoHideInviteToastAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await InvokeAsync(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    InviteToastMessage = null;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
     private Task StateHasChangedAsync()
     {
         StateHasChanged();
@@ -915,6 +1025,7 @@
         NavigationManager.LocationChanged -= HandleLocationChanged;
         StopGlobalSessionRefreshLoop();
         HideFriendRequestToast();
+        HideInviteToast();
 
         if (_tutorialListenerRegistered)
         {
