@@ -79,10 +79,14 @@ else
                             @(IsLoading ? "Refreshing..." : "Refresh")
                         </button>
                     </div>
+                    @if (StakedOwnedMapCount > 0)
+                    {
+                        <div class="empty-state-inline">@StakedOwnedMapCount staked map(s) are hidden from listing until unstaked.</div>
+                    }
 
                     @if (AvailableOwnedMaps.Count == 0)
                     {
-                        <div class="empty-state-inline">You do not have any unlisted owned maps available for sale.</div>
+                        <div class="empty-state-inline">@GetMapListingEmptyStateMessage()</div>
                     }
                     else
                     {
@@ -106,8 +110,8 @@ else
                                 <ValidationMessage For="() => SellRequest.Price" />
                             </div>
 
-                            <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">
-                                @(IsActionBusy ? "Listing..." : "List Map")
+                            <button class="btn btn-primary" type="submit" disabled="@(!CanListSelectedMap || IsActionBusy)" title="@GetMapListingBlockedReason()">
+                                @(GetMapListingButtonLabel())
                             </button>
                         </EditForm>
                     }
@@ -613,6 +617,8 @@ else
     private const int ListingSectionSize = 10;
     private int CurrentListingSectionIndex { get; set; }
     private readonly Dictionary<string, int> ListingDraftPrices = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> StakedOwnedMapIds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, DateTimeOffset> StakedMapLockById { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     private string _mapSearchQuery = string.Empty;
     private string _mapDifficultyFilter = "all";
     private string _mapThemeFilter = "all";
@@ -737,10 +743,16 @@ else
             .Where(map => !string.IsNullOrWhiteSpace(map.MapName))
             .GroupBy(map => map.MapName, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
+            .Where(map => !IsOwnedMapStaked(map))
             .Where(map => !Listings.Any(listing => EqualsIgnoreCase(listing.MapName, map.MapName)))
             .OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase)
             .ToList()
         ?? [];
+    private int StakedOwnedMapCount =>
+        Session?.MapsOwned.Count(IsOwnedMapStaked) ?? 0;
+    private bool CanListSelectedMap =>
+        !string.IsNullOrWhiteSpace(SellRequest.MapName)
+        && AvailableOwnedMaps.Any(map => EqualsIgnoreCase(map.MapName, SellRequest.MapName));
     private IReadOnlyList<SelectOption<string>> AvailableOwnedMapOptions =>
         AvailableOwnedMaps.Select(static map => new SelectOption<string>(map.MapName, map.MapName)).ToArray();
     private IReadOnlyList<SelectOption<string>> MapDifficultyOptions =>
@@ -838,6 +850,8 @@ else
                 StatusMessage = await response.Content.ReadAsStringAsync();
                 Listings = [];
                 ShopItems = [];
+                StakedOwnedMapIds.Clear();
+                StakedMapLockById.Clear();
                 return;
             }
 
@@ -845,11 +859,19 @@ else
             Listings = payload?.Listings ?? [];
             ListingDraftPrices.Clear();
             ShopItems = (await Api.GetFromJsonAsync<ItemShopResponse>("api/auth/items/shop"))?.Items ?? [];
+            await LoadStakingGateStateAsync();
             ClampListingSectionIndex();
 
-            if (AvailableOwnedMaps.Count > 0 && string.IsNullOrWhiteSpace(SellRequest.MapName))
+            if (AvailableOwnedMaps.Count > 0)
             {
-                SellRequest.MapName = AvailableOwnedMaps[0].MapName;
+                if (string.IsNullOrWhiteSpace(SellRequest.MapName) || !CanListSelectedMap)
+                {
+                    SellRequest.MapName = AvailableOwnedMaps[0].MapName;
+                }
+            }
+            else
+            {
+                SellRequest.MapName = string.Empty;
             }
         }
         catch (Exception ex)
@@ -858,6 +880,8 @@ else
             StatusMessage = ex.Message;
             Listings = [];
             ShopItems = [];
+            StakedOwnedMapIds.Clear();
+            StakedMapLockById.Clear();
         }
         finally
         {
@@ -873,6 +897,12 @@ else
         {
             return;
         }
+        if (!CanListSelectedMap)
+        {
+            HasError = true;
+            StatusMessage = GetMapListingBlockedReason();
+            return;
+        }
 
         await PerformMarketplaceActionAsync(
             () => Api.PostJsonAsync("api/auth/marketplace/add", new
@@ -883,6 +913,36 @@ else
             successFallback: "Map listed.");
 
         await LoadMarketplaceAsync();
+    }
+
+    private async Task LoadStakingGateStateAsync()
+    {
+        var stakingPayload = await Api.GetFromJsonAsync<StakingOverviewResponse>("api/auth/staking");
+        var stakedMaps = stakingPayload?.Overview?.StakedMaps ?? [];
+        var mapIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var lockLookup = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var stakedMap in stakedMaps)
+        {
+            var mapId = (stakedMap.MapId ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(mapId))
+            {
+                continue;
+            }
+
+            mapIds.Add(mapId);
+            if (DateTimeOffset.TryParse(stakedMap.LockedUntil, out var lockUntil))
+            {
+                lockLookup[mapId] = lockUntil.ToUniversalTime();
+            }
+        }
+
+        StakedOwnedMapIds = mapIds;
+        StakedMapLockById = lockLookup;
+        if (stakingPayload?.User is not null)
+        {
+            Session = stakingPayload.User;
+        }
     }
 
     private async Task BuyListingAsync(MarketplaceListing listing)
@@ -1010,6 +1070,87 @@ else
         return Session is not null
             && !IsOwnListing(listing)
             && Session.MazeNuggets >= listing.Price;
+    }
+
+    private bool IsOwnedMapStaked(MapSummary map)
+    {
+        var mapId = (map.Id ?? string.Empty).Trim();
+        return !string.IsNullOrWhiteSpace(mapId) && StakedOwnedMapIds.Contains(mapId);
+    }
+
+    private bool TryGetOwnedMapByName(string? mapName, out MapSummary? map)
+    {
+        map = Session?.MapsOwned.FirstOrDefault(candidate => EqualsIgnoreCase(candidate.MapName, mapName));
+        return map is not null;
+    }
+
+    private string GetMapListingButtonLabel()
+    {
+        if (IsActionBusy)
+        {
+            return "Listing...";
+        }
+
+        return CanListSelectedMap ? "List Map" : "Unavailable";
+    }
+
+    private string GetMapListingBlockedReason()
+    {
+        if (CanListSelectedMap)
+        {
+            return "List this map in the marketplace.";
+        }
+
+        if (!TryGetOwnedMapByName(SellRequest.MapName, out var selectedMap) || selectedMap is null)
+        {
+            return "Select an eligible owned map to list.";
+        }
+
+        if (IsOwnedMapStaked(selectedMap))
+        {
+            var mapId = (selectedMap.Id ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(mapId)
+                && StakedMapLockById.TryGetValue(mapId, out var lockUntil)
+                && lockUntil > DateTimeOffset.UtcNow)
+            {
+                var remaining = lockUntil - DateTimeOffset.UtcNow;
+                if (remaining.TotalDays >= 1)
+                {
+                    return $"This map is staked and locked for {(int)remaining.TotalDays}d {remaining.Hours}h.";
+                }
+
+                if (remaining.TotalHours >= 1)
+                {
+                    return $"This map is staked and locked for {(int)remaining.TotalHours}h {remaining.Minutes}m.";
+                }
+
+                return $"This map is staked and locked for {Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s.";
+            }
+
+            return "This map is currently staked. Unstake it before listing.";
+        }
+
+        if (Listings.Any(listing => EqualsIgnoreCase(listing.MapName, selectedMap.MapName)))
+        {
+            return "This map is already listed.";
+        }
+
+        return "This map cannot be listed right now.";
+    }
+
+    private string GetMapListingEmptyStateMessage()
+    {
+        if ((Session?.MapsOwned.Count ?? 0) == 0)
+        {
+            return "You do not own any maps yet.";
+        }
+
+        if (StakedOwnedMapCount > 0)
+        {
+            return "All unlisted owned maps are currently staked.";
+        }
+
+        return "You do not have any unlisted owned maps available for sale.";
     }
 
     private bool CanPurchase(ItemCatalogEntry item)

@@ -75,6 +75,8 @@ public partial class Profile : IAsyncDisposable
     private bool ShowDeletePassword { get; set; }
 
     private string AvatarMapName { get; set; } = string.Empty;
+    private HashSet<string> StakedMapIds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, DateTimeOffset> StakedMapLockById { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _ownProfileRefreshCancellation;
     private Task? _ownProfileRefreshTask;
 
@@ -190,6 +192,8 @@ public partial class Profile : IAsyncDisposable
                 LoadError = await ReadErrorAsync(response);
                 ProfileData = null;
                 InventoryItems = [];
+                StakedMapIds.Clear();
+                StakedMapLockById.Clear();
                 return;
             }
 
@@ -199,11 +203,14 @@ public partial class Profile : IAsyncDisposable
             if (IsOwnProfile)
             {
                 await LoadInventoryAsync();
+                await LoadStakingStateAsync();
                 SeedSettingsForms();
             }
             else
             {
                 InventoryItems = [];
+                StakedMapIds.Clear();
+                StakedMapLockById.Clear();
             }
 
             ApplyRequestedTab();
@@ -213,6 +220,8 @@ public partial class Profile : IAsyncDisposable
             LoadError = ex.Message;
             ProfileData = null;
             InventoryItems = [];
+            StakedMapIds.Clear();
+            StakedMapLockById.Clear();
         }
         finally
         {
@@ -226,6 +235,37 @@ public partial class Profile : IAsyncDisposable
     {
         var inventory = await Api.GetFromJsonAsync<InventoryResponse>("api/auth/items/inventory");
         InventoryItems = inventory?.Items ?? [];
+    }
+
+    private async Task LoadStakingStateAsync()
+    {
+        var stakingPayload = await Api.GetFromJsonAsync<StakingOverviewResponse>("api/auth/staking");
+        var stakedMaps = stakingPayload?.Overview?.StakedMaps ?? [];
+        var nextStakedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var nextLockLookup = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var stakedMap in stakedMaps)
+        {
+            var mapId = (stakedMap.MapId ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(mapId))
+            {
+                continue;
+            }
+
+            nextStakedIds.Add(mapId);
+            var lockUntil = ParseUtcTimestamp(stakedMap.LockedUntil);
+            if (lockUntil is DateTimeOffset expiresAt)
+            {
+                nextLockLookup[mapId] = expiresAt;
+            }
+        }
+
+        StakedMapIds = nextStakedIds;
+        StakedMapLockById = nextLockLookup;
+        if (stakingPayload?.User is not null)
+        {
+            Session = stakingPayload.User;
+        }
     }
 
     private void SeedSettingsForms()
@@ -491,6 +531,12 @@ public partial class Profile : IAsyncDisposable
         {
             return;
         }
+        if (!CanRecycleMap(map))
+        {
+            HasError = true;
+            StatusMessage = GetRecycleDisabledReason(map);
+            return;
+        }
 
         await ExecuteActionAsync(
             () => Api.PostJsonAsync("api/auth/maps/recycle", new { mapName = map.MapName }),
@@ -542,7 +588,64 @@ public partial class Profile : IAsyncDisposable
 
     private bool CanRecycleMap(MapSummary map)
     {
-        return Session is not null && EqualsIgnoreCase(map.Owner, Session.Username);
+        return Session is not null
+            && EqualsIgnoreCase(map.Owner, Session.Username)
+            && !IsMapStaked(map);
+    }
+
+    private bool IsMapStaked(MapSummary map)
+    {
+        var mapId = (map.Id ?? string.Empty).Trim();
+        return !string.IsNullOrWhiteSpace(mapId) && StakedMapIds.Contains(mapId);
+    }
+
+    private string GetRecycleDisabledReason(MapSummary map)
+    {
+        if (!IsMapStaked(map))
+        {
+            return "Recycle this map.";
+        }
+
+        if (TryGetMapStakeLock(map, out var lockUntil) && lockUntil > DateTimeOffset.UtcNow)
+        {
+            return $"Staked map lock active until {lockUntil.ToLocalTime():MMM d, yyyy h:mm tt}.";
+        }
+
+        return "Staked maps must be unstaked before recycling.";
+    }
+
+    private string GetMapStakeStatusLabel(MapSummary map)
+    {
+        if (!IsMapStaked(map))
+        {
+            return string.Empty;
+        }
+
+        if (TryGetMapStakeLock(map, out var lockUntil) && lockUntil > DateTimeOffset.UtcNow)
+        {
+            var remaining = lockUntil - DateTimeOffset.UtcNow;
+            if (remaining.TotalDays >= 1)
+            {
+                return $"Staked and locked for {(int)remaining.TotalDays}d {remaining.Hours}h.";
+            }
+
+            if (remaining.TotalHours >= 1)
+            {
+                return $"Staked and locked for {(int)remaining.TotalHours}h {remaining.Minutes}m.";
+            }
+
+            return $"Staked and locked for {Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s.";
+        }
+
+        return "Staked map. Unstake it before recycling or listing.";
+    }
+
+    private bool TryGetMapStakeLock(MapSummary map, out DateTimeOffset lockUntil)
+    {
+        lockUntil = default;
+        var mapId = (map.Id ?? string.Empty).Trim();
+        return !string.IsNullOrWhiteSpace(mapId)
+            && StakedMapLockById.TryGetValue(mapId, out lockUntil);
     }
 
     private async Task RefreshSessionAsync()
@@ -629,7 +732,8 @@ public partial class Profile : IAsyncDisposable
         var nuggetsChanged = ProfileData.MazeNuggets != latestSession.MazeNuggets;
         var profileImageChanged = !Equals(ProfileData.ProfileImage?.ImageUrl, latestSession.ProfileImage?.ImageUrl);
         var onlineChanged = ProfileData.IsOnline != latestSession.IsOnline;
-        var hasChanges = friendsChanged || requestsChanged || nuggetsChanged || profileImageChanged || onlineChanged;
+        var stakedCountChanged = ProfileData.StakedMapsCount != latestSession.StakedMapsCount;
+        var hasChanges = friendsChanged || requestsChanged || nuggetsChanged || profileImageChanged || onlineChanged || stakedCountChanged;
         Session = latestSession;
 
         if (!hasChanges)
@@ -643,7 +747,12 @@ public partial class Profile : IAsyncDisposable
         ProfileData.ProfileImage = latestSession.ProfileImage;
         ProfileData.OwnedMapsCount = latestSession.OwnedMapsCount;
         ProfileData.DiscoveredMapsCount = latestSession.DiscoveredMapsCount;
+        ProfileData.StakedMapsCount = latestSession.StakedMapsCount;
         ProfileData.IsOnline = latestSession.IsOnline;
+        if (stakedCountChanged)
+        {
+            await LoadStakingStateAsync();
+        }
 
         await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", latestSession);
         await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = latestSession.Username }, false);

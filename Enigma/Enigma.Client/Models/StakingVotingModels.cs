@@ -57,6 +57,9 @@ public sealed class StakingOverviewData
 
     [JsonPropertyName("can_claim_today")]
     public bool CanClaimToday { get; set; }
+
+    [JsonPropertyName("stake_lock_hours")]
+    public int StakeLockHours { get; set; }
 }
 
 public sealed class StakedMapEntry
@@ -81,6 +84,15 @@ public sealed class StakedMapEntry
 
     [JsonPropertyName("daily_reward")]
     public int DailyReward { get; set; }
+
+    [JsonPropertyName("locked_until")]
+    public string? LockedUntil { get; set; }
+
+    [JsonPropertyName("is_locked")]
+    public bool IsLocked { get; set; }
+
+    [JsonPropertyName("lock_seconds_remaining")]
+    public int LockSecondsRemaining { get; set; }
 }
 
 public sealed class GovernanceSessionResponse

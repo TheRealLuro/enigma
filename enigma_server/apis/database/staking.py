@@ -96,6 +96,10 @@ def get_staking_overview(request: Request, username: str):
     overview = build_staking_overview(user, maps_collection)
     normalized_staked_ids, _ = normalize_staked_map_ids(user, maps_collection)
     normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
+    missing_lock_ids = [map_id for map_id in normalized_staked_ids if map_id not in normalized_lock_lookup]
+    if missing_lock_ids:
+        for map_id in missing_lock_ids:
+            normalized_lock_lookup[map_id] = stake_lock_expires_at().isoformat()
     current_staked_ids = [str(value or "").strip() for value in list(user.get("staked_map_ids", []) or []) if str(value or "").strip()]
     current_lock_lookup = user.get("staked_map_lock_until") if isinstance(user.get("staked_map_lock_until"), dict) else {}
     if normalized_staked_ids != current_staked_ids or normalized_lock_lookup != current_lock_lookup:
@@ -122,9 +126,17 @@ def stake_map(request: Request, payload: StakeMapPayload):
     normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
     target_map_id = _resolve_owned_map_id(payload.map_id, payload.map_name, owned_lookup)
 
+    should_persist = False
     if target_map_id not in normalized_staked_ids:
         normalized_staked_ids.append(target_map_id)
         normalized_lock_lookup[target_map_id] = stake_lock_expires_at().isoformat()
+        should_persist = True
+    elif target_map_id not in normalized_lock_lookup:
+        # Legacy safety: if a staked map has no lock metadata, immediately apply a full lock window.
+        normalized_lock_lookup[target_map_id] = stake_lock_expires_at().isoformat()
+        should_persist = True
+
+    if should_persist:
         users_collection.update_one(
             {"_id": user["_id"]},
             {"$set": {"staked_map_ids": normalized_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
@@ -147,7 +159,22 @@ def unstake_map(request: Request, payload: UnstakeMapPayload):
     normalized_staked_ids, owned_lookup = normalize_staked_map_ids(user, maps_collection)
     normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
     target_map_id = _resolve_owned_map_id(payload.map_id, payload.map_name, owned_lookup)
+    if target_map_id not in normalized_staked_ids:
+        raise HTTPException(status_code=409, detail="This map is not currently staked")
+
     locked_until_iso = normalized_lock_lookup.get(target_map_id)
+    if not locked_until_iso:
+        enforced_lock_until = stake_lock_expires_at()
+        normalized_lock_lookup[target_map_id] = enforced_lock_until.isoformat()
+        users_collection.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"staked_map_ids": normalized_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f"This map is locked in staking until {enforced_lock_until.isoformat()}",
+        )
+
     if locked_until_iso:
         lock_expires_at = datetime.fromisoformat(locked_until_iso.replace("Z", "+00:00"))
         if lock_expires_at.tzinfo is None:

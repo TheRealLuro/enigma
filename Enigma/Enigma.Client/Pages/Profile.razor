@@ -192,11 +192,18 @@ else
                                         {
                                             <div class="profile-map-actions">
                                                 <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="() => UseMapForPictureAsync(map)">Use for Picture</button>
-                                                @if (CanRecycleMap(map))
-                                                {
-                                                    <button class="btn btn-danger" type="button" disabled="@IsActionBusy" @onclick="() => RecycleMapAsync(map)">Recycle</button>
-                                                }
+                                                <button class="btn btn-danger"
+                                                        type="button"
+                                                        title="@GetRecycleDisabledReason(map)"
+                                                        disabled="@(!CanRecycleMap(map) || IsActionBusy)"
+                                                        @onclick="() => RecycleMapAsync(map)">
+                                                    @(CanRecycleMap(map) ? "Recycle" : "Staked")
+                                                </button>
                                             </div>
+                                            @if (IsMapStaked(map))
+                                            {
+                                                <div class="empty-state-inline">@GetMapStakeStatusLabel(map)</div>
+                                            }
                                         }
                                     </div>
                                 </article>

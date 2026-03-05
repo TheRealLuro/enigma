@@ -6943,59 +6943,21 @@ h1:focus {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
+    align-items: start;
 }
 
 .staking-column {
     display: grid;
     gap: 14px;
+    align-content: start;
+    align-self: start;
 }
 
 .staking-map-stack {
     display: grid;
     gap: 10px;
-}
-
-.staking-map-card {
-    border-radius: 14px;
-    border: 1px solid rgba(120, 176, 255, 0.16);
-    background: rgba(16, 23, 36, 0.85);
-    padding: 14px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
-    align-items: center;
-}
-
-.staking-map-card.muted {
-    border-color: rgba(255, 255, 255, 0.08);
-}
-
-.staking-map-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 6px;
-    color: rgba(217, 225, 235, 0.72);
-    font-size: 0.86rem;
-}
-
-.staking-map-actions {
-    display: grid;
-    justify-items: end;
-    gap: 8px;
-}
-
-.staking-faq-card {
-    display: grid;
-    gap: 12px;
-}
-
-.staking-faq-list {
-    margin: 0;
-    padding-left: 20px;
-    display: grid;
-    gap: 10px;
-    color: rgba(227, 234, 246, 0.86);
+    align-content: start;
+    grid-auto-rows: auto;
 }
 
 .voting-admin-panel,
@@ -7882,7 +7844,11 @@ h1:focus {
     background: rgba(16, 23, 36, 0.9);
     padding: 14px;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
+    align-items: start;
+    align-content: start;
+    min-height: 0;
 }
 
 .staking-map-card.muted {
@@ -7944,32 +7910,60 @@ h1:focus {
 
 .staking-empty-state {
     border-radius: 14px;
-    border: 1px dashed rgba(155, 189, 238, 0.28);
-    background: rgba(255, 255, 255, 0.02);
-    padding: 18px;
+    border: 1px dashed rgba(155, 189, 238, 0.34);
+    background:
+        radial-gradient(circle at 10% 10%, rgba(93, 171, 255, 0.1), transparent 46%),
+        rgba(255, 255, 255, 0.02);
+    padding: 20px 20px 18px;
     display: grid;
-    gap: 7px;
+    gap: 10px;
     justify-items: start;
+    max-width: 100%;
+}
+
+.staking-empty-header {
+    display: grid;
+    gap: 8px;
 }
 
 .staking-empty-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 54px;
-    height: 26px;
-    padding: 0 10px;
+    min-width: 90px;
+    height: 28px;
+    padding: 0 12px;
     border-radius: 999px;
     border: 1px solid rgba(127, 176, 245, 0.42);
     color: rgba(185, 218, 255, 0.92);
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     letter-spacing: 0.12em;
     font-weight: 800;
+}
+
+.staking-empty-state strong {
+    font-size: 1rem;
+    line-height: 1.35;
 }
 
 .staking-empty-state p {
     margin: 0;
     color: rgba(201, 215, 236, 0.74);
+    line-height: 1.45;
+}
+
+.staking-map-stack-available {
+    gap: 12px;
+}
+
+.staking-map-card-available {
+    background:
+        radial-gradient(circle at 92% 8%, rgba(95, 173, 255, 0.12), transparent 42%),
+        rgba(16, 23, 36, 0.88);
+}
+
+.staking-map-stack-available .staking-map-card-available:only-child {
+    max-width: 100%;
 }
 
 .staking-faq-collapsible {
@@ -8009,6 +8003,14 @@ h1:focus {
     margin-right: 16px;
     margin-top: 2px;
     margin-bottom: 12px;
+}
+
+.staking-faq-list {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 10px;
+    color: rgba(227, 234, 246, 0.86);
 }
 
 .difficulty-elite {

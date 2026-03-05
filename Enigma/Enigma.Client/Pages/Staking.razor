@@ -192,13 +192,20 @@ else
                                     <div><span>Difficulty</span><strong>@FormatDifficultyLabel(map.Difficulty)</strong></div>
                                     <div><span>Size</span><strong>@map.Size x @map.Size</strong></div>
                                     <div><span>Multiplier</span><strong>@($"{map.SizeMultiplier:0.00}x")</strong></div>
+                                    <div><span>Stake Lock</span><strong>@GetStakeLockLabel(map)</strong></div>
                                 </div>
                                 <div class="staking-map-footer">
                                     <div>
                                         <span class="staking-yield-label">Yield</span>
                                         <strong class="staking-yield-value">@map.DailyReward.ToString("N0") MN/day</strong>
                                     </div>
-                                    <button class="btn btn-secondary" type="button" disabled="@IsBusy" @onclick="() => UnstakeMapAsync(map.MapId)">Unstake</button>
+                                    <button class="btn btn-secondary"
+                                            type="button"
+                                            title="@GetStakeLockTooltip(map)"
+                                            disabled="@(IsBusy || IsStakeLocked(map))"
+                                            @onclick="() => UnstakeMapAsync(map.MapId)">
+                                        @(IsStakeLocked(map) ? "Locked" : "Unstake")
+                                    </button>
                                 </div>
                             </article>
                         }
@@ -206,7 +213,7 @@ else
                 }
             </section>
 
-            <section class="staking-column panel profile-release-panel">
+            <section class="staking-column staking-available-column panel profile-release-panel">
                 <div class="panel-heading">
                     <div>
                         <span class="profile-eyebrow">Owned Inventory</span>
@@ -217,17 +224,19 @@ else
                 @if (Overview.AvailableMaps.Count == 0)
                 {
                     <div class="staking-empty-state">
-                        <span class="staking-empty-icon" aria-hidden="true">MAP</span>
-                        <strong>All maps are currently staked.</strong>
-                        <p>Acquire more maps to increase yield.</p>
+                        <div class="staking-empty-header">
+                            <span class="staking-empty-icon" aria-hidden="true">ALL STAKED</span>
+                            <strong>No maps available to stake right now.</strong>
+                        </div>
+                        <p>All owned maps are currently staked or unavailable. Unstake one after its lock expires, or acquire more maps.</p>
                     </div>
                 }
                 else
                 {
-                    <div class="staking-map-stack">
+                    <div class="staking-map-stack staking-map-stack-available">
                         @foreach (var map in Overview.AvailableMaps.OrderBy(static item => item.MapName, StringComparer.OrdinalIgnoreCase))
                         {
-                            <article class="staking-map-card muted">
+                            <article class="staking-map-card muted staking-map-card-available">
                                 <div class="staking-map-card-head">
                                     <h3>@map.MapName</h3>
                                     <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@FormatDifficultyLabel(map.Difficulty)</span>
@@ -264,7 +273,10 @@ else
                     <li>Base daily rewards per map difficulty: Easy = 5 MN, Medium = 15 MN, Hard = 25 MN.</li>
                     <li>Size multiplier formula: <code>0.7 + (size / 20)</code>, capped at <code>2.0x</code>. Example: 2x2 = 0.8x, 4x4 = 0.9x.</li>
                     <li>Daily reward per map is <code>ceil(base * sizeMultiplier)</code>. Example: Easy 2x2 = <code>ceil(5 * 0.8) = 4 MN/day</code>.</li>
-                    <li>Only maps you currently own can stay staked. Sold or recycled maps are automatically removed from stake.</li>
+                    <li>Each map is hard-locked for @Math.Max(0, Overview?.StakeLockHours ?? 48) hours immediately after staking.</li>
+                    <li>While locked, unstake is blocked in both UI and API. There is no bypass until the timer expires.</li>
+                    <li>Staked maps cannot be listed, sold, or recycled until you unstake them after the lock window.</li>
+                    <li>Only maps you currently own can stay staked. If ownership changes, staking data is cleaned up automatically.</li>
                     <li>Claim once per day, or log in to auto-claim when eligible.</li>
                 </ol>
             </details>
@@ -388,6 +400,14 @@ else
 
     private async Task UnstakeMapAsync(string mapId)
     {
+        var selectedMap = Overview?.StakedMaps.FirstOrDefault(entry => string.Equals(entry.MapId, mapId, StringComparison.OrdinalIgnoreCase));
+        if (selectedMap is not null && IsStakeLocked(selectedMap))
+        {
+            HasError = true;
+            StatusMessage = $"This map is still stake-locked for {GetStakeLockLabel(selectedMap)}.";
+            return;
+        }
+
         await ExecuteActionAsync(
             async () => await Api.PostJsonAsync("api/auth/staking/unstake", new { mapId }),
             "Map unstaked.");
@@ -548,6 +568,54 @@ else
         }
 
         return $"{Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s";
+    }
+
+    private bool IsStakeLocked(StakedMapEntry map)
+    {
+        var lockedUntil = ParseIsoTimestamp(map.LockedUntil);
+        return lockedUntil is DateTimeOffset value && value > CurrentClientTime.ToUniversalTime();
+    }
+
+    private string GetStakeLockLabel(StakedMapEntry map)
+    {
+        if (!IsStakeLocked(map))
+        {
+            return "Ready";
+        }
+
+        var lockedUntil = ParseIsoTimestamp(map.LockedUntil);
+        if (lockedUntil is not DateTimeOffset value)
+        {
+            return "Locked";
+        }
+
+        var remaining = value - CurrentClientTime.ToUniversalTime();
+        if (remaining <= TimeSpan.Zero)
+        {
+            return "Ready";
+        }
+
+        if (remaining.TotalDays >= 1)
+        {
+            return $"{(int)remaining.TotalDays}d {remaining.Hours}h";
+        }
+
+        if (remaining.TotalHours >= 1)
+        {
+            return $"{(int)remaining.TotalHours}h {remaining.Minutes}m";
+        }
+
+        return $"{Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s";
+    }
+
+    private string GetStakeLockTooltip(StakedMapEntry map)
+    {
+        if (!IsStakeLocked(map))
+        {
+            return "This map can be unstaked now.";
+        }
+
+        return $"Unstake unlocks in {GetStakeLockLabel(map)}.";
     }
 
     private IReadOnlyList<YieldSlice> GetYieldSlices()
