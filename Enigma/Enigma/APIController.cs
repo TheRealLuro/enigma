@@ -560,6 +560,124 @@ public class APIController : ControllerBase
     }
 
     [Authorize]
+    [HttpGet("economy/overview")]
+    public async Task<IActionResult> GetEconomyOverview()
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.GetAsync($"database/economy/overview?username={Esc(username)}");
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpGet("staking")]
+    public async Task<IActionResult> GetStakingOverview()
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.GetAsync($"database/staking/overview?username={Esc(username)}");
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("staking/stake")]
+    public async Task<IActionResult> StakeMap([FromBody] StakingMapRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/staking/stake", new
+        {
+            username,
+            map_id = request.MapId,
+            map_name = request.MapName,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("staking/unstake")]
+    public async Task<IActionResult> UnstakeMap([FromBody] StakingMapRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/staking/unstake", new
+        {
+            username,
+            map_id = request.MapId,
+            map_name = request.MapName,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("staking/claim")]
+    public async Task<IActionResult> ClaimStakingReward()
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/staking/claim", new
+        {
+            username,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpGet("voting/session")]
+    public async Task<IActionResult> GetVotingSession()
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.GetAsync($"database/governance/session?username={Esc(username)}");
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("voting/session/start")]
+    public async Task<IActionResult> StartVotingSession([FromBody] StartVotingSessionRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/governance/session/start", new
+        {
+            username,
+            title = request.Title,
+            description = request.Description,
+            options = request.Options,
+            duration_hours = request.DurationHours,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("voting/session/close")]
+    public async Task<IActionResult> CloseVotingSession()
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/governance/session/close", new
+        {
+            username,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPost("voting/cast")]
+    public async Task<IActionResult> CastVote([FromBody] CastVoteRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PostAsJsonAsync("database/governance/vote", new
+        {
+            username,
+            option_id = request.OptionId,
+            mn_spent = request.MnSpent,
+        });
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
     [HttpPost("marketplace/add")]
     public async Task<IActionResult> AddMarketplaceListing([FromBody] MarketplaceAddRequest request)
     {
@@ -918,6 +1036,26 @@ public sealed class PurchaseItemRequest
 {
     public string ItemId { get; set; } = string.Empty;
     public int Quantity { get; set; } = 1;
+}
+
+public sealed class StakingMapRequest
+{
+    public string? MapId { get; set; }
+    public string? MapName { get; set; }
+}
+
+public sealed class StartVotingSessionRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public List<string> Options { get; set; } = [];
+    public int DurationHours { get; set; } = 24;
+}
+
+public sealed class CastVoteRequest
+{
+    public string OptionId { get; set; } = string.Empty;
+    public int MnSpent { get; set; }
 }
 
 public sealed class CreateMultiplayerSessionRequest

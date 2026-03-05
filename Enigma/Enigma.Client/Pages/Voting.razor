@@ -1,0 +1,414 @@
+@page "/voting"
+@using Enigma.Client.Models
+@inject Enigma.Client.Services.EnigmaApiClient Api
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<SeoHead Title="Enigma Voting | Community Governance"
+         Description="Vote in active Enigma governance sessions using Maze Nuggets. Voting power scales with MN spent and staked-map weight."
+         Robots="noindex,follow"
+         OpenGraphType="website"
+         SchemaType="WebPage" />
+
+@if (IsLoading)
+{
+    <div class="content"><div class="card enigma-game-message"><div class="loader"></div><p>Loading governance session...</p></div></div>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Voting unavailable</h1>
+            <p>@ErrorMessage</p>
+            <button class="btn btn-primary" type="button" @onclick="ReloadAsync">Retry</button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="content voting-shell">
+        <section class="voting-banner">
+            <div>
+                <span class="profile-eyebrow">Governance</span>
+                <h1>Community Voting</h1>
+                <p>Use MN to vote. More MN means more power. Staked maps add a balanced multiplier.</p>
+            </div>
+            <div class="voting-banner-meta">
+                <span class="profile-chip">Balance @(Session?.MazeNuggets.ToString("N0") ?? "0") MN</span>
+                <span class="profile-chip">Stake Weight x@CurrentStakeMultiplier.ToString("0.00")</span>
+                <span class="profile-chip">@CurrentStakedCount staked map(s)</span>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
+        }
+
+        @if (CanStartSession)
+        {
+            <section class="panel profile-release-panel voting-admin-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Bank Controls</span>
+                        <h2>Start Voting Session</h2>
+                    </div>
+                </div>
+                <div class="voting-form-grid">
+                    <div>
+                        <label class="form-label">Title</label>
+                        <input class="form-control" @bind="StartTitle" maxlength="120" />
+                    </div>
+                    <div>
+                        <label class="form-label">Duration (hours)</label>
+                        <input class="form-control" type="number" min="1" max="168" @bind="StartDurationHours" />
+                    </div>
+                    <div class="voting-form-span">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" rows="3" maxlength="500" @bind="StartDescription"></textarea>
+                    </div>
+                    <div>
+                        <label class="form-label">Option A</label>
+                        <input class="form-control" @bind="OptionA" maxlength="80" />
+                    </div>
+                    <div>
+                        <label class="form-label">Option B</label>
+                        <input class="form-control" @bind="OptionB" maxlength="80" />
+                    </div>
+                    <div>
+                        <label class="form-label">Option C (optional)</label>
+                        <input class="form-control" @bind="OptionC" maxlength="80" />
+                    </div>
+                    <div>
+                        <label class="form-label">Option D (optional)</label>
+                        <input class="form-control" @bind="OptionD" maxlength="80" />
+                    </div>
+                </div>
+                <div class="voting-admin-actions">
+                    <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="StartSessionAsync">@(IsBusy ? "Starting..." : "Start Session")</button>
+                </div>
+            </section>
+        }
+
+        @if (ActiveSession is not null)
+        {
+            <section class="panel profile-release-panel voting-session-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Active Session</span>
+                        <h2>@ActiveSession.Title</h2>
+                    </div>
+                    <span class="section-count">@ActiveSession.SessionId</span>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(ActiveSession.Description))
+                {
+                    <p class="voting-session-copy">@ActiveSession.Description</p>
+                }
+                <div class="voting-session-meta">
+                    <span>Ends: @FormatTimestamp(ActiveSession.EndsAt)</span>
+                    <span>Total MN: @ActiveSession.TotalMnSpent.ToString("N0")</span>
+                    <span>Total power: @ActiveSession.TotalVotePower.ToString("N2")</span>
+                    <span>Voters: @ActiveSession.UniqueVoterCount</span>
+                </div>
+                <div class="voting-vote-row">
+                    <label class="form-label">MN to spend per vote</label>
+                    <input class="form-control voting-mn-input" type="number" min="1" max="1000000" @bind="VoteMnAmount" />
+                    <span class="voting-power-preview">Power per vote: @(Math.Max(1, VoteMnAmount) * CurrentStakeMultiplier).ToString("N2")</span>
+                </div>
+                <div class="voting-options-grid">
+                    @foreach (var option in ActiveSession.Options.OrderByDescending(static option => option.VotePower))
+                    {
+                        <article class="voting-option-card">
+                            <div class="voting-option-top">
+                                <strong>@option.Label</strong>
+                                <span>@option.VotePower.ToString("N2") power</span>
+                            </div>
+                            <div class="voting-option-meta">
+                                <span>@option.MnSpent.ToString("N0") MN</span>
+                                <span>@option.VoteCount votes</span>
+                            </div>
+                            <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="() => VoteAsync(option.Id)">
+                                @(IsBusy ? "Submitting..." : $"Vote for {option.Label}")
+                            </button>
+                        </article>
+                    }
+                </div>
+                @if (CanCloseSession)
+                {
+                    <div class="voting-admin-actions">
+                        <button class="btn btn-danger" type="button" disabled="@IsBusy" @onclick="CloseSessionAsync">@(IsBusy ? "Closing..." : "Close Session")</button>
+                    </div>
+                }
+            </section>
+        }
+        else
+        {
+            <section class="panel profile-release-panel voting-empty-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Session Status</span>
+                        <h2>Voting is currently closed</h2>
+                    </div>
+                </div>
+                <p class="empty-state-inline">A session appears here when `enigma_bank` starts one.</p>
+            </section>
+        }
+
+        @if (LatestClosedSession is not null)
+        {
+            <section class="panel profile-release-panel voting-results-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Latest Results</span>
+                        <h2>@LatestClosedSession.Title</h2>
+                    </div>
+                    <span class="section-count">Closed</span>
+                </div>
+                <div class="voting-options-grid compact">
+                    @foreach (var option in LatestClosedSession.Options.OrderByDescending(static option => option.VotePower))
+                    {
+                        <article class="voting-option-card compact">
+                            <div class="voting-option-top">
+                                <strong>@option.Label</strong>
+                                <span>@option.VotePower.ToString("N2") power</span>
+                            </div>
+                            <div class="voting-option-meta">
+                                <span>@option.MnSpent.ToString("N0") MN</span>
+                                <span>@option.VoteCount votes</span>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+    </div>
+}
+
+@code {
+    private bool IsLoading { get; set; } = true;
+    private bool IsBusy { get; set; }
+    private bool HasError { get; set; }
+    private string? ErrorMessage { get; set; }
+    private string? StatusMessage { get; set; }
+    private LoginUserSummary? Session { get; set; }
+    private GovernanceSessionData? ActiveSession { get; set; }
+    private GovernanceSessionData? LatestClosedSession { get; set; }
+    private bool IsBankUser { get; set; }
+
+    private string StartTitle { get; set; } = "Weekly Community Decision";
+    private string StartDescription { get; set; } = "Vote with MN to decide this cycle's priority.";
+    private int StartDurationHours { get; set; } = 24;
+    private string OptionA { get; set; } = "Boost map rewards";
+    private string OptionB { get; set; } = "Boost item drops";
+    private string OptionC { get; set; } = string.Empty;
+    private string OptionD { get; set; } = string.Empty;
+    private int VoteMnAmount { get; set; } = 25;
+
+    private bool CanStartSession => IsBankUser && ActiveSession is null;
+    private bool CanCloseSession => IsBankUser && ActiveSession is not null;
+
+    private int CurrentStakedCount =>
+        ActiveSession?.UserVoteSummary?.StakedMapsCount
+        ?? LatestClosedSession?.UserVoteSummary?.StakedMapsCount
+        ?? Session?.StakedMapsCount
+        ?? 0;
+
+    private double CurrentStakeMultiplier =>
+        ActiveSession?.UserVoteSummary?.StakeWeightMultiplier
+        ?? LatestClosedSession?.UserVoteSummary?.StakeWeightMultiplier
+        ?? 1.0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        IsLoading = true;
+        HasError = false;
+        ErrorMessage = null;
+        StatusMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var payload = await Api.GetFromJsonAsync<GovernanceSessionResponse>("api/auth/voting/session");
+            if (payload is null)
+            {
+                throw new InvalidOperationException("Unable to load voting session.");
+            }
+
+            IsBankUser = payload.IsBankUser;
+            ActiveSession = payload.ActiveSession;
+            LatestClosedSession = payload.LatestClosedSession ?? payload.ClosedSession;
+            Session = payload.User ?? await Api.GetSessionAsync();
+            await SyncClientSessionAsync(payload.User);
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task StartSessionAsync()
+    {
+        var options = new[] { OptionA, OptionB, OptionC, OptionD }
+            .Select(static option => (option ?? string.Empty).Trim())
+            .Where(static option => !string.IsNullOrWhiteSpace(option))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (string.IsNullOrWhiteSpace(StartTitle) || options.Count < 2)
+        {
+            HasError = true;
+            StatusMessage = "Provide a title and at least two unique options.";
+            return;
+        }
+
+        await ExecuteActionAsync(
+            async () => await Api.PostJsonAsync("api/auth/voting/session/start", new
+            {
+                title = StartTitle.Trim(),
+                description = StartDescription.Trim(),
+                options,
+                durationHours = StartDurationHours,
+            }),
+            "Voting session started.");
+    }
+
+    private async Task CloseSessionAsync()
+    {
+        await ExecuteActionAsync(
+            async () => await Api.PostJsonAsync("api/auth/voting/session/close", new { }),
+            "Voting session closed.");
+    }
+
+    private async Task VoteAsync(string optionId)
+    {
+        if (VoteMnAmount <= 0)
+        {
+            HasError = true;
+            StatusMessage = "Vote amount must be at least 1 MN.";
+            return;
+        }
+
+        await ExecuteVoteAsync(optionId, VoteMnAmount);
+    }
+
+    private async Task ExecuteActionAsync(Func<Task<HttpResponseMessage>> requestFactory, string successMessage)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        HasError = false;
+        StatusMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await requestFactory();
+            var payload = await Api.ReadJsonAsync<GovernanceSessionResponse>(response);
+            if (!response.IsSuccessStatusCode || payload is null)
+            {
+                throw new InvalidOperationException("Request failed.");
+            }
+
+            IsBankUser = payload.IsBankUser;
+            ActiveSession = payload.ActiveSession;
+            LatestClosedSession = payload.LatestClosedSession ?? payload.ClosedSession ?? LatestClosedSession;
+            Session = payload.User ?? Session;
+            await SyncClientSessionAsync(payload.User);
+            StatusMessage = successMessage;
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ExecuteVoteAsync(string optionId, int mnSpent)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        HasError = false;
+        StatusMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await Api.PostJsonAsync("api/auth/voting/cast", new
+            {
+                optionId,
+                mnSpent,
+            });
+            var payload = await Api.ReadJsonAsync<GovernanceVoteResponse>(response);
+            if (!response.IsSuccessStatusCode || payload is null)
+            {
+                throw new InvalidOperationException("Vote failed.");
+            }
+
+            ActiveSession = payload.ActiveSession ?? ActiveSession;
+            Session = payload.User ?? Session;
+            await SyncClientSessionAsync(payload.User);
+            StatusMessage = $"Vote cast: {payload.MnSpent:N0} MN -> {payload.VotePower:N2} power.";
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SyncClientSessionAsync(LoginUserSummary? session)
+    {
+        if (session is null)
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
+        await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session.Username }, false);
+    }
+
+    private static string FormatTimestamp(string? isoUtc)
+    {
+        if (string.IsNullOrWhiteSpace(isoUtc))
+        {
+            return "Unknown";
+        }
+
+        return DateTimeOffset.TryParse(isoUtc, out var parsed)
+            ? parsed.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+            : isoUtc;
+    }
+}

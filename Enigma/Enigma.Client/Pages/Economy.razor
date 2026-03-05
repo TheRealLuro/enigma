@@ -1,0 +1,237 @@
+@page "/economy"
+@using Enigma.Client.Models
+@inject Enigma.Client.Services.EnigmaApiClient Api
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<SeoHead Title="Enigma Economy | Circulation, Marketplace, and Staking"
+         Description="Track MN and map circulation, user activity, and access marketplace and staking tools from one economy hub."
+         Robots="noindex,follow"
+         OpenGraphType="website"
+         SchemaType="WebPage" />
+
+@if (IsLoading && Overview is null)
+{
+    <div class="content"><div class="card enigma-game-message"><div class="loader"></div><p>Loading economy overview...</p></div></div>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage) && Overview is null)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <h1>Economy unavailable</h1>
+            <p>@ErrorMessage</p>
+            <button class="btn btn-primary" type="button" @onclick="ReloadAsync">Retry</button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="content economy-shell">
+        <section class="economy-banner">
+            <div>
+                <span class="profile-eyebrow">Economy</span>
+                <h1>Market Pulse</h1>
+                <p>Monitor MN circulation, map circulation, player activity, and governance spend in one place.</p>
+            </div>
+            <div class="economy-banner-meta">
+                <span class="profile-chip">@((Overview?.MnTotalKnown ?? 0).ToString("N0")) MN known total</span>
+                <span class="profile-chip">@((Overview?.MapsTotal ?? 0).ToString("N0")) maps tracked</span>
+                <span class="profile-chip">@((Overview?.UsersOnlineNow ?? 0).ToString("N0")) online now</span>
+                <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="ReloadAsync">
+                    @(IsLoading ? "Refreshing..." : "Refresh")
+                </button>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <div class="alert alert-warning">@ErrorMessage</div>
+        }
+
+        <div class="profile-tabbar economy-tabbar">
+            <button class="@GetTabClass(OverviewTab)" type="button" @onclick='@(() => SetActiveTab(OverviewTab))'>Overview</button>
+            <button class="@GetTabClass(MarketplaceTab)" type="button" @onclick='@(() => SetActiveTab(MarketplaceTab))'>Marketplace</button>
+            <button class="@GetTabClass(StakingTab)" type="button" @onclick='@(() => SetActiveTab(StakingTab))'>Staking</button>
+        </div>
+
+        @if (ActiveTab == OverviewTab)
+        {
+            <section class="economy-grid">
+                <article class="panel profile-release-panel economy-card">
+                    <span class="profile-eyebrow">Maze Nuggets</span>
+                    <h2>MN Circulation</h2>
+                    <div class="economy-stat-line"><span>Player wallets</span><strong>@((Overview?.MnPlayerWalletsTotal ?? 0).ToString("N0")) MN</strong></div>
+                    <div class="economy-stat-line"><span>Bank reserve</span><strong>@((Overview?.MnBankReserveTotal ?? 0).ToString("N0")) MN</strong></div>
+                    <div class="economy-stat-line"><span>Total known</span><strong>@((Overview?.MnTotalKnown ?? 0).ToString("N0")) MN</strong></div>
+                </article>
+
+                <article class="panel profile-release-panel economy-card">
+                    <span class="profile-eyebrow">Map Supply</span>
+                    <h2>Map Circulation</h2>
+                    <div class="economy-stat-line"><span>Total maps</span><strong>@((Overview?.MapsTotal ?? 0).ToString("N0"))</strong></div>
+                    <div class="economy-stat-line"><span>Listed maps</span><strong>@((Overview?.MapsListed ?? 0).ToString("N0")) (@((Overview?.MapsListedPercent ?? 0).ToString("0.##"))%)</strong></div>
+                    <div class="economy-stat-line"><span>Staked maps</span><strong>@((Overview?.MapsStaked ?? 0).ToString("N0")) (@((Overview?.MapsStakedPercent ?? 0).ToString("0.##"))%)</strong></div>
+                </article>
+
+                <article class="panel profile-release-panel economy-card">
+                    <span class="profile-eyebrow">Players</span>
+                    <h2>Activity Snapshot</h2>
+                    <div class="economy-stat-line"><span>Total users</span><strong>@((Overview?.UsersTotal ?? 0).ToString("N0"))</strong></div>
+                    <div class="economy-stat-line"><span>Online now</span><strong>@((Overview?.UsersOnlineNow ?? 0).ToString("N0"))</strong></div>
+                    <div class="economy-stat-line"><span>Active (24h)</span><strong>@((Overview?.UsersActive24h ?? 0).ToString("N0"))</strong></div>
+                    <div class="economy-stat-line"><span>Users staking</span><strong>@((Overview?.StakersTotal ?? 0).ToString("N0"))</strong></div>
+                </article>
+
+                <article class="panel profile-release-panel economy-card">
+                    <span class="profile-eyebrow">Marketplace + Voting</span>
+                    <h2>Economic Flow</h2>
+                    <div class="economy-stat-line"><span>Listing value total</span><strong>@((Overview?.MarketplaceListingValueTotal ?? 0).ToString("N0")) MN</strong></div>
+                    <div class="economy-stat-line"><span>Avg listing price</span><strong>@((Overview?.MarketplaceListingPriceAvg ?? 0).ToString("N2")) MN</strong></div>
+                    <div class="economy-stat-line"><span>Voting status</span><strong>@(Overview?.GovernanceVotingOpen == true ? "Open" : "Closed")</strong></div>
+                    <div class="economy-stat-line"><span>MN spent in voting</span><strong>@((Overview?.GovernanceTotalMnSpent ?? 0).ToString("N0")) MN</strong></div>
+                    @if (!string.IsNullOrWhiteSpace(Overview?.GovernanceActiveTitle))
+                    {
+                        <p class="economy-card-footnote">Active vote: @Overview.GovernanceActiveTitle</p>
+                    }
+                </article>
+            </section>
+
+            <section class="panel profile-release-panel economy-faq">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Economy FAQ</span>
+                        <h2>How to read this tab</h2>
+                    </div>
+                </div>
+                <ol class="staking-faq-list">
+                    <li>MN circulation shows player-held balance, bank-held reserve, and known total supply snapshot.</li>
+                    <li>Map circulation tracks total maps, currently listed maps, and currently staked maps.</li>
+                    <li>Active users are measured by recent activity in the last 24 hours. Online now is a tighter live window.</li>
+                    <li>Marketplace and staking remain fully usable as subtabs here.</li>
+                    <li>Voting spend tracks how much MN has been committed to governance sessions.</li>
+                </ol>
+                @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))
+                {
+                    <p class="economy-card-footnote">Snapshot generated @FormatTimestamp(Overview.GeneratedAt).</p>
+                }
+            </section>
+        }
+        else if (ActiveTab == MarketplaceTab)
+        {
+            <Marketplace Embedded="true" />
+        }
+        else
+        {
+            <Staking Embedded="true" />
+        }
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+
+    private const string OverviewTab = "overview";
+    private const string MarketplaceTab = "marketplace";
+    private const string StakingTab = "staking";
+
+    private bool IsLoading { get; set; } = true;
+    private string? ErrorMessage { get; set; }
+    private EconomyOverviewData? Overview { get; set; }
+    private LoginUserSummary? Session { get; set; }
+    private string ActiveTab { get; set; } = OverviewTab;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        ActiveTab = NormalizeTab(Tab);
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var payload = await Api.GetFromJsonAsync<EconomyOverviewResponse>("api/auth/economy/overview");
+            if (payload is null || payload.Overview is null)
+            {
+                throw new InvalidOperationException("Unable to load economy overview.");
+            }
+
+            Overview = payload.Overview;
+            Session = payload.User ?? await Api.GetSessionAsync();
+            await SyncClientSessionAsync(payload.User);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        var normalized = NormalizeTab(tab);
+        if (string.Equals(ActiveTab, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        ActiveTab = normalized;
+        var target = normalized == OverviewTab ? "/economy" : $"/economy?tab={normalized}";
+        NavigationManager.NavigateTo(target, replace: true);
+    }
+
+    private static string NormalizeTab(string? tab)
+    {
+        return (tab ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            MarketplaceTab => MarketplaceTab,
+            StakingTab => StakingTab,
+            _ => OverviewTab,
+        };
+    }
+
+    private string GetTabClass(string tab)
+    {
+        return string.Equals(ActiveTab, tab, StringComparison.OrdinalIgnoreCase) ? "profile-tab active" : "profile-tab";
+    }
+
+    private async Task SyncClientSessionAsync(LoginUserSummary? session)
+    {
+        if (session is null)
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
+        await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session.Username }, false);
+    }
+
+    private static string FormatTimestamp(string? isoUtc)
+    {
+        if (string.IsNullOrWhiteSpace(isoUtc))
+        {
+            return "Unknown";
+        }
+
+        return DateTimeOffset.TryParse(isoUtc, out var parsed)
+            ? parsed.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+            : isoUtc;
+    }
+}

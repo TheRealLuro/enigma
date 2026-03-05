@@ -13,6 +13,7 @@ from .user_utils import (
     build_user_defaults_update,
     serialize_session_user,
 )
+from .staking_rules import claim_daily_staking_reward
 
 router = APIRouter(prefix="/database/users")
 
@@ -77,9 +78,15 @@ def login_user(request: Request, username: str | None = None, passwd: str | None
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    staking_claim = claim_daily_staking_reward(users_collection, maps_collection, user)
+    if staking_claim.get("reward_granted"):
+        user = users_collection.find_one({"username": username}) or user
+
     return {
         "status": "success",
         "user": serialize_session_user(user, maps_collection),
         "daily_reward_granted": rewarded,
         "daily_reward_amount": DAILY_REWARD if rewarded else 0,
+        "daily_staking_reward_granted": bool(staking_claim.get("reward_granted")),
+        "daily_staking_reward_amount": int(staking_claim.get("rewarded_mn", 0) or 0),
     }

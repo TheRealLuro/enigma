@@ -5,15 +5,18 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
-<SeoHead Title="Enigma Marketplace | Map Trading and Item Shop"
-         Description="Trade Enigma maps, review live listings, and buy item-shop inventory from the marketplace."
-         Robots="noindex,follow"
-         OpenGraphType="website"
-         SchemaType="WebPage" />
+@if (!Embedded)
+{
+    <SeoHead Title="Enigma Marketplace | Map Trading and Item Shop"
+             Description="Trade Enigma maps, review live listings, and buy item-shop inventory from the marketplace."
+             Robots="noindex,follow"
+             OpenGraphType="website"
+             SchemaType="WebPage" />
+}
 
 @if (IsLoading && !HasLoadedOnce)
 {
-    <div class="content">
+    <div class="@(Embedded ? "economy-embedded-state" : "content")">
         <div class="card enigma-game-message">
             <div class="loader"></div>
             <p>Loading marketplace...</p>
@@ -22,7 +25,7 @@
 }
 else if (Session is null)
 {
-    <div class="content">
+    <div class="@(Embedded ? "economy-embedded-state" : "content")">
         <div class="card enigma-game-message">
             <h1>Marketplace unavailable</h1>
             <p>Sign in to browse and trade maps.</p>
@@ -35,7 +38,7 @@ else if (Session is null)
 }
 else
 {
-    <div class="content marketplace-shell">
+    <div class="@(Embedded ? "marketplace-shell economy-embedded-shell" : "content marketplace-shell")">
         <section class="marketplace-banner">
             <div>
                 <h1>Marketplace</h1>
@@ -590,6 +593,8 @@ else
 }
 
 @code {
+    [Parameter] public bool Embedded { get; set; }
+
     [Inject] private NavigationManager NavigationManager { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
 

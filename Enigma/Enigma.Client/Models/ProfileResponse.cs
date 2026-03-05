@@ -46,6 +46,12 @@ public class ProfileUserData
     [JsonPropertyName("owned_cosmetics")]
     public List<string> OwnedCosmetics { get; set; } = [];
 
+    [JsonPropertyName("staked_maps_count")]
+    public int StakedMapsCount { get; set; }
+
+    [JsonPropertyName("last_staking_reward_at")]
+    public string? LastStakingRewardAt { get; set; }
+
     [JsonPropertyName("owned_maps_count")]
     public int OwnedMapsCount { get; set; }
 

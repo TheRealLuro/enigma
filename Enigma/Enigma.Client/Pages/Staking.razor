@@ -1,0 +1,325 @@
+@page "/staking"
+@using Enigma.Client.Models
+@inject Enigma.Client.Services.EnigmaApiClient Api
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+@if (!Embedded)
+{
+    <SeoHead Title="Enigma Staking | Daily Map Yield"
+             Description="Stake owned maps to earn daily Maze Nugget rewards based on map difficulty and size."
+             Robots="noindex,follow"
+             OpenGraphType="website"
+             SchemaType="WebPage" />
+}
+
+@if (IsLoading)
+{
+    <div class="@(Embedded ? "economy-embedded-state" : "content")"><div class="card enigma-game-message"><div class="loader"></div><p>Loading staking...</p></div></div>
+}
+else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="@(Embedded ? "economy-embedded-state" : "content")">
+        <div class="card enigma-game-message">
+            <h1>Staking unavailable</h1>
+            <p>@ErrorMessage</p>
+            <button class="btn btn-primary" type="button" @onclick="ReloadAsync">Retry</button>
+        </div>
+    </div>
+}
+else if (Overview is null)
+{
+    <div class="@(Embedded ? "economy-embedded-state" : "content")"><div class="card enigma-game-message"><p>Staking overview is unavailable right now.</p></div></div>
+}
+else
+{
+    <div class="@(Embedded ? "staking-shell economy-embedded-shell" : "content staking-shell")">
+        <section class="staking-banner">
+            <div>
+                <span class="profile-eyebrow">Map Staking</span>
+                <h1>Daily Yield Engine</h1>
+                <p>Stake owned maps to receive daily MN. Claim once per day, or auto-claim on login.</p>
+            </div>
+            <div class="staking-banner-meta">
+                <span class="profile-chip">@Overview.StakedMapsCount staked</span>
+                <span class="profile-chip">@Overview.TotalDailyReward.ToString("N0") MN/day</span>
+                <span class="profile-chip">Balance @(Session?.MazeNuggets.ToString("N0") ?? "0") MN</span>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
+        }
+
+        <section class="staking-claim-card">
+            <div>
+                <strong>Daily Claim</strong>
+                <p>
+                    @if (Overview.CanClaimToday)
+                    {
+                        <span>Claim is ready for @Overview.TotalDailyReward.ToString("N0") MN.</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(Overview.NextClaimAt))
+                    {
+                        <span>Next claim available: @FormatTimestamp(Overview.NextClaimAt).</span>
+                    }
+                    else
+                    {
+                        <span>Stake maps to unlock daily payouts.</span>
+                    }
+                </p>
+            </div>
+            <button class="btn btn-primary" type="button" disabled="@(!Overview.CanClaimToday || IsBusy)" @onclick="ClaimDailyAsync">
+                @(IsBusy ? "Processing..." : "Claim Daily MN")
+            </button>
+        </section>
+
+        <div class="staking-grid">
+            <section class="staking-column panel profile-release-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Active Stake</span>
+                        <h2>Staked Maps</h2>
+                    </div>
+                    <span class="section-count">@Overview.StakedMapsCount</span>
+                </div>
+                @if (Overview.StakedMaps.Count == 0)
+                {
+                    <div class="empty-state-inline">No maps staked yet.</div>
+                }
+                else
+                {
+                    <div class="staking-map-stack">
+                        @foreach (var map in Overview.StakedMaps.OrderBy(static item => item.MapName, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <article class="staking-map-card">
+                                <div>
+                                    <strong>@map.MapName</strong>
+                                    <div class="staking-map-meta">
+                                        <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
+                                        <span>@map.Size x @map.Size</span>
+                                        <span>@map.BaseReward MN base</span>
+                                        <span>x@map.SizeMultiplier.ToString("0.00") size</span>
+                                    </div>
+                                </div>
+                                <div class="staking-map-actions">
+                                    <strong>@map.DailyReward.ToString("N0") MN/day</strong>
+                                    <button class="btn btn-secondary" type="button" disabled="@IsBusy" @onclick="() => UnstakeMapAsync(map.MapId)">Unstake</button>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+
+            <section class="staking-column panel profile-release-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Owned Inventory</span>
+                        <h2>Available to Stake</h2>
+                    </div>
+                    <span class="section-count">@Overview.AvailableMapsCount</span>
+                </div>
+                @if (Overview.AvailableMaps.Count == 0)
+                {
+                    <div class="empty-state-inline">All owned maps are already staked.</div>
+                }
+                else
+                {
+                    <div class="staking-map-stack">
+                        @foreach (var map in Overview.AvailableMaps.OrderBy(static item => item.MapName, StringComparer.OrdinalIgnoreCase))
+                        {
+                            <article class="staking-map-card muted">
+                                <div>
+                                    <strong>@map.MapName</strong>
+                                    <div class="staking-map-meta">
+                                        <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
+                                        <span>@map.Size x @map.Size</span>
+                                        <span>@map.BaseReward MN base</span>
+                                        <span>x@map.SizeMultiplier.ToString("0.00") size</span>
+                                    </div>
+                                </div>
+                                <div class="staking-map-actions">
+                                    <strong>@map.DailyReward.ToString("N0") MN/day</strong>
+                                    <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="() => StakeMapAsync(map.MapId)">Stake</button>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+
+        <section class="panel profile-release-panel staking-faq-card">
+            <div class="panel-heading">
+                <div>
+                    <span class="profile-eyebrow">FAQ</span>
+                    <h2>Staking System</h2>
+                </div>
+            </div>
+            <ol class="staking-faq-list">
+                <li>Base daily rewards per map difficulty: Easy = 5 MN, Medium = 15 MN, Hard = 25 MN.</li>
+                <li>Size multiplier formula: <code>0.7 + (size / 20)</code>, capped at <code>2.0x</code>. Example: 2x2 = 0.8x, 4x4 = 0.9x.</li>
+                <li>Daily reward per map is <code>ceil(base * sizeMultiplier)</code>. Example: Easy 2x2 = <code>ceil(5 * 0.8) = 4 MN/day</code>.</li>
+                <li>Only maps you currently own can stay staked. Sold/recycled maps are automatically removed from stake.</li>
+                <li>Claim once per day, or log in to auto-claim when eligible.</li>
+            </ol>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Embedded { get; set; }
+
+    private bool IsLoading { get; set; } = true;
+    private bool IsBusy { get; set; }
+    private bool HasError { get; set; }
+    private string? ErrorMessage { get; set; }
+    private string? StatusMessage { get; set; }
+    private LoginUserSummary? Session { get; set; }
+    private StakingOverviewData? Overview { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        IsLoading = true;
+        HasError = false;
+        ErrorMessage = null;
+        StatusMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var payload = await Api.GetFromJsonAsync<StakingOverviewResponse>("api/auth/staking");
+            if (payload is null)
+            {
+                throw new InvalidOperationException("Unable to load staking overview.");
+            }
+
+            Overview = payload.Overview;
+            Session = payload.User ?? await Api.GetSessionAsync();
+            await SyncClientSessionAsync(payload.User);
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task StakeMapAsync(string mapId)
+    {
+        await ExecuteActionAsync(
+            async () => await Api.PostJsonAsync("api/auth/staking/stake", new { mapId }),
+            "Map staked.");
+    }
+
+    private async Task UnstakeMapAsync(string mapId)
+    {
+        await ExecuteActionAsync(
+            async () => await Api.PostJsonAsync("api/auth/staking/unstake", new { mapId }),
+            "Map unstaked.");
+    }
+
+    private async Task ClaimDailyAsync()
+    {
+        await ExecuteActionAsync(
+            async () => await Api.PostJsonAsync("api/auth/staking/claim", new { }),
+            "Daily staking claim processed.");
+    }
+
+    private async Task ExecuteActionAsync(Func<Task<HttpResponseMessage>> requestFactory, string successMessage)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        HasError = false;
+        StatusMessage = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var response = await requestFactory();
+            var payload = await Api.ReadJsonAsync<StakingActionResponse>(response);
+            if (!response.IsSuccessStatusCode || payload is null)
+            {
+                throw new InvalidOperationException("Request failed.");
+            }
+
+            Overview = payload.Overview ?? Overview;
+            Session = payload.User ?? Session;
+            await SyncClientSessionAsync(payload.User);
+
+            if (payload.RewardGranted && payload.RewardedMn > 0)
+            {
+                StatusMessage = $"+{payload.RewardedMn:N0} MN claimed from staking.";
+            }
+            else
+            {
+                StatusMessage = successMessage;
+            }
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+        }
+        finally
+        {
+            IsBusy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SyncClientSessionAsync(LoginUserSummary? session)
+    {
+        if (session is null)
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
+        await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session.Username }, false);
+    }
+
+    private static string FormatTimestamp(string? isoUtc)
+    {
+        if (string.IsNullOrWhiteSpace(isoUtc))
+        {
+            return "Unknown";
+        }
+
+        return DateTimeOffset.TryParse(isoUtc, out var parsed)
+            ? parsed.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+            : isoUtc;
+    }
+
+    private static string GetDifficultyClass(string difficulty)
+    {
+        return difficulty?.Trim().ToLowerInvariant() switch
+        {
+            "easy" => "easy",
+            "medium" => "medium",
+            "hard" => "hard",
+            _ => "default",
+        };
+    }
+}

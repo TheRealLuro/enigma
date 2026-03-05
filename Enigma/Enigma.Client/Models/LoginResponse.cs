@@ -52,6 +52,12 @@ public class LoginUserSummary
     [JsonPropertyName("item_counts")]
     public Dictionary<string, int> ItemCounts { get; set; } = [];
 
+    [JsonPropertyName("staked_maps_count")]
+    public int StakedMapsCount { get; set; }
+
+    [JsonPropertyName("last_staking_reward_at")]
+    public string? LastStakingRewardAt { get; set; }
+
     [JsonPropertyName("pending_multiplayer_invites")]
     public List<PendingMultiplayerInvite> PendingMultiplayerInvites { get; set; } = [];
 

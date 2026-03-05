@@ -2,7 +2,7 @@
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
 <SeoHead Title="Enigma Home | Puzzle Maze Hub"
-         Description="Open the Enigma hub to start runs, view leaderboards, manage your profile, and access the marketplace."
+         Description="Open the Enigma hub to start runs, view leaderboards, manage your profile, and track the economy."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -47,11 +47,11 @@
 
         <button class="game-card clickable menu-image-card" type="button" @onclick="OnMarketplaceClick">
             <div class="menu-card-media">
-                <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Marketplace" />
+                <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Economy" />
             </div>
             <div class="game-card-content">
-                <div class="game-card-title">Marketplace</div>
-                <div class="game-card-meta">Trade maps and buy items</div>
+                <div class="game-card-title">Economy</div>
+                <div class="game-card-meta">Circulation, marketplace, and staking</div>
             </div>
         </button>
 
@@ -101,7 +101,7 @@
 
     private void OnProfileClick() => NavigationManager.NavigateTo("/profile");
 
-    private void OnMarketplaceClick() => NavigationManager.NavigateTo("/marketplace");
+    private void OnMarketplaceClick() => NavigationManager.NavigateTo("/economy");
 
     private void OnPlayersClick() => NavigationManager.NavigateTo("/players");
 }

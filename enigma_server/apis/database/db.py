@@ -25,3 +25,5 @@ merchant = db.item_shop
 shop_state = db.shop_state
 item_inventory = db.item_inventory
 run_results = db.run_results
+governance_sessions = db.governance_sessions
+governance_votes = db.governance_votes
