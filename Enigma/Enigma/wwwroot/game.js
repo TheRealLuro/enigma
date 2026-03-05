@@ -9,6 +9,7 @@
     const fullscreenOptOutKey = "enigma.game.fullscreen-opt-out";
     const fullscreenPreferenceKey = "enigma.game.fullscreen-preference";
     const tutorialRequestKey = "enigma.tutorial.requested";
+    const tutorialJourneyStateKey = "enigma.tutorial.journey";
 
     let dotNetRef = null;
     let keyDownHandler = null;
@@ -880,6 +881,23 @@
             const requested = getStorageItem("session", tutorialRequestKey) === "true";
             removeStorageItem("session", tutorialRequestKey);
             return requested;
+        },
+
+        setTutorialJourneyState: function (state) {
+            if (!state) {
+                removeStorageItem("session", tutorialJourneyStateKey);
+                return;
+            }
+
+            setStorageItem("session", tutorialJourneyStateKey, JSON.stringify(state));
+        },
+
+        getTutorialJourneyState: function () {
+            return parseJsonValue(getStorageItem("session", tutorialJourneyStateKey), "session", tutorialJourneyStateKey);
+        },
+
+        clearTutorialJourneyState: function () {
+            removeStorageItem("session", tutorialJourneyStateKey);
         },
 
         reportTutorialObjective: function (objectiveKey) {

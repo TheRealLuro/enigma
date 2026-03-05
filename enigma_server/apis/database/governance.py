@@ -583,11 +583,40 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
                 raise HTTPException(status_code=400, detail="Invalid voting option")
             selections.append((selected_id, option_lookup[selected_id]))
     elif vote_type == VOTE_TYPE_TEXT_ENTRY:
+        tallies = active_session.get("tallies")
+        text_option_lookup: dict[str, str] = {}
+        if isinstance(tallies, dict):
+            for tally_key, tally_value in tallies.items():
+                option_id = str(tally_key or "").strip()
+                if not option_id.startswith("text:") or not isinstance(tally_value, dict):
+                    continue
+                option_label = str(tally_value.get("label") or "").strip()
+                if option_label:
+                    text_option_lookup[option_id] = option_label
+
         text_value = str(payload.text_entry or "").strip()
-        if not text_value:
-            raise HTTPException(status_code=400, detail="Text entry is required for this voting type")
-        text_value = text_value[:120]
-        selections = [(f"text:{text_value.casefold()}", text_value)]
+        has_new_entry = bool(text_value)
+
+        if len(selected_ids) > 1:
+            raise HTTPException(status_code=400, detail="Choose one text entry to upvote")
+        if selected_ids and has_new_entry:
+            raise HTTPException(
+                status_code=400,
+                detail="Choose either an existing text entry to upvote or submit a new entry",
+            )
+
+        if selected_ids:
+            selected_id = selected_ids[0]
+            selected_label = text_option_lookup.get(selected_id)
+            if not selected_label:
+                raise HTTPException(status_code=400, detail="Invalid text entry selection")
+            selections = [(selected_id, selected_label)]
+        elif has_new_entry:
+            text_value = text_value[:120]
+            text_key = f"text:{text_value.casefold()}"
+            selections = [(text_key, text_option_lookup.get(text_key) or text_value)]
+        else:
+            raise HTTPException(status_code=400, detail="Choose a text entry to upvote or submit a new one")
     else:
         if payload.number_entry is None:
             raise HTTPException(status_code=400, detail="Number entry is required for this voting type")

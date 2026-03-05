@@ -233,8 +233,15 @@ else
                 else if (ActiveSession.VoteType == "text_entry")
                 {
                     <div class="voting-entry-block">
-                        <label class="form-label">Your entry</label>
-                        <input class="form-control" maxlength="120" @bind="VoteTextEntry" />
+                        <label class="form-label">New entry (optional)</label>
+                        <input class="form-control"
+                               maxlength="120"
+                               placeholder="Write a new entry or select one below to upvote"
+                               value="@VoteTextEntry"
+                               @oninput="OnTextEntryInput" />
+                        <span class="voting-option-meta">
+                            @GetTextVoteSelectionLabel()
+                        </span>
                     </div>
                     <div class="voting-options-grid compact">
                         @foreach (var option in ActiveSession.Options)
@@ -248,6 +255,12 @@ else
                                     <span>@option.MnSpent.ToString("N0") MN</span>
                                     <span>@option.VoteQuantity.ToString("N0") votes</span>
                                 </div>
+                                <button class="btn @(IsSelectedTextOption(option.Id) ? "btn-primary" : "btn-secondary")"
+                                        type="button"
+                                        disabled="@IsBusy"
+                                        @onclick="() => SelectTextOption(option.Id)">
+                                    @(IsSelectedTextOption(option.Id) ? "Upvote selected" : "Upvote this")
+                                </button>
                             </article>
                         }
                     </div>
@@ -426,6 +439,7 @@ else
     private int VoteQuantity { get; set; } = 1;
     private string? SelectedOptionId { get; set; }
     private HashSet<string> SelectedOptionIds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    private string? SelectedTextOptionId { get; set; }
     private string VoteTextEntry { get; set; } = string.Empty;
     private int? VoteNumberEntry { get; set; }
 
@@ -444,7 +458,7 @@ else
         {
             "one_choice" => string.IsNullOrWhiteSpace(SelectedOptionId) ? 0 : 1,
             "multiple_choice" => SelectedOptionIds.Count,
-            "text_entry" => string.IsNullOrWhiteSpace(VoteTextEntry) ? 0 : 1,
+            "text_entry" => GetTextSelectionCount(),
             "number_selection" => VoteNumberEntry is null ? 0 : 1,
             _ => 0,
         };
@@ -469,7 +483,7 @@ else
             {
                 "one_choice" => !string.IsNullOrWhiteSpace(SelectedOptionId),
                 "multiple_choice" => SelectedOptionIds.Count > 0,
-                "text_entry" => !string.IsNullOrWhiteSpace(VoteTextEntry),
+                "text_entry" => GetTextSelectionCount() > 0,
                 "number_selection" => VoteNumberEntry is not null && IsNumberEntryInRange(VoteNumberEntry.Value),
                 _ => false,
             };
@@ -587,6 +601,7 @@ else
         {
             SelectedOptionId = null;
             SelectedOptionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            SelectedTextOptionId = null;
             VoteTextEntry = string.Empty;
             VoteNumberEntry = null;
             return;
@@ -605,6 +620,19 @@ else
             SelectedOptionIds = SelectedOptionIds
                 .Where(selected => ActiveSession.Options.Any(option => option.Id == selected))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        else if (ActiveSession.VoteType == "text_entry")
+        {
+            if (string.IsNullOrWhiteSpace(SelectedTextOptionId)
+                || !ActiveSession.Options.Any(option => option.Id == SelectedTextOptionId))
+            {
+                SelectedTextOptionId = null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(VoteTextEntry))
+            {
+                SelectedTextOptionId = null;
+            }
         }
         else if (ActiveSession.VoteType == "number_selection")
         {
@@ -689,6 +717,7 @@ else
             },
             "text_entry" => new
             {
+                optionId = string.IsNullOrWhiteSpace(VoteTextEntry) ? SelectedTextOptionId : null,
                 textEntry = VoteTextEntry.Trim(),
                 voteQuantity = VoteQuantity,
             },
@@ -856,6 +885,70 @@ else
         }
 
         return true;
+    }
+
+    private int GetTextSelectionCount()
+    {
+        if (ActiveSession is null)
+        {
+            return 0;
+        }
+
+        if (!string.IsNullOrWhiteSpace(VoteTextEntry))
+        {
+            return 1;
+        }
+
+        return ActiveSession.Options.Any(option => string.Equals(option.Id, SelectedTextOptionId, StringComparison.OrdinalIgnoreCase))
+            ? 1
+            : 0;
+    }
+
+    private void OnTextEntryInput(ChangeEventArgs args)
+    {
+        VoteTextEntry = Convert.ToString(args.Value) ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(VoteTextEntry))
+        {
+            SelectedTextOptionId = null;
+        }
+    }
+
+    private void SelectTextOption(string optionId)
+    {
+        if (string.IsNullOrWhiteSpace(optionId))
+        {
+            return;
+        }
+
+        SelectedTextOptionId = optionId;
+        VoteTextEntry = string.Empty;
+    }
+
+    private bool IsSelectedTextOption(string optionId)
+    {
+        return string.Equals(SelectedTextOptionId, optionId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetTextVoteSelectionLabel()
+    {
+        if (ActiveSession is null)
+        {
+            return "Select an entry to upvote or submit your own.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(VoteTextEntry))
+        {
+            return "Submitting a new entry.";
+        }
+
+        var selectedOption = ActiveSession.Options
+            .FirstOrDefault(option => string.Equals(option.Id, SelectedTextOptionId, StringComparison.OrdinalIgnoreCase));
+        if (selectedOption is null)
+        {
+            return "Select an entry to upvote or submit your own.";
+        }
+
+        return $"Upvoting: {selectedOption.Label}";
     }
 
     private static bool IsChoiceVoteType(string voteType)

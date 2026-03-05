@@ -157,6 +157,7 @@
     private LoginUserSummary? Session { get; set; }
     private List<ItemCatalogEntry> Inventory { get; set; } = [];
     private Dictionary<string, int> SelectedItems { get; set; } = [];
+    private bool _playTutorialInteractionReported;
     private static readonly IReadOnlyList<SelectOption<Difficulty>> DifficultyOptions =
         Enum.GetValues<Difficulty>()
             .Select(static difficulty => new SelectOption<Difficulty>(difficulty, difficulty.ToString()))
@@ -201,6 +202,7 @@
 
     private async Task OnNewClick()
     {
+        await ReportPlayTutorialInteractionAsync();
         IsBusy = true;
         HasError = false;
         StatusMessage = string.Empty;
@@ -232,6 +234,7 @@
 
     private async Task OnSeedClick()
     {
+        await ReportPlayTutorialInteractionAsync();
         IsBusy = true;
         HasError = false;
         StatusMessage = string.Empty;
@@ -363,6 +366,7 @@
     private Task OnPlayMapNameChanged(string mapName)
     {
         loadMazeRequest.MapName = mapName;
+        _ = ReportPlayTutorialInteractionAsync();
         return InvokeAsync(StateHasChanged);
     }
 
@@ -430,6 +434,7 @@
 
     private void ChangeItemSelection(ItemCatalogEntry item, int delta)
     {
+        _ = ReportPlayTutorialInteractionAsync();
         var next = (SelectedItems.TryGetValue(item.ItemId, out var current) ? current : 0) + delta;
         if (next <= 0)
         {
@@ -443,6 +448,23 @@
         }
 
         SelectedItems[item.ItemId] = next;
+    }
+
+    private async Task ReportPlayTutorialInteractionAsync()
+    {
+        if (_playTutorialInteractionReported)
+        {
+            return;
+        }
+
+        _playTutorialInteractionReported = true;
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.reportTutorialObjective", "tutorial-play-interacted");
+        }
+        catch (JSException)
+        {
+        }
     }
 
     private string ValidateSelection()

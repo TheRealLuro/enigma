@@ -1,5 +1,6 @@
 @page "/leaderboard"
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject IJSRuntime JS
 
 <SeoHead Title="Enigma Leaderboard | Top Maps and Players"
          Description="Review Enigma rankings for maps and players, including discovery counts, Maze Nuggets, records, and leaderboard standings."
@@ -392,6 +393,7 @@
     private List<PlayerLeaderboardEntry> PodiumPlayers { get; set; } = [];
     private int TotalCount { get; set; }
     private int CurrentSectionIndex { get; set; }
+    private bool _leaderboardTutorialInteractionReported;
 
     private bool IsPlayerMode => BoardMode == "players";
     private const int SectionSize = 10;
@@ -448,6 +450,7 @@
             return;
         }
 
+        await ReportLeaderboardTutorialInteractionAsync();
         BoardMode = mode;
         SortBy = IsPlayerMode ? "maze_nuggets" : "rating";
         Order = "desc";
@@ -457,6 +460,7 @@
 
     private async Task ApplyLeaderboardSettingsAsync()
     {
+        await ReportLeaderboardTutorialInteractionAsync();
         CurrentSectionIndex = 0;
         await LoadLeaderboardAsync();
     }
@@ -590,6 +594,7 @@
             return;
         }
 
+        await ReportLeaderboardTutorialInteractionAsync();
         CurrentSectionIndex = sectionIndex;
         await LoadLeaderboardAsync();
     }
@@ -637,6 +642,7 @@
             return;
         }
 
+        await ReportLeaderboardTutorialInteractionAsync();
         try
         {
             var response = await Api.GetFromJsonAsync<SeedApiResponse>($"api/auth/loadMap?name={Uri.EscapeDataString(mapName)}");
@@ -663,7 +669,25 @@
             return;
         }
 
+        _ = ReportLeaderboardTutorialInteractionAsync();
         NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(username)}");
+    }
+
+    private async Task ReportLeaderboardTutorialInteractionAsync()
+    {
+        if (_leaderboardTutorialInteractionReported)
+        {
+            return;
+        }
+
+        _leaderboardTutorialInteractionReported = true;
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.reportTutorialObjective", "tutorial-leaderboard-interacted");
+        }
+        catch (JSException)
+        {
+        }
     }
 
     private static string FormatFoundedDate(MapSummary map)

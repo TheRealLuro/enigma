@@ -12,4 +12,5 @@ public sealed class TutorialStepDefinition
     public string Eyebrow { get; init; } = string.Empty;
     public string HelperText { get; init; } = string.Empty;
     public string CompletionEventKey { get; init; } = string.Empty;
+    public int RouteCompletionDelayMs { get; init; } = 650;
 }

@@ -91,9 +91,30 @@
 {
     <div class="enigma-modal-backdrop tutorial-backdrop @(IsGamePath() ? "tutorial-backdrop-game" : string.Empty)">
         <div class="enigma-modal-card tutorial-modal-card">
-            <span class="profile-kicker">@CurrentTutorialStep.Chapter</span>
+            <div class="tutorial-head-row">
+                <span class="profile-kicker">@CurrentTutorialStep.Chapter</span>
+                <span class="tutorial-step-chip">Step @(_tutorialIndex + 1) / @_tutorialSteps.Count</span>
+            </div>
             <h2>@CurrentTutorialStep.Title</h2>
             <p>@CurrentTutorialStep.Description</p>
+            <div class="tutorial-route-hint">
+                <span>Target Route</span>
+                <strong>@GetTutorialDestinationLabel(CurrentTutorialStep)</strong>
+            </div>
+            <div class="tutorial-step-rail" role="list" aria-label="Tutorial mission steps">
+                @for (var index = 0; index < _tutorialSteps.Count; index++)
+                {
+                    var step = _tutorialSteps[index];
+                    <button class="@GetTutorialStepButtonClass(index)"
+                            type="button"
+                            role="listitem"
+                            title="@step.Title"
+                            @onclick="(() => JumpToTutorialStepAsync(index))">
+                        <span class="tutorial-step-number">@((index + 1).ToString("00"))</span>
+                        <span class="tutorial-step-name">@step.Eyebrow</span>
+                    </button>
+                }
+            </div>
             <div class="tutorial-objective-card">
                 <span class="profile-eyebrow">@CurrentTutorialStep.Eyebrow Objective</span>
                 <p>@CurrentTutorialStep.Objective</p>
@@ -117,6 +138,7 @@
                 <span>@CompletedTutorialStepCount / @_tutorialSteps.Count completed</span>
             </div>
             <div class="enigma-end-actions tutorial-action-row">
+                <button class="btn btn-secondary" type="button" @onclick="RestartTutorialJourneyAsync">Restart</button>
                 <button class="btn btn-secondary" type="button" @onclick="SkipTutorialAsync">Skip</button>
                 <button class="btn btn-secondary" type="button" disabled="@(_tutorialIndex == 0)" @onclick="GoToPreviousTutorialStepAsync">Previous</button>
                 <button class="btn btn-secondary" type="button" @onclick="OpenCurrentTutorialObjectiveAsync">Open Objective</button>
@@ -145,6 +167,15 @@
     private const string TutorialDemoSeed = "easy-0,0BrS-1,0JqR-2,0HrF";
     private static readonly TimeSpan GlobalSessionRefreshInterval = TimeSpan.FromSeconds(3);
 
+    private sealed class TutorialJourneyState
+    {
+        public string Username { get; set; } = string.Empty;
+        public bool Visible { get; set; }
+        public int CurrentIndex { get; set; }
+        public List<int> CompletedIndexes { get; set; } = [];
+        public string UpdatedAtUtc { get; set; } = string.Empty;
+    }
+
     private LoginUserSummary? Session { get; set; }
     private bool AuthCheckComplete { get; set; }
     private bool IsAuthenticated { get; set; }
@@ -171,6 +202,7 @@
     private HashSet<string> _knownInviteSessionIds = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<int> _completedTutorialStepIndexes = [];
     private readonly HashSet<int> _announcedTutorialStepIndexes = [];
+    private CancellationTokenSource? _tutorialRouteCompletionCts;
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
@@ -190,9 +222,10 @@
             Eyebrow = "Play",
             Title = "Start a Discovery",
             Description = "Play is your run launcher for new seeds and saved maps.",
-            Objective = "Open Play and review Generate, Load, and Loadout controls.",
+            Objective = "Open Play and interact with Generate, Load, or Loadout controls.",
             HelperText = "Pick up to 3 items in loadout before entering a run.",
-            Path = "/play"
+            Path = "/play",
+            CompletionEventKey = "tutorial-play-interacted"
         },
         new()
         {
@@ -200,9 +233,10 @@
             Eyebrow = "Co-op",
             Title = "Dual Expedition",
             Description = "Co-op is the live lobby for shared maze sessions.",
-            Objective = "Open Co-op lobby and review invite, create, and join flows.",
+            Objective = "Open Co-op lobby and perform one lobby action (create, join, invite, or ready).",
             HelperText = "Owner creates the session, invites one friend, both ready up, then enter together.",
-            Path = "/play/coop"
+            Path = "/play/coop",
+            CompletionEventKey = "tutorial-coop-interacted"
         },
         new()
         {
@@ -221,9 +255,10 @@
             Eyebrow = "Leaderboard",
             Title = "Read the Rankings",
             Description = "Leaderboard tracks top maps and top explorers in paged sections.",
-            Objective = "Open Leaderboard and review either map rankings or player rankings.",
+            Objective = "Open Leaderboard and interact with mode, sort, or section controls.",
             HelperText = "Sections keep large leaderboards fast and readable.",
-            Path = "/leaderboard"
+            Path = "/leaderboard",
+            CompletionEventKey = "tutorial-leaderboard-interacted"
         },
         new()
         {
@@ -231,9 +266,10 @@
             Eyebrow = "Players",
             Title = "Scout Explorers",
             Description = "Player search is your social lookup system.",
-            Objective = "Open Players and test live username search.",
+            Objective = "Open Players and run a live search with at least 2 characters.",
             HelperText = "Search updates as you type and profile cards show live online state.",
-            Path = "/players"
+            Path = "/players",
+            CompletionEventKey = "tutorial-players-search-interacted"
         },
         new()
         {
@@ -241,9 +277,10 @@
             Eyebrow = "Economy",
             Title = "Watch Market Pulse",
             Description = "Economy overview shows live circulation, activity, and health metrics.",
-            Objective = "Open Economy overview and confirm the dashboard loads.",
+            Objective = "Open Economy and interact with the tab bar or refresh controls.",
             HelperText = "Overview is your live macro view before taking action in subtabs.",
-            Path = "/economy"
+            Path = "/economy",
+            CompletionEventKey = "tutorial-economy-interacted"
         },
         new()
         {
@@ -495,6 +532,7 @@
         await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
         await JS.InvokeVoidAsync("enigmaGame.clearRunLoadout");
         await JS.InvokeVoidAsync("enigmaGame.consumeTutorialRequest");
+        await JS.InvokeVoidAsync("enigmaGame.clearTutorialJourneyState");
     }
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
@@ -502,8 +540,9 @@
         IsAccountMenuOpen = false;
         if (TutorialVisible)
         {
-            TryMarkTutorialProgressFromUri(args.Location, announce: true);
             UpdateTutorialIndexFromUri(args.Location);
+            QueueTutorialRouteCompletion(args.Location, announce: true);
+            _ = PersistTutorialJourneyStateAsync();
         }
         ResetAuthStateForCurrentPath(args.Location);
         if (IsPublicPath(args.Location) || !IsAuthenticated)
@@ -570,7 +609,18 @@
         }
 
         var requested = await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
-        var shouldAutoStart = requested || string.IsNullOrWhiteSpace(session.TutorialState.SeenAt);
+        if (requested)
+        {
+            StartTutorialJourney(resetProgress: true);
+            return;
+        }
+
+        if (await RestoreTutorialJourneyStateAsync(session))
+        {
+            return;
+        }
+
+        var shouldAutoStart = string.IsNullOrWhiteSpace(session.TutorialState.SeenAt);
         if (!shouldAutoStart)
         {
             return;
@@ -736,19 +786,23 @@
         }
 
         TutorialVisible = true;
-        TryMarkTutorialProgressFromUri(NavigationManager.Uri, announce: false);
         var matchedIndex = GetTutorialIndexForUri(NavigationManager.Uri);
         if (matchedIndex >= 0)
         {
             _tutorialIndex = matchedIndex;
-            return;
+        }
+        else
+        {
+            _tutorialIndex = GetFirstIncompleteTutorialStepIndex();
         }
 
-        _tutorialIndex = GetFirstIncompleteTutorialStepIndex();
+        QueueTutorialRouteCompletion(NavigationManager.Uri, announce: false);
+        _ = PersistTutorialJourneyStateAsync();
     }
 
     private void ResetTutorialJourneyProgress()
     {
+        CancelPendingTutorialRouteCompletion();
         _completedTutorialStepIndexes.Clear();
         _announcedTutorialStepIndexes.Clear();
         _tutorialIndex = 0;
@@ -767,9 +821,30 @@
         return 0;
     }
 
-    private bool TryMarkTutorialProgressFromUri(string uri, bool announce)
+    private bool MarkTutorialStepCompleted(int index, bool announce)
     {
-        var markedAny = false;
+        if (index < 0 || index >= _tutorialSteps.Count)
+        {
+            return false;
+        }
+
+        if (!_completedTutorialStepIndexes.Add(index))
+        {
+            return false;
+        }
+
+        if (announce && _announcedTutorialStepIndexes.Add(index))
+        {
+            Notifications.Success($"Objective complete: {_tutorialSteps[index].Title}", 3);
+        }
+
+        return true;
+    }
+
+    private int GetBestIncompleteRouteMatchIndex(string uri)
+    {
+        var bestIndex = -1;
+        var bestScore = -1;
         for (var index = 0; index < _tutorialSteps.Count; index++)
         {
             if (_completedTutorialStepIndexes.Contains(index))
@@ -777,63 +852,143 @@
                 continue;
             }
 
-            if (!string.IsNullOrWhiteSpace(_tutorialSteps[index].CompletionEventKey))
+            var step = _tutorialSteps[index];
+            if (!string.IsNullOrWhiteSpace(step.CompletionEventKey))
             {
                 continue;
             }
 
-            if (!DoesUriMatchTutorialStep(_tutorialSteps[index], uri))
+            var score = GetTutorialStepMatchScore(step, uri);
+            if (score > bestScore)
             {
-                continue;
-            }
-
-            _completedTutorialStepIndexes.Add(index);
-            markedAny = true;
-            if (announce && _announcedTutorialStepIndexes.Add(index))
-            {
-                Notifications.Success($"Objective complete: {_tutorialSteps[index].Title}", 3);
+                bestScore = score;
+                bestIndex = index;
             }
         }
 
-        return markedAny;
+        return bestIndex;
+    }
+
+    private void QueueTutorialRouteCompletion(string uri, bool announce)
+    {
+        CancelPendingTutorialRouteCompletion();
+        if (!TutorialVisible)
+        {
+            return;
+        }
+
+        var targetIndex = GetBestIncompleteRouteMatchIndex(uri);
+        if (targetIndex < 0)
+        {
+            return;
+        }
+
+        var step = _tutorialSteps[targetIndex];
+        var delayMs = Math.Max(0, step.RouteCompletionDelayMs);
+        if (delayMs == 0)
+        {
+            if (MarkTutorialStepCompleted(targetIndex, announce))
+            {
+                _ = PersistTutorialJourneyStateAsync();
+            }
+
+            return;
+        }
+
+        _tutorialRouteCompletionCts = new CancellationTokenSource();
+        _ = CompleteRouteMatchAfterDelayAsync(targetIndex, announce, delayMs, _tutorialRouteCompletionCts.Token);
+    }
+
+    private async Task CompleteRouteMatchAfterDelayAsync(int targetIndex, bool announce, int delayMs, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(delayMs, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        await InvokeAsync(async () =>
+        {
+            if (cancellationToken.IsCancellationRequested || !TutorialVisible)
+            {
+                return;
+            }
+
+            if (GetBestIncompleteRouteMatchIndex(NavigationManager.Uri) != targetIndex)
+            {
+                return;
+            }
+
+            if (MarkTutorialStepCompleted(targetIndex, announce))
+            {
+                await PersistTutorialJourneyStateAsync();
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void CancelPendingTutorialRouteCompletion()
+    {
+        if (_tutorialRouteCompletionCts is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _tutorialRouteCompletionCts.Cancel();
+        }
+        catch
+        {
+        }
+
+        _tutorialRouteCompletionCts.Dispose();
+        _tutorialRouteCompletionCts = null;
     }
 
     [JSInvokable]
-    public Task HandleTutorialObjectiveCompletedAsync(string? completionEventKey)
+    public async Task HandleTutorialObjectiveCompletedAsync(string? completionEventKey)
     {
+        if (!TutorialVisible)
+        {
+            return;
+        }
+
         var normalizedKey = (completionEventKey ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(normalizedKey))
         {
-            return Task.CompletedTask;
+            return;
         }
 
         var markedAny = false;
         for (var index = 0; index < _tutorialSteps.Count; index++)
         {
-            if (_completedTutorialStepIndexes.Contains(index))
-            {
-                continue;
-            }
-
             if (!string.Equals(_tutorialSteps[index].CompletionEventKey, normalizedKey, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            _completedTutorialStepIndexes.Add(index);
-            markedAny = true;
-            if (_announcedTutorialStepIndexes.Add(index))
+            if (MarkTutorialStepCompleted(index, announce: true))
             {
-                Notifications.Success($"Objective complete: {_tutorialSteps[index].Title}", 3);
+                markedAny = true;
             }
         }
 
         if (!markedAny)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        return InvokeAsync(StateHasChanged);
+        await PersistTutorialJourneyStateAsync();
+        await InvokeAsync(StateHasChanged);
     }
 
     private bool DoesUriMatchTutorialStep(TutorialStepDefinition step, string uri)
@@ -953,6 +1108,139 @@
         return values;
     }
 
+    private async Task<bool> RestoreTutorialJourneyStateAsync(LoginUserSummary session)
+    {
+        TutorialJourneyState? savedState;
+        try
+        {
+            savedState = await JS.InvokeAsync<TutorialJourneyState?>("enigmaGame.getTutorialJourneyState");
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (savedState is null)
+        {
+            return false;
+        }
+
+        var username = (session.Username ?? string.Empty).Trim();
+        var stateUsername = (savedState.Username ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(stateUsername) ||
+            !string.Equals(stateUsername, username, StringComparison.OrdinalIgnoreCase))
+        {
+            await ClearTutorialJourneyStateAsync();
+            return false;
+        }
+
+        var completedIndexes = savedState.CompletedIndexes
+            .Where(index => index >= 0 && index < _tutorialSteps.Count)
+            .Distinct()
+            .ToList();
+        if (completedIndexes.Count >= _tutorialSteps.Count)
+        {
+            await ClearTutorialJourneyStateAsync();
+            return false;
+        }
+
+        _completedTutorialStepIndexes.Clear();
+        _announcedTutorialStepIndexes.Clear();
+        foreach (var index in completedIndexes)
+        {
+            _completedTutorialStepIndexes.Add(index);
+            _announcedTutorialStepIndexes.Add(index);
+        }
+
+        var normalizedIndex = savedState.CurrentIndex;
+        if (normalizedIndex < 0 || normalizedIndex >= _tutorialSteps.Count)
+        {
+            normalizedIndex = GetFirstIncompleteTutorialStepIndex();
+        }
+
+        _tutorialIndex = normalizedIndex;
+        TutorialVisible = true;
+        QueueTutorialRouteCompletion(NavigationManager.Uri, announce: false);
+        await PersistTutorialJourneyStateAsync();
+        return true;
+    }
+
+    private async Task PersistTutorialJourneyStateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Session?.Username))
+        {
+            return;
+        }
+
+        if (!TutorialVisible && _completedTutorialStepIndexes.Count == 0)
+        {
+            await ClearTutorialJourneyStateAsync();
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync(
+                "enigmaGame.setTutorialJourneyState",
+                new TutorialJourneyState
+                {
+                    Username = Session!.Username,
+                    Visible = TutorialVisible,
+                    CurrentIndex = _tutorialIndex,
+                    CompletedIndexes = _completedTutorialStepIndexes.OrderBy(index => index).ToList(),
+                    UpdatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
+                });
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task ClearTutorialJourneyStateAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.clearTutorialJourneyState");
+        }
+        catch
+        {
+        }
+    }
+
+    private bool IsTutorialStepCompleted(int index) => _completedTutorialStepIndexes.Contains(index);
+
+    private bool IsTutorialStepCurrent(int index) => index == _tutorialIndex;
+
+    private string GetTutorialStepButtonClass(int index)
+    {
+        if (IsTutorialStepCurrent(index) && IsTutorialStepCompleted(index))
+        {
+            return "tutorial-step-pill current complete";
+        }
+
+        if (IsTutorialStepCurrent(index))
+        {
+            return "tutorial-step-pill current";
+        }
+
+        if (IsTutorialStepCompleted(index))
+        {
+            return "tutorial-step-pill complete";
+        }
+
+        return "tutorial-step-pill";
+    }
+
+    private string GetTutorialDestinationLabel(TutorialStepDefinition step)
+    {
+        if (string.Equals(step.Path, "/game", StringComparison.OrdinalIgnoreCase))
+        {
+            return "/game?tutorial=true";
+        }
+
+        return step.Path;
+    }
+
     private string GetTutorialProgressStyle()
     {
         if (_tutorialSteps.Count == 0)
@@ -962,6 +1250,24 @@
 
         var percent = Math.Clamp((CompletedTutorialStepCount * 100.0) / _tutorialSteps.Count, 0.0, 100.0);
         return $"width:{percent:0.##}%;";
+    }
+
+    private async Task JumpToTutorialStepAsync(int index)
+    {
+        if (index < 0 || index >= _tutorialSteps.Count)
+        {
+            return;
+        }
+
+        _tutorialIndex = index;
+        await PersistTutorialJourneyStateAsync();
+        await NavigateToTutorialStepAsync(index);
+    }
+
+    private async Task RestartTutorialJourneyAsync()
+    {
+        StartTutorialJourney(resetProgress: true);
+        await NavigateToTutorialStepAsync(_tutorialIndex);
     }
 
     private async Task GoToPreviousTutorialStepAsync()
@@ -1004,22 +1310,24 @@
         await NavigateToTutorialStepAsync(_tutorialIndex);
     }
 
-    private Task NavigateToTutorialStepAsync(int index)
+    private async Task NavigateToTutorialStepAsync(int index)
     {
         if (index < 0 || index >= _tutorialSteps.Count)
         {
-            return Task.CompletedTask;
+            return;
         }
+
+        _tutorialIndex = index;
+        await PersistTutorialJourneyStateAsync();
 
         var step = _tutorialSteps[index];
         if (string.Equals(GetCleanPath(new Uri(new Uri(NavigationManager.BaseUri), step.Path).AbsoluteUri), "game", StringComparison.OrdinalIgnoreCase))
         {
             NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(TutorialDemoSeed)}&source=new&tutorial=true", replace: true);
-            return Task.CompletedTask;
+            return;
         }
 
         NavigationManager.NavigateTo(step.Path, replace: true);
-        return Task.CompletedTask;
     }
 
     private async Task SkipTutorialAsync()
@@ -1027,6 +1335,7 @@
         TutorialVisible = false;
         ResetTutorialJourneyProgress();
         await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
+        await ClearTutorialJourneyStateAsync();
         try
         {
             await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "skipped" });
@@ -1041,7 +1350,9 @@
         TutorialVisible = false;
         _completedTutorialStepIndexes.Clear();
         _announcedTutorialStepIndexes.Clear();
+        CancelPendingTutorialRouteCompletion();
         await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
+        await ClearTutorialJourneyStateAsync();
         try
         {
             await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "completed" });
@@ -1417,6 +1728,7 @@
 
     private void ResetRealtimeTracking()
     {
+        CancelPendingTutorialRouteCompletion();
         _sessionDeltaInitialized = false;
         _governanceTrackingInitialized = false;
         _knownGovernanceVotingOpen = false;
@@ -1442,6 +1754,7 @@
         NavigationManager.LocationChanged -= HandleLocationChanged;
         Notifications.NotificationPublished -= HandleNotificationPublished;
         StopGlobalSessionRefreshLoop();
+        CancelPendingTutorialRouteCompletion();
         HideFriendRequestToast();
         HideInviteToast();
 

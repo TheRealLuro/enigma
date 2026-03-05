@@ -369,6 +369,7 @@ else
     private bool IsEnteringActiveSession { get; set; }
     private bool CoopSocketOpen { get; set; }
     private DotNetObjectReference<CoopLobby>? LobbySocketRef { get; set; }
+    private bool _coopTutorialInteractionReported;
 
     private IReadOnlyList<string> AvailableFriends => Session?.Friends.OrderBy(static friend => friend, StringComparer.OrdinalIgnoreCase).ToList() ?? [];
     private static readonly IReadOnlyList<SelectOption<Difficulty>> DifficultyOptions =
@@ -495,6 +496,7 @@ else
         var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
         await EnsureSuccessAsync(response, payload, "Unable to create a co-op session.");
         ApplySessionEnvelope(payload);
+        await ReportCoopTutorialInteractionAsync();
         StatusMessage = "Session created. Share the session id or invite a friend to join.";
         HasError = false;
     }
@@ -507,6 +509,7 @@ else
             var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
             await EnsureSuccessAsync(response, payload, "Unable to join the co-op session.");
             ApplySessionEnvelope(payload);
+            await ReportCoopTutorialInteractionAsync();
             StatusMessage = "Joined session. Ready up when both players are in the lobby.";
             HasError = false;
         });
@@ -535,6 +538,7 @@ else
             var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
             await EnsureSuccessAsync(response, payload, "Unable to update ready state.");
             ApplySessionEnvelope(payload);
+            await ReportCoopTutorialInteractionAsync();
         });
     }
 
@@ -556,6 +560,7 @@ else
             await EnsureSuccessAsync(response, payload, "Unable to invite that friend.");
             InvitePendingFriend = string.Empty;
             ApplySessionEnvelope(payload);
+            await ReportCoopTutorialInteractionAsync();
             StatusMessage = "Friend invited. They can now join with the session id.";
             HasError = false;
         });
@@ -1181,5 +1186,22 @@ else
         InviteToastCancellation.Cancel();
         InviteToastCancellation.Dispose();
         InviteToastCancellation = null;
+    }
+
+    private async Task ReportCoopTutorialInteractionAsync()
+    {
+        if (_coopTutorialInteractionReported)
+        {
+            return;
+        }
+
+        _coopTutorialInteractionReported = true;
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.reportTutorialObjective", "tutorial-coop-interacted");
+        }
+        catch (JSException)
+        {
+        }
     }
 }

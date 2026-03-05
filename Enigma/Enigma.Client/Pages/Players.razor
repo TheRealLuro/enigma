@@ -1,6 +1,7 @@
 @page "/players"
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @inject Enigma.Client.Services.UiNotificationService Notifications
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <SeoHead Title="Enigma Players | Search Explorer Profiles"
@@ -196,6 +197,7 @@ else
     private CancellationTokenSource? _pollCancellation;
     private Task? _pollTask;
     private bool _loadingTopPlayers;
+    private bool _playersTutorialInteractionReported;
 
     private bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery) && SearchQuery.Trim().Length >= 2;
 
@@ -340,6 +342,7 @@ else
             return;
         }
 
+        await ReportPlayersTutorialInteractionAsync();
         IsSearching = true;
         HasError = false;
         StatusMessage = string.Empty;
@@ -487,7 +490,25 @@ else
             return;
         }
 
+        _ = ReportPlayersTutorialInteractionAsync();
         NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(username.Trim())}");
+    }
+
+    private async Task ReportPlayersTutorialInteractionAsync()
+    {
+        if (_playersTutorialInteractionReported)
+        {
+            return;
+        }
+
+        _playersTutorialInteractionReported = true;
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.reportTutorialObjective", "tutorial-players-search-interacted");
+        }
+        catch (JSException)
+        {
+        }
     }
 
     private void GoHome()

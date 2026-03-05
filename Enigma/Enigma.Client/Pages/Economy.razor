@@ -292,6 +292,7 @@ else
     private Task? _pollTask;
     private bool _loadingOverview;
     private string? _lastOverviewSnapshotAt;
+    private bool _economyTutorialInteractionReported;
 
     protected override async Task OnInitializedAsync()
     {
@@ -306,6 +307,7 @@ else
 
     private async Task ReloadAsync()
     {
+        await ReportEconomyTutorialInteractionAsync();
         await LoadAsync(silent: false);
     }
 
@@ -410,9 +412,27 @@ else
             return;
         }
 
+        _ = ReportEconomyTutorialInteractionAsync();
         ActiveTab = normalized;
         var target = normalized == OverviewTab ? "/economy" : $"/economy?tab={normalized}";
         NavigationManager.NavigateTo(target, replace: true);
+    }
+
+    private async Task ReportEconomyTutorialInteractionAsync()
+    {
+        if (_economyTutorialInteractionReported)
+        {
+            return;
+        }
+
+        _economyTutorialInteractionReported = true;
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.reportTutorialObjective", "tutorial-economy-interacted");
+        }
+        catch (JSException)
+        {
+        }
     }
 
     private static string NormalizeTab(string? tab)
