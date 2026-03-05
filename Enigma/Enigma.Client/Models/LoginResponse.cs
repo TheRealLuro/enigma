@@ -58,6 +58,15 @@ public class LoginUserSummary
     [JsonPropertyName("last_login_at")]
     public string? LastLoginAt { get; set; }
 
+    [JsonPropertyName("last_username_change_at")]
+    public string? LastUsernameChangeAt { get; set; }
+
+    [JsonPropertyName("username_change_cooldown_days")]
+    public int UsernameChangeCooldownDays { get; set; }
+
+    [JsonPropertyName("next_username_change_at")]
+    public string? NextUsernameChangeAt { get; set; }
+
     [JsonPropertyName("email")]
     public string Email { get; set; } = string.Empty;
 

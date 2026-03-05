@@ -10,6 +10,7 @@ namespace Enigma.Client.Pages;
 
 public partial class Profile : IAsyncDisposable
 {
+    private const int DefaultUsernameCooldownDays = 14;
     private const string OverviewTab = "overview";
     private const string MapsTab = "maps";
     private const string InventoryTab = "inventory";
@@ -81,6 +82,43 @@ public partial class Profile : IAsyncDisposable
         Session is not null
         && ProfileData is not null
         && string.Equals(Session.Username, ProfileData.Username, StringComparison.OrdinalIgnoreCase);
+    private DateTimeOffset? NextUsernameChangeAt =>
+        ParseUtcTimestamp(Session?.NextUsernameChangeAt)
+        ?? (IsOwnProfile ? ParseUtcTimestamp(ProfileData?.NextUsernameChangeAt) : null);
+    private int UsernameChangeCooldownDays
+    {
+        get
+        {
+            if (Session?.UsernameChangeCooldownDays > 0)
+            {
+                return Session.UsernameChangeCooldownDays;
+            }
+
+            if (IsOwnProfile && ProfileData?.UsernameChangeCooldownDays > 0)
+            {
+                return ProfileData.UsernameChangeCooldownDays;
+            }
+
+            return DefaultUsernameCooldownDays;
+        }
+    }
+    private bool IsUsernameChangeCoolingDown =>
+        IsOwnProfile &&
+        NextUsernameChangeAt is DateTimeOffset nextChangeAt &&
+        nextChangeAt > DateTimeOffset.UtcNow;
+    private string UsernameCooldownMessage
+    {
+        get
+        {
+            if (!IsUsernameChangeCoolingDown || NextUsernameChangeAt is not DateTimeOffset nextChangeAt)
+            {
+                return $"You can change your username every {UsernameChangeCooldownDays} days.";
+            }
+
+            return $"Username changes are limited to every {UsernameChangeCooldownDays} days. "
+                + $"Next change available on {nextChangeAt.ToLocalTime():MMM d, yyyy h:mm tt}.";
+        }
+    }
 
     private IReadOnlyList<(string Key, string Label)> VisibleTabs => IsOwnProfile ? OwnTabs : PublicTabs;
 
@@ -315,6 +353,23 @@ public partial class Profile : IAsyncDisposable
         {
             HasError = true;
             StatusMessage = "Choose a different username.";
+            return;
+        }
+
+        if (IsUsernameChangeCoolingDown)
+        {
+            HasError = true;
+            StatusMessage = UsernameCooldownMessage;
+            return;
+        }
+
+        var confirmChange = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Change username from '{Session?.Username}' to '{requestedUsername}'?");
+        if (!confirmChange)
+        {
+            HasError = false;
+            StatusMessage = "Username change canceled.";
             return;
         }
 
@@ -862,6 +917,18 @@ public partial class Profile : IAsyncDisposable
         var leftSet = new HashSet<string>(NormalizeUsernameList(left), StringComparer.OrdinalIgnoreCase);
         var rightSet = new HashSet<string>(NormalizeUsernameList(right), StringComparer.OrdinalIgnoreCase);
         return leftSet.SetEquals(rightSet);
+    }
+
+    private static DateTimeOffset? ParseUtcTimestamp(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return DateTimeOffset.TryParse(value, out var parsed)
+            ? parsed.ToUniversalTime()
+            : null;
     }
 
     private async Task ClearLocalSessionAsync()

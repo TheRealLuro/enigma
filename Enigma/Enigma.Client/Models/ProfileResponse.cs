@@ -52,6 +52,15 @@ public class ProfileUserData
     [JsonPropertyName("discovered_maps_count")]
     public int DiscoveredMapsCount { get; set; }
 
+    [JsonPropertyName("last_username_change_at")]
+    public string? LastUsernameChangeAt { get; set; }
+
+    [JsonPropertyName("username_change_cooldown_days")]
+    public int UsernameChangeCooldownDays { get; set; }
+
+    [JsonPropertyName("next_username_change_at")]
+    public string? NextUsernameChangeAt { get; set; }
+
     [JsonPropertyName("profile_image")]
     public ProfileImageState? ProfileImage { get; set; }
 

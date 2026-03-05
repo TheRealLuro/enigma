@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 from .map_utils import load_maps_by_ids, normalize_int, serialize_user_map_documents
@@ -8,6 +8,7 @@ from .redis_store import load_user_invites
 
 SYSTEM_BANK_USERNAME = "enigma_bank"
 TUTORIAL_VERSION = 1
+USERNAME_CHANGE_COOLDOWN_DAYS = 14
 DEFAULT_PROFILE_IMAGE_CROP = {
     "x": 11.0,
     "y": 17.0,
@@ -37,6 +38,7 @@ def default_user_fields(username: str | None = None, email: str | None = None) -
         "allow_public_profile": not is_system_account,
         "email_normalized": normalize_email(email),
         "last_login_at": datetime.now(timezone.utc),
+        "last_username_change_at": None,
         "owned_cosmetics": [],
         "item_counts": {},
     }
@@ -196,6 +198,27 @@ def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, A
     else:
         last_login_value = None
 
+    last_username_change_at = normalized_user.get("last_username_change_at")
+    if isinstance(last_username_change_at, datetime):
+        if last_username_change_at.tzinfo is None:
+            last_username_change_at = last_username_change_at.replace(tzinfo=timezone.utc)
+        last_username_change_value = last_username_change_at.astimezone(timezone.utc).isoformat()
+    else:
+        last_username_change_value = str(last_username_change_at or "").strip() or None
+
+    next_username_change_value = None
+    if last_username_change_value:
+        try:
+            parsed_username_change = datetime.fromisoformat(last_username_change_value.replace("Z", "+00:00"))
+            if parsed_username_change.tzinfo is None:
+                parsed_username_change = parsed_username_change.replace(tzinfo=timezone.utc)
+            next_username_change_value = (
+                parsed_username_change.astimezone(timezone.utc)
+                + timedelta(days=USERNAME_CHANGE_COOLDOWN_DAYS)
+            ).isoformat()
+        except ValueError:
+            next_username_change_value = None
+
     return {
         "username": normalized_user.get("username", ""),
         "email": normalized_user.get("email", ""),
@@ -211,6 +234,9 @@ def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, A
         "item_counts": normalized_user.get("item_counts", {}),
         "pending_multiplayer_invites": serialize_pending_multiplayer_invites(normalized_user.get("username")),
         "last_login_at": last_login_value,
+        "last_username_change_at": last_username_change_value,
+        "username_change_cooldown_days": USERNAME_CHANGE_COOLDOWN_DAYS,
+        "next_username_change_at": next_username_change_value,
         "profile_image": serialize_profile_image(normalized_user.get("profile_image"), maps_owned_docs),
         "tutorial_state": serialize_tutorial_state(normalized_user.get("tutorial_state")),
         "is_system_account": bool(normalized_user.get("is_system_account")),
@@ -231,6 +257,27 @@ def serialize_public_profile(
     friends = list(normalized_user.get("friends", [])) if is_self else []
     friend_requests = list(normalized_user.get("friend_requests", [])) if is_self else []
 
+    last_username_change_at = normalized_user.get("last_username_change_at")
+    if isinstance(last_username_change_at, datetime):
+        if last_username_change_at.tzinfo is None:
+            last_username_change_at = last_username_change_at.replace(tzinfo=timezone.utc)
+        last_username_change_value = last_username_change_at.astimezone(timezone.utc).isoformat()
+    else:
+        last_username_change_value = str(last_username_change_at or "").strip() or None
+
+    next_username_change_value = None
+    if is_self and last_username_change_value:
+        try:
+            parsed_username_change = datetime.fromisoformat(last_username_change_value.replace("Z", "+00:00"))
+            if parsed_username_change.tzinfo is None:
+                parsed_username_change = parsed_username_change.replace(tzinfo=timezone.utc)
+            next_username_change_value = (
+                parsed_username_change.astimezone(timezone.utc)
+                + timedelta(days=USERNAME_CHANGE_COOLDOWN_DAYS)
+            ).isoformat()
+        except ValueError:
+            next_username_change_value = None
+
     return {
         "id": str(normalized_user.get("_id", "")),
         "username": normalized_user.get("username", ""),
@@ -245,6 +292,9 @@ def serialize_public_profile(
         "owned_cosmetics": list(normalized_user.get("owned_cosmetics", [])) if is_self else [],
         "owned_maps_count": len(serialize_user_map_documents(maps_owned_docs)),
         "discovered_maps_count": len(serialize_user_map_documents(maps_discovered_docs)),
+        "last_username_change_at": last_username_change_value if is_self else None,
+        "username_change_cooldown_days": USERNAME_CHANGE_COOLDOWN_DAYS if is_self else 0,
+        "next_username_change_at": next_username_change_value if is_self else None,
         "profile_image": serialize_profile_image(normalized_user.get("profile_image"), maps_owned_docs),
         "is_system_account": bool(normalized_user.get("is_system_account")),
         "allow_public_profile": bool(normalized_user.get("allow_public_profile", True)),

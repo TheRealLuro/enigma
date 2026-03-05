@@ -53,6 +53,10 @@ else
         {
             <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
         }
+        @if (!string.IsNullOrWhiteSpace(InviteToastMessage))
+        {
+            <div class="coop-invite-toast" role="status" aria-live="polite">@InviteToastMessage</div>
+        }
 
         @if (CurrentSession is null)
         {
@@ -255,17 +259,29 @@ else
                         </article>
                     </div>
 
-                    @if (IsOwner && !HasGuest && InviteCandidates.Count > 0)
+                    @if (IsOwner && !HasGuest)
                     {
-                        <div class="coop-inline-form">
-                            <EnigmaDropdown TValue="string"
-                                            Class="form-control"
-                                            Options="InvitePendingFriendOptions"
-                                            @bind-Value="InvitePendingFriend" />
-                            <button class="btn btn-secondary" type="button" disabled="@IsActionBusy || string.IsNullOrWhiteSpace(InvitePendingFriend)" @onclick="InviteFriendAsync">
-                                Invite
-                            </button>
-                        </div>
+                        <section class="coop-invite-section">
+                            <div class="coop-invite-section-head">
+                                <span class="profile-eyebrow">Invite</span>
+                                <strong>Bring a friend into this run</strong>
+                            </div>
+                            @if (InviteCandidates.Count == 0)
+                            {
+                                <div class="empty-state-inline">No available friends to invite right now.</div>
+                            }
+                            else
+                            {
+                                <div class="coop-invite-choice-grid">
+                                    @foreach (var friend in InviteCandidates)
+                                    {
+                                        <button class="btn btn-secondary coop-invite-choice" type="button" disabled="@IsActionBusy" @onclick="(() => InviteFriendDirectAsync(friend))">
+                                            Invite @friend
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </section>
                     }
 
                     @if (CurrentSession.InvitedFriends.Count > 0)
@@ -346,6 +362,8 @@ else
     private Task? PollTask { get; set; }
     private CancellationTokenSource? InviteRefreshCancellation { get; set; }
     private Task? InviteRefreshTask { get; set; }
+    private CancellationTokenSource? InviteToastCancellation { get; set; }
+    private string? InviteToastMessage { get; set; }
     private bool HasEnteredActiveSession { get; set; }
     private bool IsEnteringActiveSession { get; set; }
     private bool CoopSocketOpen { get; set; }
@@ -358,8 +376,6 @@ else
             .ToArray();
     private IReadOnlyList<SelectOption<string>> AvailableFriendOptions =>
         [new(string.Empty, "Choose later"), .. AvailableFriends.Select(static friend => new SelectOption<string>(friend, friend))];
-    private IReadOnlyList<SelectOption<string>> InvitePendingFriendOptions =>
-        [new(string.Empty, "Invite a friend"), .. InviteCandidates.Select(static friend => new SelectOption<string>(friend, friend))];
     private bool IsOwner => CurrentSession is not null && string.Equals(CurrentSession.OwnerUsername, Session?.Username, StringComparison.OrdinalIgnoreCase);
     private bool HasGuest => !string.IsNullOrWhiteSpace(CurrentSession?.GuestUsername);
     private bool CanEnterGame => CurrentSession is not null && string.Equals(CurrentSession.Status, "active", StringComparison.OrdinalIgnoreCase);
@@ -392,6 +408,7 @@ else
                 return;
             }
 
+            SyncInviteIdentity(Session);
             await JS.InvokeVoidAsync("enigmaGame.clearCoopLeaveUnload");
             LobbySocketRef = DotNetObjectReference.Create(this);
             HasLoadedOnce = true;
@@ -543,6 +560,12 @@ else
         });
     }
 
+    private Task InviteFriendDirectAsync(string friendUsername)
+    {
+        InvitePendingFriend = (friendUsername ?? string.Empty).Trim();
+        return InviteFriendAsync();
+    }
+
     private async Task LeaveSessionAsync()
     {
         if (CurrentSession is null)
@@ -679,6 +702,27 @@ else
                     .Select(static invite => invite.SessionId)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var hasInviteDelta = !previousInviteIds.SetEquals(refreshedInviteIds);
+                var previousFriendIds = Session?.Friends
+                    .Select(friend => (friend ?? string.Empty).Trim())
+                    .Where(static friend => !string.IsNullOrWhiteSpace(friend))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+                var refreshedFriendIds = refreshedSession.Friends
+                    .Select(friend => (friend ?? string.Empty).Trim())
+                    .Where(static friend => !string.IsNullOrWhiteSpace(friend))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var hasFriendDelta = !previousFriendIds.SetEquals(refreshedFriendIds);
+                var previousFriendRequestIds = Session?.FriendRequests
+                    .Select(friend => (friend ?? string.Empty).Trim())
+                    .Where(static friend => !string.IsNullOrWhiteSpace(friend))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+                var refreshedFriendRequestIds = refreshedSession.FriendRequests
+                    .Select(friend => (friend ?? string.Empty).Trim())
+                    .Where(static friend => !string.IsNullOrWhiteSpace(friend))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var hasFriendRequestDelta = !previousFriendRequestIds.SetEquals(refreshedFriendRequestIds);
+                var addedInvites = refreshedSession.PendingMultiplayerInvites
+                    .Where(invite => !previousInviteIds.Contains(invite.SessionId))
+                    .ToList();
 
                 if (CurrentSession is null && !string.IsNullOrWhiteSpace(RequestedSessionId) &&
                     refreshedSession.PendingMultiplayerInvites.Any(invite =>
@@ -692,7 +736,7 @@ else
                     continue;
                 }
 
-                if (!hasInviteDelta)
+                if (!hasInviteDelta && !hasFriendDelta && !hasFriendRequestDelta)
                 {
                     continue;
                 }
@@ -700,6 +744,17 @@ else
                 await InvokeAsync(() =>
                 {
                     Session = refreshedSession;
+                    SyncInviteIdentity(refreshedSession);
+                    if (addedInvites.Count > 0)
+                    {
+                        var firstSender = string.IsNullOrWhiteSpace(addedInvites[0].OwnerUsername)
+                            ? "a teammate"
+                            : addedInvites[0].OwnerUsername;
+                        var toastText = addedInvites.Count == 1
+                            ? $"New invite received from {firstSender}."
+                            : $"{addedInvites.Count} new invites received.";
+                        ShowInviteToast(toastText);
+                    }
                     StateHasChanged();
                 });
             }
@@ -986,6 +1041,7 @@ else
 
     public async ValueTask DisposeAsync()
     {
+        StopInviteToast();
         await StopInviteRefreshAsync();
         await StopPollingAsync();
         try
@@ -1043,5 +1099,78 @@ else
 
             InviteRefreshTask = null;
         }
+    }
+
+    private static void SyncInviteIdentity(LoginUserSummary session)
+    {
+        session.Friends = session.Friends
+            .Select(friend => (friend ?? string.Empty).Trim())
+            .Where(static friend => !string.IsNullOrWhiteSpace(friend))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static friend => friend, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        session.FriendRequests = session.FriendRequests
+            .Select(friend => (friend ?? string.Empty).Trim())
+            .Where(static friend => !string.IsNullOrWhiteSpace(friend))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static friend => friend, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreach (var invite in session.PendingMultiplayerInvites)
+        {
+            invite.SessionId = (invite.SessionId ?? string.Empty).Trim();
+            invite.OwnerUsername = (invite.OwnerUsername ?? string.Empty).Trim();
+        }
+    }
+
+    private void ShowInviteToast(string message)
+    {
+        InviteToastMessage = message;
+        CancelInviteToast();
+
+        var cts = new CancellationTokenSource();
+        InviteToastCancellation = cts;
+        _ = AutoClearInviteToastAsync(cts.Token);
+    }
+
+    private async Task AutoClearInviteToastAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await InvokeAsync(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    InviteToastMessage = null;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void StopInviteToast()
+    {
+        CancelInviteToast();
+        InviteToastMessage = null;
+    }
+
+    private void CancelInviteToast()
+    {
+        if (InviteToastCancellation is null)
+        {
+            return;
+        }
+
+        InviteToastCancellation.Cancel();
+        InviteToastCancellation.Dispose();
+        InviteToastCancellation = null;
     }
 }

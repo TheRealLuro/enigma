@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import bcrypt
@@ -18,6 +18,7 @@ from .item_catalog import serialize_shop_item
 from .redis_store import delete_keys, load_json, save_json, session_key, user_invites_key, user_session_key
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
+    USERNAME_CHANGE_COOLDOWN_DAYS,
     build_owned_maps_sync_update,
     build_user_defaults_update,
     normalize_email,
@@ -94,6 +95,41 @@ def _verify_password(user: dict[str, Any], password: str) -> None:
     hashed_bytes = hashed if isinstance(hashed, bytes) else str(hashed).encode("utf-8")
     if not bcrypt.checkpw(password.encode("utf-8"), hashed_bytes):
         raise HTTPException(status_code=401, detail="Incorrect password")
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _assert_username_cooldown_elapsed(user: dict[str, Any]) -> None:
+    last_changed_at = _parse_datetime(user.get("last_username_change_at"))
+    if last_changed_at is None:
+        return
+
+    now = datetime.now(timezone.utc)
+    next_change_at = last_changed_at + timedelta(days=USERNAME_CHANGE_COOLDOWN_DAYS)
+    if now >= next_change_at:
+        return
+
+    wait_seconds = int((next_change_at - now).total_seconds())
+    wait_days = max(1, int((wait_seconds + 86399) // 86400))
+    next_change_label = next_change_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    raise HTTPException(
+        status_code=429,
+        detail=f"Username can be changed every {USERNAME_CHANGE_COOLDOWN_DAYS} days. "
+        f"Try again in about {wait_days} day(s) (next available: {next_change_label}).",
+    )
 
 
 def _replace_username_values(values: list[Any], current_username: str, new_username: str) -> list[str]:
@@ -359,6 +395,7 @@ def update_username(request: Request, payload: UpdateUsernamePayload):
     if user.get("is_system_account"):
         raise HTTPException(status_code=403, detail="System accounts cannot change usernames")
     _verify_password(user, payload.current_password)
+    _assert_username_cooldown_elapsed(user)
     _assert_username_change_multiplayer_safe(current_username)
 
     existing_user = users_collection.find_one(
@@ -370,7 +407,10 @@ def update_username(request: Request, payload: UpdateUsernamePayload):
     if existing_user:
         raise HTTPException(status_code=409, detail="Username is already in use")
 
-    users_collection.update_one({"_id": user["_id"]}, {"$set": {"username": new_username}})
+    users_collection.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"username": new_username, "last_username_change_at": datetime.now(timezone.utc)}},
+    )
 
     affected_users = users_collection.find(
         {

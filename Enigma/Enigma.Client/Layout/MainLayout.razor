@@ -53,6 +53,11 @@
         </header>
     }
 
+    @if (!string.IsNullOrWhiteSpace(FriendRequestToastMessage) && IsAuthenticated && !IsPublicPath())
+    {
+        <div class="global-friend-request-toast" role="status" aria-live="polite">@FriendRequestToastMessage</div>
+    }
+
     <main>
         @if (CanRenderCurrentRoute)
         {
@@ -117,6 +122,7 @@
         "enigma-multiplayer",
     };
     private const string TutorialDemoSeed = "easy-0,0BrS-1,0JqR-2,0HrF";
+    private static readonly TimeSpan GlobalSessionRefreshInterval = TimeSpan.FromSeconds(5);
 
     private LoginUserSummary? Session { get; set; }
     private bool AuthCheckComplete { get; set; }
@@ -130,6 +136,12 @@
     private bool _userSessionListenerRegistered;
     private DotNetObjectReference<MainLayout>? _userSessionListenerRef;
     private bool _handlingUserSessionUpdate;
+    private CancellationTokenSource? _sessionRefreshCancellation;
+    private Task? _sessionRefreshTask;
+    private bool _friendRequestsInitialized;
+    private HashSet<string> _knownFriendRequests = new(StringComparer.OrdinalIgnoreCase);
+    private string? FriendRequestToastMessage { get; set; }
+    private CancellationTokenSource? _friendRequestToastCancellation;
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
@@ -267,9 +279,11 @@
             AuthCheckComplete = true;
             IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
             Session = session;
+            UpdateFriendRequestTracking(session);
 
             if (!IsAuthenticated)
             {
+                StopGlobalSessionRefreshLoop();
                 await ClearBrowserSessionAsync();
                 NavigationManager.NavigateTo("/", replace: true);
                 return;
@@ -286,6 +300,7 @@
             var rememberSession = await GetRememberedSessionStateAsync();
             await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session!.Username }, rememberSession);
             await EnsureTutorialStateAsync(session);
+            EnsureGlobalSessionRefreshLoop();
             await InvokeAsync(StateHasChanged);
         }
         catch
@@ -293,6 +308,7 @@
             AuthCheckComplete = true;
             IsAuthenticated = false;
             Session = null;
+            StopGlobalSessionRefreshLoop();
             await ClearBrowserSessionAsync();
             NavigationManager.NavigateTo("/", replace: true);
         }
@@ -329,6 +345,7 @@
     private async Task LogoutAsync()
     {
         IsAccountMenuOpen = false;
+        StopGlobalSessionRefreshLoop();
         try
         {
             await Api.LogoutAsync();
@@ -362,6 +379,14 @@
         IsAccountMenuOpen = false;
         UpdateTutorialIndexFromUri(args.Location);
         ResetAuthStateForCurrentPath(args.Location);
+        if (IsPublicPath(args.Location) || !IsAuthenticated)
+        {
+            StopGlobalSessionRefreshLoop();
+        }
+        else
+        {
+            EnsureGlobalSessionRefreshLoop();
+        }
         _ = InvokeAsync(StateHasChanged);
     }
 
@@ -485,14 +510,17 @@
             AuthCheckComplete = true;
             IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
             Session = session;
+            UpdateFriendRequestTracking(session);
 
             if (!IsAuthenticated)
             {
+                StopGlobalSessionRefreshLoop();
                 await ClearBrowserSessionAsync();
                 NavigationManager.NavigateTo("/", replace: true);
                 return;
             }
 
+            EnsureGlobalSessionRefreshLoop();
             await InvokeAsync(StateHasChanged);
         }
         catch
@@ -694,9 +722,199 @@
         }
     }
 
+    private void EnsureGlobalSessionRefreshLoop()
+    {
+        if (IsPublicPath() || !IsAuthenticated)
+        {
+            return;
+        }
+
+        if (_sessionRefreshTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        StopGlobalSessionRefreshLoop();
+        _sessionRefreshCancellation = new CancellationTokenSource();
+        _sessionRefreshTask = RunGlobalSessionRefreshLoopAsync(_sessionRefreshCancellation.Token);
+    }
+
+    private void StopGlobalSessionRefreshLoop()
+    {
+        if (_sessionRefreshCancellation is not null)
+        {
+            try
+            {
+                _sessionRefreshCancellation.Cancel();
+            }
+            catch
+            {
+            }
+
+            _sessionRefreshCancellation.Dispose();
+            _sessionRefreshCancellation = null;
+        }
+
+        _sessionRefreshTask = null;
+    }
+
+    private async Task RunGlobalSessionRefreshLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(GlobalSessionRefreshInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (cancellationToken.IsCancellationRequested || IsPublicPath() || !IsAuthenticated || _handlingUserSessionUpdate)
+                {
+                    continue;
+                }
+
+                LoginUserSummary? latestSession;
+                try
+                {
+                    latestSession = await Api.GetSessionAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                await InvokeAsync(async () =>
+                {
+                    AuthCheckComplete = true;
+                    IsAuthenticated = latestSession is not null && !string.IsNullOrWhiteSpace(latestSession.Username);
+                    Session = latestSession;
+                    UpdateFriendRequestTracking(latestSession);
+
+                    if (!IsAuthenticated)
+                    {
+                        StopGlobalSessionRefreshLoop();
+                        await ClearBrowserSessionAsync();
+                        NavigationManager.NavigateTo("/", replace: true);
+                        return;
+                    }
+
+                    await StateHasChangedAsync();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void UpdateFriendRequestTracking(LoginUserSummary? session)
+    {
+        if (session is null || string.IsNullOrWhiteSpace(session.Username))
+        {
+            _friendRequestsInitialized = false;
+            _knownFriendRequests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HideFriendRequestToast();
+            return;
+        }
+
+        var latest = session.FriendRequests
+            .Select(request => (request ?? string.Empty).Trim())
+            .Where(static request => !string.IsNullOrWhiteSpace(request))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!_friendRequestsInitialized)
+        {
+            _knownFriendRequests = latest;
+            _friendRequestsInitialized = true;
+            return;
+        }
+
+        var addedRequests = latest
+            .Where(requester => !_knownFriendRequests.Contains(requester))
+            .OrderBy(requester => requester, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _knownFriendRequests = latest;
+        if (addedRequests.Count == 0)
+        {
+            return;
+        }
+
+        var toastMessage = addedRequests.Count == 1
+            ? $"New friend request received from {addedRequests[0]}."
+            : $"{addedRequests.Count} new friend requests received.";
+        ShowFriendRequestToast(toastMessage);
+    }
+
+    private void ShowFriendRequestToast(string message)
+    {
+        CancelFriendRequestToast();
+        FriendRequestToastMessage = message;
+        _friendRequestToastCancellation = new CancellationTokenSource();
+        _ = AutoHideFriendRequestToastAsync(_friendRequestToastCancellation.Token);
+    }
+
+    private void HideFriendRequestToast()
+    {
+        CancelFriendRequestToast();
+        FriendRequestToastMessage = null;
+    }
+
+    private void CancelFriendRequestToast()
+    {
+        if (_friendRequestToastCancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _friendRequestToastCancellation.Cancel();
+        }
+        catch
+        {
+        }
+
+        _friendRequestToastCancellation.Dispose();
+        _friendRequestToastCancellation = null;
+    }
+
+    private async Task AutoHideFriendRequestToastAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await InvokeAsync(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    FriendRequestToastMessage = null;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private Task StateHasChangedAsync()
+    {
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
     public async ValueTask DisposeAsync()
     {
         NavigationManager.LocationChanged -= HandleLocationChanged;
+        StopGlobalSessionRefreshLoop();
+        HideFriendRequestToast();
 
         if (_tutorialListenerRegistered)
         {
