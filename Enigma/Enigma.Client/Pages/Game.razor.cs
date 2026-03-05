@@ -1776,6 +1776,107 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
         return slotKind.Trim().Replace('_', ' ');
     }
 
+    protected IEnumerable<RunLoadoutSelection> GetVisibleLoadoutItems() =>
+        EquippedLoadout.Where(item => !string.IsNullOrWhiteSpace(item.ItemId) && item.Quantity > 0);
+
+    protected bool CanActivateLoadoutItem(RunLoadoutSelection item)
+    {
+        if (item is null || item.Quantity <= 0)
+        {
+            return false;
+        }
+
+        var slotKind = (item.SlotKind ?? string.Empty).Trim().ToLowerInvariant();
+        if (slotKind is "passive" or "perk")
+        {
+            return false;
+        }
+
+        var effectType = GetLoadoutEffectType(item);
+        return effectType switch
+        {
+            "trap_block" => false,
+            "reward_multiplier" => false,
+            "permanent_founder_bonus" => false,
+            _ => true,
+        };
+    }
+
+    protected bool CanUseLoadoutItem(RunLoadoutSelection item)
+    {
+        if (!CanActivateLoadoutItem(item))
+        {
+            return false;
+        }
+
+        return EquippedLoadout.Any(entry =>
+            string.Equals(entry.ItemId, item.ItemId, StringComparison.OrdinalIgnoreCase) &&
+            entry.Quantity > 0);
+    }
+
+    protected async Task UseLoadoutItemFromUiAsync(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId))
+        {
+            return;
+        }
+
+        var item = EquippedLoadout.FirstOrDefault(entry =>
+            string.Equals(entry.ItemId, itemId, StringComparison.OrdinalIgnoreCase));
+
+        if (item is null || !CanUseLoadoutItem(item))
+        {
+            return;
+        }
+
+        item.Quantity = Math.Max(0, item.Quantity - 1);
+        if (item.Quantity <= 0)
+        {
+            EquippedLoadout.Remove(item);
+        }
+
+        _playerStateDirty = true;
+        ShowBanner($"{item.Name} consumed.", 1.0d);
+
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.setRunLoadout", EquippedLoadout);
+        }
+        catch
+        {
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    protected string GetLoadoutHotkeyLabel(RunLoadoutSelection item)
+    {
+        if (item is null)
+        {
+            return "item";
+        }
+
+        var activeItems = GetVisibleLoadoutItems()
+            .Where(CanActivateLoadoutItem)
+            .Take(9)
+            .ToList();
+
+        var index = activeItems.FindIndex(candidate =>
+            string.Equals(candidate.ItemId, item.ItemId, StringComparison.OrdinalIgnoreCase));
+
+        return index >= 0 ? (index + 1).ToString(CultureInfo.InvariantCulture) : "item";
+    }
+
+    private static string GetLoadoutEffectType(RunLoadoutSelection item)
+    {
+        if (item.EffectConfig is null || !item.EffectConfig.TryGetValue("type", out var rawType) || rawType is null)
+        {
+            return string.Empty;
+        }
+
+        return rawType.ToString()?.Trim().ToLowerInvariant() ?? string.Empty;
+    }
+
     private List<string> BuildSelectedItemIds()
     {
         var usedItems = new List<string>();
