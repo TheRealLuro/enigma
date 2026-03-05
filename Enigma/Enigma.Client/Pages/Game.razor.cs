@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
+using Enigma.Client.Models;
 using Enigma.Client.Models.Gameplay;
 using Enigma.Client.Services;
 using Microsoft.AspNetCore.Components;
@@ -2649,15 +2650,50 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
                 reason = summary.Reason,
             });
 
+            var payload = await Api.ReadJsonAsync<LoginResponse>(response);
+            if (response.IsSuccessStatusCode && payload?.User is not null)
+            {
+                await RefreshClientSessionAsync(payload.User);
+                return;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 _ = await response.Content.ReadAsStringAsync();
+            }
+            else
+            {
+                await RefreshClientSessionAsync();
             }
         }
         catch
         {
         }
     }
+
+    private async Task RefreshClientSessionAsync(LoginUserSummary? session = null)
+    {
+        try
+        {
+            var nextSession = session;
+            if (nextSession is null || string.IsNullOrWhiteSpace(nextSession.Username))
+            {
+                nextSession = await Api.GetSessionAsync();
+            }
+
+            if (nextSession is null || string.IsNullOrWhiteSpace(nextSession.Username))
+            {
+                return;
+            }
+
+            Username = nextSession.Username;
+            await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", nextSession);
+        }
+        catch
+        {
+        }
+    }
+
     private void MarkPlayerStateDirty(
         double previousX,
         double previousY,

@@ -8,12 +8,13 @@ using Microsoft.JSInterop;
 
 namespace Enigma.Client.Pages;
 
-public partial class Profile
+public partial class Profile : IAsyncDisposable
 {
     private const string OverviewTab = "overview";
     private const string MapsTab = "maps";
     private const string InventoryTab = "inventory";
     private const string SettingsTab = "settings";
+    private static readonly TimeSpan OwnProfileRefreshInterval = TimeSpan.FromSeconds(4);
 
     private static readonly IReadOnlyList<(string Key, string Label)> OwnTabs =
     [
@@ -63,14 +64,18 @@ public partial class Profile
             .ToList();
 
     private EmailFormModel EmailForm { get; set; } = new();
+    private UsernameFormModel UsernameForm { get; set; } = new();
     private PasswordFormModel PasswordForm { get; set; } = new();
     private DeleteFormModel DeleteForm { get; set; } = new();
 
+    private bool ShowUsernamePassword { get; set; }
     private bool ShowEmailPassword { get; set; }
     private bool ShowPasswordFields { get; set; }
     private bool ShowDeletePassword { get; set; }
 
     private string AvatarMapName { get; set; } = string.Empty;
+    private CancellationTokenSource? _ownProfileRefreshCancellation;
+    private Task? _ownProfileRefreshTask;
 
     private bool IsOwnProfile =>
         Session is not null
@@ -174,6 +179,7 @@ public partial class Profile
         finally
         {
             IsLoading = false;
+            ConfigureOwnProfileRefreshLoop();
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -191,6 +197,8 @@ public partial class Profile
             return;
         }
 
+        UsernameForm.NewUsername = Session.Username;
+        UsernameForm.CurrentPassword = string.Empty;
         EmailForm.NewEmail = Session.Email;
         EmailForm.CurrentPassword = string.Empty;
         PasswordForm = new PasswordFormModel();
@@ -289,6 +297,54 @@ public partial class Profile
             {
                 var message = await RefreshSessionFromUserResponseAsync(response, "Email updated.");
                 EmailForm.CurrentPassword = string.Empty;
+                return message;
+            });
+    }
+
+    private async Task UpdateUsernameAsync()
+    {
+        var requestedUsername = UsernameForm.NewUsername?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(requestedUsername))
+        {
+            HasError = true;
+            StatusMessage = "Enter a new username first.";
+            return;
+        }
+
+        if (Session is not null && EqualsIgnoreCase(Session.Username, requestedUsername))
+        {
+            HasError = true;
+            StatusMessage = "Choose a different username.";
+            return;
+        }
+
+        UsernameForm.NewUsername = requestedUsername;
+
+        await ExecuteActionAsync(
+            () => Api.PutJsonAsync("api/auth/account/username", new
+            {
+                newUsername = requestedUsername,
+                currentPassword = UsernameForm.CurrentPassword,
+            }),
+            async response =>
+            {
+                var raw = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException(ReadError(raw));
+                }
+
+                var payload = JsonSerializer.Deserialize<LoginResponse>(raw, JsonOptions);
+                if (payload?.User is not null)
+                {
+                    Session = payload.User;
+                    await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", payload.User);
+                    await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = payload.User.Username }, false);
+                }
+
+                UsernameForm.CurrentPassword = string.Empty;
+                var message = JsonSerializer.Deserialize<ApiStatusResponse>(raw, JsonOptions)?.ToDisplayMessage() ?? "Username updated.";
+                NavigationManager.NavigateTo($"/profile?tab={Uri.EscapeDataString(SettingsTab)}", replace: true);
                 return message;
             });
     }
@@ -445,6 +501,96 @@ public partial class Profile
         Session = session;
         await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", session);
         await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = session.Username }, false);
+    }
+
+    private void ConfigureOwnProfileRefreshLoop()
+    {
+        if (!IsOwnProfile || ProfileData is null)
+        {
+            StopOwnProfileRefreshLoop();
+            return;
+        }
+
+        if (_ownProfileRefreshTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        StopOwnProfileRefreshLoop();
+        _ownProfileRefreshCancellation = new CancellationTokenSource();
+        _ownProfileRefreshTask = RunOwnProfileRefreshLoopAsync(_ownProfileRefreshCancellation.Token);
+    }
+
+    private void StopOwnProfileRefreshLoop()
+    {
+        if (_ownProfileRefreshCancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _ownProfileRefreshCancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
+        _ownProfileRefreshCancellation.Dispose();
+        _ownProfileRefreshCancellation = null;
+        _ownProfileRefreshTask = null;
+    }
+
+    private async Task RunOwnProfileRefreshLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(OwnProfileRefreshInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await RefreshOwnProfileLiveStateAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task RefreshOwnProfileLiveStateAsync(CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested || IsLoading || IsActionBusy || !IsOwnProfile || ProfileData is null)
+        {
+            return;
+        }
+
+        var latestSession = await Api.GetSessionAsync(cancellationToken);
+        if (latestSession is null || string.IsNullOrWhiteSpace(latestSession.Username))
+        {
+            return;
+        }
+
+        var friendsChanged = !SetEqualsIgnoreCase(ProfileData.Friends, latestSession.Friends);
+        var requestsChanged = !SetEqualsIgnoreCase(ProfileData.FriendRequests, latestSession.FriendRequests);
+        var nuggetsChanged = ProfileData.MazeNuggets != latestSession.MazeNuggets;
+        var profileImageChanged = !Equals(ProfileData.ProfileImage?.ImageUrl, latestSession.ProfileImage?.ImageUrl);
+        var hasChanges = friendsChanged || requestsChanged || nuggetsChanged || profileImageChanged;
+        Session = latestSession;
+
+        if (!hasChanges)
+        {
+            return;
+        }
+
+        ProfileData.Friends = NormalizeUsernameList(latestSession.Friends);
+        ProfileData.FriendRequests = NormalizeUsernameList(latestSession.FriendRequests);
+        ProfileData.MazeNuggets = latestSession.MazeNuggets;
+        ProfileData.ProfileImage = latestSession.ProfileImage;
+        ProfileData.OwnedMapsCount = latestSession.OwnedMapsCount;
+        ProfileData.DiscoveredMapsCount = latestSession.DiscoveredMapsCount;
+
+        await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", latestSession);
+        await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = latestSession.Username }, false);
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task<string> RefreshSessionFromUserResponseAsync(HttpResponseMessage response, string successFallback)
@@ -693,6 +839,31 @@ public partial class Profile
         return string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
+    private static List<string> NormalizeUsernameList(IEnumerable<string>? usernames)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var normalized = new List<string>();
+        foreach (var username in usernames ?? [])
+        {
+            var value = (username ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(value) || !seen.Add(value))
+            {
+                continue;
+            }
+
+            normalized.Add(value);
+        }
+
+        return normalized;
+    }
+
+    private static bool SetEqualsIgnoreCase(IEnumerable<string>? left, IEnumerable<string>? right)
+    {
+        var leftSet = new HashSet<string>(NormalizeUsernameList(left), StringComparer.OrdinalIgnoreCase);
+        var rightSet = new HashSet<string>(NormalizeUsernameList(right), StringComparer.OrdinalIgnoreCase);
+        return leftSet.SetEquals(rightSet);
+    }
+
     private async Task ClearLocalSessionAsync()
     {
         await JS.InvokeVoidAsync("enigmaGame.clearPlayerIdentity");
@@ -701,6 +872,12 @@ public partial class Profile
         await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
         await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
         await JS.InvokeVoidAsync("enigmaGame.clearRunLoadout");
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        StopOwnProfileRefreshLoop();
+        return ValueTask.CompletedTask;
     }
 
     private sealed class SeedApiResponse
@@ -720,6 +897,17 @@ public partial class Profile
         [Required]
         [EmailAddress]
         public string NewEmail { get; set; } = string.Empty;
+
+        [Required]
+        public string CurrentPassword { get; set; } = string.Empty;
+    }
+
+    private sealed class UsernameFormModel
+    {
+        [Required]
+        [MinLength(3)]
+        [MaxLength(32)]
+        public string NewUsername { get; set; } = string.Empty;
 
         [Required]
         public string CurrentPassword { get; set; } = string.Empty;

@@ -326,6 +326,15 @@ else
         {
             <div class="profile-settings-stack" data-tour-id="profile-settings">
                 <section class="panel profile-release-panel profile-settings-panel">
+                    <div class="panel-heading"><div><span class="profile-eyebrow">Identity</span><h2>Change Username</h2></div></div>
+                    <EditForm FormName="ProfileUsernameForm" Model="UsernameForm" OnValidSubmit="UpdateUsernameAsync" class="profile-settings-form">
+                        <DataAnnotationsValidator />
+                        <div><label class="form-label">New Username</label><InputText class="form-control" @bind-Value="UsernameForm.NewUsername" /><ValidationMessage For="() => UsernameForm.NewUsername" /></div>
+                        <div><label class="form-label">Current Password</label><div class="password-field-wrap"><InputText class="form-control" type="@(ShowUsernamePassword ? "text" : "password")" @bind-Value="UsernameForm.CurrentPassword" /><button class="password-toggle-button" type="button" @onclick="() => ShowUsernamePassword = !ShowUsernamePassword">@(ShowUsernamePassword ? "Hide" : "Show")</button></div><ValidationMessage For="() => UsernameForm.CurrentPassword" /></div>
+                        <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">@(IsActionBusy ? "Saving..." : "Save Username")</button>
+                    </EditForm>
+                </section>
+                <section class="panel profile-release-panel profile-settings-panel">
                     <div class="panel-heading"><div><span class="profile-eyebrow">Settings</span><h2>Update Email</h2></div></div>
                     <EditForm FormName="ProfileEmailForm" Model="EmailForm" OnValidSubmit="UpdateEmailAsync" class="profile-settings-form">
                         <DataAnnotationsValidator />

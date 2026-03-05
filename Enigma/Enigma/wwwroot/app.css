@@ -4306,6 +4306,22 @@ h1:focus {
     font-size: 0.82rem;
 }
 
+.marketplace-owner-tools {
+    display: grid;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.marketplace-owner-stepper .form-label {
+    margin-bottom: 6px;
+}
+
+.marketplace-owner-actions {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .inline-link-button {
     padding: 0;
     border: none;

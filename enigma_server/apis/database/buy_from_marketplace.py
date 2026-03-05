@@ -131,3 +131,58 @@ def buy_from(request: Request, map_name: str, buyer: str):
         "seller_reward": split["seller_reward"],
         "bank_dividend": split["bank_dividend"],
     }
+
+
+@router.put("/listing/price")
+@limiter.limit("20/minute")
+def update_listing_price(request: Request, map_name: str, seller: str, price: int):
+    normalized_map_name = (map_name or "").strip()
+    normalized_seller = (seller or "").strip()
+    if not normalized_map_name:
+        raise HTTPException(status_code=400, detail="Map name is required")
+    if not normalized_seller:
+        raise HTTPException(status_code=400, detail="Seller is required")
+    if price <= 0:
+        raise HTTPException(status_code=400, detail="Price must be greater than zero")
+
+    listing = marketplace_collection.find_one({"map_name": normalized_map_name})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    listing_seller = str(listing.get("seller") or "").strip()
+    if listing_seller != normalized_seller:
+        raise HTTPException(status_code=403, detail="Only the seller can change this listing price")
+
+    marketplace_collection.update_one(
+        {"_id": listing["_id"]},
+        {"$set": {"price": int(price)}},
+    )
+
+    return {
+        "status": "success",
+        "map_name": normalized_map_name,
+        "price": int(price),
+        "message": "Listing price updated",
+    }
+
+
+@router.delete("/listing")
+@limiter.limit("20/minute")
+def remove_listing(request: Request, map_name: str, seller: str):
+    normalized_map_name = (map_name or "").strip()
+    normalized_seller = (seller or "").strip()
+    if not normalized_map_name:
+        raise HTTPException(status_code=400, detail="Map name is required")
+    if not normalized_seller:
+        raise HTTPException(status_code=400, detail="Seller is required")
+
+    listing = marketplace_collection.find_one({"map_name": normalized_map_name})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    listing_seller = str(listing.get("seller") or "").strip()
+    if listing_seller != normalized_seller:
+        raise HTTPException(status_code=403, detail="Only the seller can remove this listing")
+
+    marketplace_collection.delete_one({"_id": listing["_id"]})
+    return {"status": "success", "map_name": normalized_map_name, "message": "Listing removed"}

@@ -194,7 +194,7 @@ else
                     </div>
                 </section>
 
-                @if (FilteredListings.Count == 0)
+                @if (AllFilteredListings.Count == 0)
                 {
                     <section class="panel leaderboard-empty-panel">
                         <h2>No matching listings</h2>
@@ -203,8 +203,39 @@ else
                 }
                 else
                 {
+                @if (TotalListingSections > 1)
+                {
+                    <section class="panel leaderboard-pagination-panel">
+                        <p class="leaderboard-pagination-summary">@MapListingSectionSummary</p>
+
+                        <div class="leaderboard-pagination">
+                            <button class="btn btn-secondary"
+                                    type="button"
+                                    disabled="@(!CanGoToPreviousListingSection)"
+                                    @onclick="GoToPreviousListingSectionAsync">
+                                Previous
+                            </button>
+                            @foreach (var sectionIndex in GetVisibleListingSectionIndexes())
+                            {
+                                <button class="@GetListingSectionButtonClass(sectionIndex)"
+                                        type="button"
+                                        disabled="@IsLoading"
+                                        @onclick="() => GoToListingSectionAsync(sectionIndex)">
+                                    @(sectionIndex + 1)
+                                </button>
+                            }
+                            <button class="btn btn-secondary"
+                                    type="button"
+                                    disabled="@(!CanGoToNextListingSection)"
+                                    @onclick="GoToNextListingSectionAsync">
+                                Next
+                            </button>
+                        </div>
+                    </section>
+                }
+
                 <section class="catalog-card-grid marketplace-grid">
-                    @foreach (var listing in FilteredListings)
+                    @foreach (var listing in PagedFilteredListings)
                     {
                         <article class="catalog-card marketplace-card">
                             <MapImageFrame ImageUrl="@listing.MapImage" AltText="@($"{listing.MapName} artwork")" FallbackText="@listing.MapName" Class="poster" />
@@ -232,6 +263,30 @@ else
                                 @if (IsOwnListing(listing))
                                 {
                                     <span class="profile-status-pill">Your listing</span>
+                                    <div class="marketplace-owner-tools">
+                                        <div class="marketplace-owner-stepper">
+                                            <label class="form-label">Listing Price</label>
+                                            <EnigmaIntStepper Class="form-control"
+                                                              Min="1"
+                                                              Max="100000000"
+                                                              Value="@GetListingDraftPrice(listing)"
+                                                              ValueChanged="@(value => UpdateListingDraftPrice(listing, value))" />
+                                        </div>
+                                        <div class="marketplace-owner-actions">
+                                            <button class="btn btn-primary"
+                                                    type="button"
+                                                    disabled="@IsActionBusy"
+                                                    @onclick="() => UpdateListingPriceAsync(listing)">
+                                                @(IsActionBusy ? "Updating..." : "Update Price")
+                                            </button>
+                                            <button class="btn btn-secondary"
+                                                    type="button"
+                                                    disabled="@IsActionBusy"
+                                                    @onclick="() => RemoveListingAsync(listing)">
+                                                @(IsActionBusy ? "Removing..." : "Remove Listing")
+                                            </button>
+                                        </div>
+                                    </div>
                                 }
                                 else
                                 {
@@ -550,11 +605,89 @@ else
     private MarketplaceSellForm SellRequest { get; set; } = new();
     private const string MapShopTab = "maps";
     private const string ItemShopTab = "items";
-    private string MapSearchQuery { get; set; } = string.Empty;
-    private string MapDifficultyFilter { get; set; } = "all";
-    private string MapThemeFilter { get; set; } = "all";
-    private string MapSortBy { get; set; } = "listed_at";
-    private string MapSortOrder { get; set; } = "desc";
+    private const int ListingSectionSize = 10;
+    private int CurrentListingSectionIndex { get; set; }
+    private readonly Dictionary<string, int> ListingDraftPrices = new(StringComparer.OrdinalIgnoreCase);
+    private string _mapSearchQuery = string.Empty;
+    private string _mapDifficultyFilter = "all";
+    private string _mapThemeFilter = "all";
+    private string _mapSortBy = "listed_at";
+    private string _mapSortOrder = "desc";
+    private string MapSearchQuery
+    {
+        get => _mapSearchQuery;
+        set
+        {
+            var next = value ?? string.Empty;
+            if (string.Equals(_mapSearchQuery, next, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _mapSearchQuery = next;
+            ResetListingSection();
+        }
+    }
+    private string MapDifficultyFilter
+    {
+        get => _mapDifficultyFilter;
+        set
+        {
+            var next = string.IsNullOrWhiteSpace(value) ? "all" : value;
+            if (string.Equals(_mapDifficultyFilter, next, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _mapDifficultyFilter = next;
+            ResetListingSection();
+        }
+    }
+    private string MapThemeFilter
+    {
+        get => _mapThemeFilter;
+        set
+        {
+            var next = string.IsNullOrWhiteSpace(value) ? "all" : value;
+            if (string.Equals(_mapThemeFilter, next, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _mapThemeFilter = next;
+            ResetListingSection();
+        }
+    }
+    private string MapSortBy
+    {
+        get => _mapSortBy;
+        set
+        {
+            var next = string.IsNullOrWhiteSpace(value) ? "listed_at" : value;
+            if (string.Equals(_mapSortBy, next, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _mapSortBy = next;
+            ResetListingSection();
+        }
+    }
+    private string MapSortOrder
+    {
+        get => _mapSortOrder;
+        set
+        {
+            var next = string.IsNullOrWhiteSpace(value) ? "desc" : value;
+            if (string.Equals(_mapSortOrder, next, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _mapSortOrder = next;
+            ResetListingSection();
+        }
+    }
     private string ItemSearchQuery { get; set; } = string.Empty;
     private string ItemKindFilter { get; set; } = "all";
     private string ItemRarityFilter { get; set; } = "all";
@@ -636,7 +769,7 @@ else
                 .ThenBy(static rarity => rarity, StringComparer.OrdinalIgnoreCase),
             "All rarities");
 
-    private List<MarketplaceListing> FilteredListings =>
+    private List<MarketplaceListing> AllFilteredListings =>
         ApplyMapSort(
             Listings.Where(listing =>
                     MatchesMapSearch(listing)
@@ -644,6 +777,11 @@ else
                     && MatchesFilter(listing.Theme, MapThemeFilter))
                 .ToList())
         .ToList();
+    private List<MarketplaceListing> PagedFilteredListings =>
+        AllFilteredListings
+            .Skip(CurrentListingSectionOffset)
+            .Take(ListingSectionSize)
+            .ToList();
     private List<ItemCatalogEntry> FilteredShopItems =>
         ApplyItemSort(
             ShopItems.Where(item =>
@@ -652,7 +790,14 @@ else
                     && MatchesFilter(item.Rarity, ItemRarityFilter))
                 .ToList())
         .ToList();
-    private string MapListingSummary => $"Showing {FilteredListings.Count} of {Listings.Count}";
+    private int CurrentListingSectionOffset => CurrentListingSectionIndex * ListingSectionSize;
+    private int TotalListingSections => Math.Max(1, (int)Math.Ceiling(AllFilteredListings.Count / (double)ListingSectionSize));
+    private bool CanGoToPreviousListingSection => CurrentListingSectionIndex > 0;
+    private bool CanGoToNextListingSection => CurrentListingSectionIndex + 1 < TotalListingSections;
+    private int CurrentListingRankStart => AllFilteredListings.Count == 0 ? 0 : CurrentListingSectionOffset + 1;
+    private int CurrentListingRankEnd => AllFilteredListings.Count == 0 ? 0 : Math.Min(CurrentListingSectionOffset + PagedFilteredListings.Count, AllFilteredListings.Count);
+    private string MapListingSectionSummary => AllFilteredListings.Count == 0 ? "No results" : $"Showing {CurrentListingRankStart}-{CurrentListingRankEnd} of {AllFilteredListings.Count}";
+    private string MapListingSummary => AllFilteredListings.Count == 0 ? "No results" : $"Section {CurrentListingSectionIndex + 1} of {TotalListingSections} | {MapListingSectionSummary}";
     private string ItemListingSummary => $"Showing {FilteredShopItems.Count} of {ShopItems.Count}";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -693,7 +838,9 @@ else
 
             var payload = await Api.ReadJsonAsync<MarketplaceResponse>(response);
             Listings = payload?.Listings ?? [];
+            ListingDraftPrices.Clear();
             ShopItems = (await Api.GetFromJsonAsync<ItemShopResponse>("api/auth/items/shop"))?.Items ?? [];
+            ClampListingSectionIndex();
 
             if (AvailableOwnedMaps.Count > 0 && string.IsNullOrWhiteSpace(SellRequest.MapName))
             {
@@ -751,6 +898,47 @@ else
                 await RefreshSessionAsync();
                 await LoadMarketplaceAsync();
             });
+    }
+
+    private async Task UpdateListingPriceAsync(MarketplaceListing listing)
+    {
+        if (Session is null || !IsOwnListing(listing))
+        {
+            return;
+        }
+
+        var nextPrice = GetListingDraftPrice(listing);
+        if (nextPrice <= 0)
+        {
+            HasError = true;
+            StatusMessage = "Listing price must be greater than zero.";
+            return;
+        }
+
+        await PerformMarketplaceActionAsync(
+            () => Api.PutJsonAsync("api/auth/marketplace/listing/price", new
+            {
+                mapName = listing.MapName,
+                price = nextPrice,
+            }),
+            successFallback: "Listing price updated.",
+            asyncOnSuccess: LoadMarketplaceAsync);
+    }
+
+    private async Task RemoveListingAsync(MarketplaceListing listing)
+    {
+        if (Session is null || !IsOwnListing(listing))
+        {
+            return;
+        }
+
+        await PerformMarketplaceActionAsync(
+            () => Api.DeleteJsonAsync("api/auth/marketplace/listing", new
+            {
+                mapName = listing.MapName,
+            }),
+            successFallback: "Listing removed.",
+            asyncOnSuccess: LoadMarketplaceAsync);
     }
 
     private async Task PurchaseItemAsync(ItemCatalogEntry item)
@@ -837,6 +1025,79 @@ else
         ActiveMarketplaceTab = string.Equals(tab, ItemShopTab, StringComparison.OrdinalIgnoreCase)
             ? ItemShopTab
             : MapShopTab;
+    }
+
+    private int GetListingDraftPrice(MarketplaceListing listing)
+    {
+        var key = listing.MapName;
+        if (ListingDraftPrices.TryGetValue(key, out var existing) && existing > 0)
+        {
+            return existing;
+        }
+
+        var defaultValue = Math.Max(1, listing.Price);
+        ListingDraftPrices[key] = defaultValue;
+        return defaultValue;
+    }
+
+    private Task UpdateListingDraftPrice(MarketplaceListing listing, int value)
+    {
+        ListingDraftPrices[listing.MapName] = Math.Max(1, value);
+        return Task.CompletedTask;
+    }
+
+    private void ResetListingSection()
+    {
+        CurrentListingSectionIndex = 0;
+    }
+
+    private void ClampListingSectionIndex()
+    {
+        if (AllFilteredListings.Count == 0)
+        {
+            CurrentListingSectionIndex = 0;
+            return;
+        }
+
+        CurrentListingSectionIndex = Math.Clamp(CurrentListingSectionIndex, 0, Math.Max(0, TotalListingSections - 1));
+    }
+
+    private IEnumerable<int> GetVisibleListingSectionIndexes()
+    {
+        if (TotalListingSections <= 0)
+        {
+            yield break;
+        }
+
+        var maxButtons = 5;
+        var start = Math.Max(0, CurrentListingSectionIndex - 2);
+        var end = Math.Min(TotalListingSections - 1, start + maxButtons - 1);
+        start = Math.Max(0, end - (maxButtons - 1));
+
+        for (var index = start; index <= end; index++)
+        {
+            yield return index;
+        }
+    }
+
+    private string GetListingSectionButtonClass(int sectionIndex)
+    {
+        return sectionIndex == CurrentListingSectionIndex ? "btn btn-primary leaderboard-page-button" : "btn btn-secondary leaderboard-page-button";
+    }
+
+    private Task GoToPreviousListingSectionAsync() => GoToListingSectionAsync(CurrentListingSectionIndex - 1);
+
+    private Task GoToNextListingSectionAsync() => GoToListingSectionAsync(CurrentListingSectionIndex + 1);
+
+    private Task GoToListingSectionAsync(int sectionIndex)
+    {
+        if (sectionIndex == CurrentListingSectionIndex || sectionIndex < 0 || sectionIndex >= TotalListingSections)
+        {
+            return Task.CompletedTask;
+        }
+
+        CurrentListingSectionIndex = sectionIndex;
+        return InvokeAsync(StateHasChanged);
     }
 
     private string GetMarketplaceTabClass(string tab)

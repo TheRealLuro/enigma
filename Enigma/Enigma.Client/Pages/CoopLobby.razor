@@ -344,6 +344,8 @@ else
     private MultiplayerSessionState? CurrentSession { get; set; }
     private CancellationTokenSource? PollCancellation { get; set; }
     private Task? PollTask { get; set; }
+    private CancellationTokenSource? InviteRefreshCancellation { get; set; }
+    private Task? InviteRefreshTask { get; set; }
     private bool HasEnteredActiveSession { get; set; }
     private bool IsEnteringActiveSession { get; set; }
     private bool CoopSocketOpen { get; set; }
@@ -394,6 +396,7 @@ else
             LobbySocketRef = DotNetObjectReference.Create(this);
             HasLoadedOnce = true;
             IsLoading = false;
+            StartInviteRefresh();
 
             if (!string.IsNullOrWhiteSpace(RequestedSessionId))
             {
@@ -624,6 +627,86 @@ else
         }
 
         await InvokeAsync(StateHasChanged);
+    }
+
+    private void StartInviteRefresh()
+    {
+        if (InviteRefreshTask is not null)
+        {
+            return;
+        }
+
+        InviteRefreshCancellation = new CancellationTokenSource();
+        InviteRefreshTask = RefreshInviteLoopAsync(InviteRefreshCancellation.Token);
+    }
+
+    private async Task RefreshInviteLoopAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(1500));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (IsActionBusy || IsEnteringActiveSession || HasEnteredActiveSession)
+                {
+                    continue;
+                }
+
+                LoginUserSummary? refreshedSession;
+                try
+                {
+                    refreshedSession = await Api.GetSessionAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (refreshedSession is null)
+                {
+                    await InvokeAsync(() => NavigationManager.NavigateTo("/", replace: true));
+                    break;
+                }
+
+                var previousInviteIds = Session?.PendingMultiplayerInvites
+                    .Select(static invite => invite.SessionId)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+                var refreshedInviteIds = refreshedSession.PendingMultiplayerInvites
+                    .Select(static invite => invite.SessionId)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var hasInviteDelta = !previousInviteIds.SetEquals(refreshedInviteIds);
+
+                if (CurrentSession is null && !string.IsNullOrWhiteSpace(RequestedSessionId) &&
+                    refreshedSession.PendingMultiplayerInvites.Any(invite =>
+                        string.Equals(invite.SessionId, RequestedSessionId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        Session = refreshedSession;
+                        await JoinPendingInviteAsync(RequestedSessionId);
+                    });
+                    continue;
+                }
+
+                if (!hasInviteDelta)
+                {
+                    continue;
+                }
+
+                await InvokeAsync(() =>
+                {
+                    Session = refreshedSession;
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private void ApplySessionEnvelope(MultiplayerSessionEnvelope? payload)
@@ -903,6 +986,7 @@ else
 
     public async ValueTask DisposeAsync()
     {
+        await StopInviteRefreshAsync();
         await StopPollingAsync();
         try
         {
@@ -935,6 +1019,29 @@ else
             }
 
             PollTask = null;
+        }
+    }
+
+    private async Task StopInviteRefreshAsync()
+    {
+        if (InviteRefreshCancellation is not null)
+        {
+            InviteRefreshCancellation.Cancel();
+            InviteRefreshCancellation.Dispose();
+            InviteRefreshCancellation = null;
+        }
+
+        if (InviteRefreshTask is not null)
+        {
+            try
+            {
+                await InviteRefreshTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            InviteRefreshTask = null;
         }
     }
 }

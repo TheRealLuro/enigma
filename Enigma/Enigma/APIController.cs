@@ -360,6 +360,58 @@ public class APIController : ControllerBase
     }
 
     [Authorize]
+    [HttpPut("account/username")]
+    public async Task<IActionResult> UpdateUsername([FromBody] UpdateUsernameRequest request)
+    {
+        using var client = CreateClient();
+        var username = RequireAuthenticatedUsername();
+        using var response = await client.PutAsJsonAsync("database/users/update_username", new
+        {
+            username,
+            current_password = request.CurrentPassword,
+            new_username = request.NewUsername,
+        });
+
+        var content = await ReadContentAsync(response);
+        var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+        if (!response.IsSuccessStatusCode)
+        {
+            return new ContentResult
+            {
+                Content = content,
+                ContentType = contentType,
+                StatusCode = (int)response.StatusCode,
+            };
+        }
+
+        try
+        {
+            using var payload = JsonDocument.Parse(content);
+            var updatedUsername = payload.RootElement
+                .GetProperty("user")
+                .GetProperty("username")
+                .GetString();
+
+            if (!string.IsNullOrWhiteSpace(updatedUsername))
+            {
+                var authResult = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                var rememberMe = authResult.Succeeded && authResult.Properties?.IsPersistent == true;
+                await SignInAsync(updatedUsername, rememberMe);
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return new ContentResult
+        {
+            Content = content,
+            ContentType = contentType,
+            StatusCode = (int)response.StatusCode,
+        };
+    }
+
+    [Authorize]
     [HttpPut("account/password")]
     public async Task<IActionResult> UpdatePassword([FromBody] UpdatePasswordRequest request)
     {
@@ -467,6 +519,29 @@ public class APIController : ControllerBase
         using var response = await client.PostAsync(
             $"database/maps/add_to_marketplace?user={Esc(user)}&map_name={Esc(request.MapName)}&price={request.Price}",
             null);
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpPut("marketplace/listing/price")]
+    public async Task<IActionResult> UpdateMarketplaceListingPrice([FromBody] MarketplaceUpdateListingPriceRequest request)
+    {
+        using var client = CreateClient();
+        var seller = RequireAuthenticatedUsername();
+        using var response = await client.PutAsync(
+            $"database/marketplace/listing/price?map_name={Esc(request.MapName)}&seller={Esc(seller)}&price={request.Price}",
+            null);
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpDelete("marketplace/listing")]
+    public async Task<IActionResult> RemoveMarketplaceListing([FromBody] MarketplaceRemoveListingRequest request)
+    {
+        using var client = CreateClient();
+        var seller = RequireAuthenticatedUsername();
+        using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, $"database/marketplace/listing?map_name={Esc(request.MapName)}&seller={Esc(seller)}");
+        using var response = await client.SendAsync(deleteRequest);
         return await RelayAsync(response);
     }
 
@@ -755,6 +830,12 @@ public sealed class UpdateEmailRequest
     public string CurrentPassword { get; set; } = string.Empty;
 }
 
+public sealed class UpdateUsernameRequest
+{
+    public string NewUsername { get; set; } = string.Empty;
+    public string CurrentPassword { get; set; } = string.Empty;
+}
+
 public sealed class UpdatePasswordRequest
 {
     public string CurrentPassword { get; set; } = string.Empty;
@@ -864,6 +945,17 @@ public sealed class MarketplaceAddRequest
 }
 
 public sealed class MarketplaceBuyRequest
+{
+    public string MapName { get; set; } = string.Empty;
+}
+
+public sealed class MarketplaceUpdateListingPriceRequest
+{
+    public string MapName { get; set; } = string.Empty;
+    public int Price { get; set; }
+}
+
+public sealed class MarketplaceRemoveListingRequest
 {
     public string MapName { get; set; } = string.Empty;
 }

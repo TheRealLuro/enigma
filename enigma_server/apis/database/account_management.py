@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,9 +12,10 @@ from pymongo.errors import DuplicateKeyError
 from main import limiter
 
 from .account_cleanup import delete_user_account
-from .db import client, item_inventory, maps_collection, run_results, users_collection
+from .db import client, item_inventory, maps_collection, marketplace_collection, run_results, users_collection
 from .economy_rules import compute_loss_fee, credit_bank_dividend
 from .item_catalog import serialize_shop_item
+from .redis_store import delete_keys, load_json, save_json, session_key, user_invites_key, user_session_key
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
     build_owned_maps_sync_update,
@@ -42,6 +44,12 @@ class UpdatePasswordPayload(BaseModel):
     username: str
     current_password: str
     new_password: str = Field(min_length=8)
+
+
+class UpdateUsernamePayload(BaseModel):
+    username: str
+    current_password: str
+    new_username: str = Field(min_length=3, max_length=32)
 
 
 class UpdateAvatarPayload(BaseModel):
@@ -86,6 +94,152 @@ def _verify_password(user: dict[str, Any], password: str) -> None:
     hashed_bytes = hashed if isinstance(hashed, bytes) else str(hashed).encode("utf-8")
     if not bcrypt.checkpw(password.encode("utf-8"), hashed_bytes):
         raise HTTPException(status_code=401, detail="Incorrect password")
+
+
+def _replace_username_values(values: list[Any], current_username: str, new_username: str) -> list[str]:
+    normalized_current = current_username.strip().casefold()
+    normalized_new = new_username.strip()
+    dedupe: set[str] = set()
+    replaced: list[str] = []
+
+    for value in values:
+        username = str(value or "").strip()
+        if not username:
+            continue
+
+        if username.casefold() == normalized_current:
+            username = normalized_new
+
+        key = username.casefold()
+        if key in dedupe:
+            continue
+
+        dedupe.add(key)
+        replaced.append(username)
+
+    return replaced
+
+
+def _assert_username_change_multiplayer_safe(username: str) -> None:
+    try:
+        active_session_payload = load_json(user_session_key(username))
+    except HTTPException:
+        return
+
+    active_session_id = ""
+    if isinstance(active_session_payload, dict):
+        active_session_id = str(active_session_payload.get("session_id") or "").strip()
+    elif isinstance(active_session_payload, str):
+        active_session_id = active_session_payload.strip()
+
+    if not active_session_id:
+        return
+
+    try:
+        active_session = load_json(session_key(active_session_id))
+    except HTTPException:
+        return
+
+    active_status = str((active_session or {}).get("status") or "").strip().lower()
+    if active_session and active_status not in {"completed", "abandoned"}:
+        raise HTTPException(status_code=409, detail="Leave your active co-op session before changing username")
+
+
+def _migrate_multiplayer_user_keys(current_username: str, new_username: str) -> None:
+    try:
+        current_invites = load_json(user_invites_key(current_username))
+        new_invites = load_json(user_invites_key(new_username))
+    except HTTPException:
+        return
+
+    merged_invites: dict[str, Any] = {}
+    if isinstance(new_invites, dict):
+        merged_invites.update(new_invites)
+    if isinstance(current_invites, dict):
+        merged_invites.update(current_invites)
+
+    normalized_current = current_username.strip().casefold()
+
+    def replace_value(value: Any) -> str:
+        username = str(value or "").strip()
+        if username.casefold() == normalized_current:
+            return new_username
+        return username
+
+    def replace_list(values: Any) -> list[str]:
+        return _replace_username_values(list(values or []), current_username, new_username)
+
+    def replace_session_payload(session_payload: dict[str, Any]) -> bool:
+        changed = False
+
+        owner_username = replace_value(session_payload.get("owner_username"))
+        if owner_username != str(session_payload.get("owner_username") or "").strip():
+            session_payload["owner_username"] = owner_username
+            changed = True
+
+        guest_username = replace_value(session_payload.get("guest_username"))
+        if guest_username != str(session_payload.get("guest_username") or "").strip():
+            session_payload["guest_username"] = guest_username
+            changed = True
+
+        current_invited = list(session_payload.get("invited_friends", []))
+        updated_invited = replace_list(current_invited)
+        if updated_invited != current_invited:
+            session_payload["invited_friends"] = updated_invited
+            changed = True
+
+        players = session_payload.get("players", {})
+        if isinstance(players, dict):
+            updated_players: dict[str, Any] = {}
+            for player_username, player_state in players.items():
+                normalized_username = replace_value(player_username)
+                next_state = dict(player_state or {})
+                if str(next_state.get("username") or "").strip().casefold() == normalized_current:
+                    next_state["username"] = new_username
+                    changed = True
+                updated_players[normalized_username] = next_state
+            if updated_players != players:
+                session_payload["players"] = updated_players
+                changed = True
+
+        abandon_by = replace_value(session_payload.get("abandoned_by"))
+        if abandon_by != str(session_payload.get("abandoned_by") or "").strip():
+            session_payload["abandoned_by"] = abandon_by or None
+            changed = True
+
+        completion = session_payload.get("completion")
+        if isinstance(completion, dict):
+            completion_changed = False
+            discoverers = replace_list(completion.get("discoverers", []))
+            if discoverers != list(completion.get("discoverers", [])):
+                completion["discoverers"] = discoverers
+                completion_changed = True
+            completion_owner = replace_value(completion.get("owner_username"))
+            if completion_owner != str(completion.get("owner_username") or "").strip():
+                completion["owner_username"] = completion_owner
+                completion_changed = True
+            if completion_changed:
+                changed = True
+
+        return changed
+
+    try:
+        if merged_invites:
+            save_json(user_invites_key(new_username), merged_invites)
+
+        for invite_session_id in merged_invites.keys():
+            normalized_session_id = str(invite_session_id or "").strip()
+            if not normalized_session_id:
+                continue
+            session_payload = load_json(session_key(normalized_session_id))
+            if not isinstance(session_payload, dict):
+                continue
+            if replace_session_payload(session_payload):
+                save_json(session_key(normalized_session_id), session_payload)
+
+        delete_keys(user_invites_key(current_username), user_session_key(current_username))
+    except HTTPException:
+        pass
 
 
 def _sync_user(username: str) -> dict[str, Any]:
@@ -184,6 +338,78 @@ def update_password(request: Request, payload: UpdatePasswordPayload):
     users_collection.update_one({"_id": user["_id"]}, {"$set": {"password": hashed_password}})
 
     refreshed = _sync_user(payload.username)
+    return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
+
+
+@router.put("/update_username")
+@limiter.limit("5/minute")
+def update_username(request: Request, payload: UpdateUsernamePayload):
+    current_username = payload.username.strip()
+    new_username = payload.new_username.strip()
+    if not current_username:
+        raise HTTPException(status_code=400, detail="Current username is required")
+    if not new_username:
+        raise HTTPException(status_code=400, detail="New username is required")
+    if new_username.lower() == SYSTEM_BANK_USERNAME:
+        raise HTTPException(status_code=403, detail="That username is reserved")
+    if new_username.casefold() == current_username.casefold():
+        raise HTTPException(status_code=400, detail="Choose a different username")
+
+    user = _sync_user(current_username)
+    if user.get("is_system_account"):
+        raise HTTPException(status_code=403, detail="System accounts cannot change usernames")
+    _verify_password(user, payload.current_password)
+    _assert_username_change_multiplayer_safe(current_username)
+
+    existing_user = users_collection.find_one(
+        {
+            "_id": {"$ne": user["_id"]},
+            "username": {"$regex": f"^{re.escape(new_username)}$", "$options": "i"},
+        }
+    )
+    if existing_user:
+        raise HTTPException(status_code=409, detail="Username is already in use")
+
+    users_collection.update_one({"_id": user["_id"]}, {"$set": {"username": new_username}})
+
+    affected_users = users_collection.find(
+        {
+            "_id": {"$ne": user["_id"]},
+            "$or": [
+                {"friends": current_username},
+                {"friend_requests": current_username},
+            ],
+        },
+        {
+            "friends": 1,
+            "friend_requests": 1,
+        },
+    )
+    for affected_user in affected_users:
+        updated_friends = _replace_username_values(affected_user.get("friends", []), current_username, new_username)
+        updated_friend_requests = _replace_username_values(
+            affected_user.get("friend_requests", []),
+            current_username,
+            new_username,
+        )
+        users_collection.update_one(
+            {"_id": affected_user["_id"]},
+            {
+                "$set": {
+                    "friends": updated_friends,
+                    "friend_requests": updated_friend_requests,
+                }
+            },
+        )
+
+    maps_collection.update_many({"owner": current_username}, {"$set": {"owner": new_username}})
+    maps_collection.update_many({"founder": current_username}, {"$set": {"founder": new_username}})
+    maps_collection.update_many({"user_with_best_time": current_username}, {"$set": {"user_with_best_time": new_username}})
+    marketplace_collection.update_many({"seller": current_username}, {"$set": {"seller": new_username}})
+    run_results.update_many({"username": current_username}, {"$set": {"username": new_username}})
+    _migrate_multiplayer_user_keys(current_username, new_username)
+
+    refreshed = _sync_user(new_username)
     return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
 
 

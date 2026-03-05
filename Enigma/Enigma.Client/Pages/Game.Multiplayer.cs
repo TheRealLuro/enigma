@@ -636,6 +636,8 @@ public partial class Game
             }
         }
 
+        await RefreshClientSessionAsync();
+
         await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
         await JS.InvokeVoidAsync("enigmaGame.disposeCoopSocket");
         await JS.InvokeVoidAsync("enigmaGame.disposeInput");

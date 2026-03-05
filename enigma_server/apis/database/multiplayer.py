@@ -518,7 +518,7 @@ def _all_players_stale(session: dict[str, Any], stale_after: timedelta) -> bool:
     for player in players.values():
         seen_at = _parse_iso_datetime((player or {}).get("last_seen_at"))
         if seen_at is None:
-            return False
+            continue
         if now - seen_at <= stale_after:
             return False
 
@@ -536,7 +536,7 @@ def _player_is_stale(session: dict[str, Any], username: str, stale_after: timede
 
     seen_at = _parse_iso_datetime(player.get("last_seen_at"))
     if seen_at is None:
-        return False
+        return True
 
     return _utc_now() - seen_at > stale_after
 
@@ -571,13 +571,13 @@ def _session_should_soft_close(session_id: str, session: dict[str, Any], usernam
         if _all_players_stale(session, stale_after=timedelta(minutes=3)):
             return True
 
-        if not _session_has_live_socket(session_id) and _all_players_stale(session, stale_after=timedelta(seconds=20)):
+        if not _session_has_live_socket(session_id) and _all_players_stale(session, stale_after=timedelta(seconds=8)):
             return True
 
         if not _session_has_live_socket(session_id, username) and _player_is_stale(
             session,
             username,
-            stale_after=timedelta(seconds=20),
+            stale_after=timedelta(seconds=8),
         ):
             return True
 
