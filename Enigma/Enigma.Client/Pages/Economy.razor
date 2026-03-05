@@ -7,21 +7,21 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<SeoHead Title="Enigma Economy | Circulation, Marketplace, Staking, and Voting"
-         Description="Track MN and map circulation, user activity, and use marketplace, staking, and voting from one economy hub."
+<SeoHead Title="Enigma Economy | Research Market, Staking, and Council Voting"
+         Description="Track MN reserves, sector circulation, explorer activity, and coordinate marketplace, staking, and council voting from one economy hub."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage" />
 
 @if (IsLoading && Overview is null)
 {
-    <div class="content"><div class="card enigma-game-message"><div class="loader"></div><p>Loading economy overview...</p></div></div>
+    <div class="content"><div class="card enigma-game-message"><div class="loader"></div><p>Loading economy telemetry...</p></div></div>
 }
 else if (!string.IsNullOrWhiteSpace(ErrorMessage) && Overview is null)
 {
     <div class="content">
         <div class="card enigma-game-message">
-            <h1>Economy unavailable</h1>
+            <h1>Economy feed unavailable</h1>
             <p>@ErrorMessage</p>
             <button class="btn btn-primary" type="button" @onclick="ReloadAsync">Retry</button>
         </div>
@@ -32,9 +32,9 @@ else
     <div class="content economy-shell" data-tour-id="economy-shell">
         <section class="economy-banner" data-tour-id="economy-banner">
             <div>
-                <span class="profile-eyebrow">Economy</span>
-                <h1>Market Pulse</h1>
-                <p>Monitor MN circulation, map circulation, player activity, and governance spend in one place.</p>
+                <span class="profile-eyebrow">Research Economy</span>
+                <h1>Anomaly Market Pulse</h1>
+                <p>Monitor MN reserves, sector circulation, explorer activity, and council spend in one place.</p>
             </div>
             <div class="economy-banner-meta">
                 @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))

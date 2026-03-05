@@ -112,6 +112,7 @@ def default_user_fields(username: str | None = None, email: str | None = None) -
         "last_staking_reward_at": None,
         "staked_map_ids": [],
         "staked_map_lock_until": {},
+        "staked_map_started_at": {},
         "owned_cosmetics": [],
         "item_counts": {},
     }

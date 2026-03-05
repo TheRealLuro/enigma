@@ -14,7 +14,9 @@ from .staking_rules import (
     claim_daily_staking_reward,
     normalize_staked_map_ids,
     normalize_staked_map_lock_until,
+    normalize_staked_map_started_at,
     stake_lock_expires_at,
+    vote_multiplier_breakdown,
 )
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
@@ -40,6 +42,64 @@ class UnstakeMapPayload(BaseModel):
 
 class ClaimStakingPayload(BaseModel):
     username: str
+
+
+def _collective_research_snapshot() -> tuple[dict[str, Any], dict[str, Any]]:
+    contributor_count = 0
+    contributed_maps_total = 0
+
+    for user_doc in users_collection.find({}, {"staked_map_ids": 1}):
+        staked_ids = {
+            str(value or "").strip()
+            for value in list(user_doc.get("staked_map_ids", []) or [])
+            if str(value or "").strip()
+        }
+        if not staked_ids:
+            continue
+
+        contributor_count += 1
+        contributed_maps_total += len(staked_ids)
+
+    target_maps = 500
+    progress_percent = round(min(100.0, (contributed_maps_total / target_maps) * 100.0), 2)
+    stability_percent = round(min(100.0, 35.0 + (progress_percent * 0.65)), 2)
+    stability_status = (
+        "Stable"
+        if stability_percent >= 80
+        else "Recovering"
+        if stability_percent >= 55
+        else "Volatile"
+    )
+
+    collective = {
+        "title": "Decode Labyrinth Type IV",
+        "description": "Global anomaly mapping objective coordinated by Enigma Research Labs. Current evidence suggests some structures may be intentionally constructed.",
+        "target_maps": target_maps,
+        "contributed_maps": contributed_maps_total,
+        "contributor_count": contributor_count,
+        "progress_percent": progress_percent,
+    }
+    stability = {
+        "percent": stability_percent,
+        "status": stability_status,
+        "required_maps": target_maps,
+    }
+    return collective, stability
+
+
+def _augment_research_metrics(overview: dict[str, Any]) -> dict[str, Any]:
+    staked_maps_count = int(overview.get("staked_maps_count", 0) or 0)
+    multiplier = vote_multiplier_breakdown(staked_maps_count, 0)
+    collective, stability = _collective_research_snapshot()
+    overview["research_influence"] = {
+        "staked_maps_count": staked_maps_count,
+        "multiplier": float(multiplier.get("effective_multiplier", 1.0) or 1.0),
+        "stake_component": float(multiplier.get("stake_multiplier", 1.0) or 1.0),
+        "description": "Research influence feeds into Council vote weight.",
+    }
+    overview["collective_research"] = collective
+    overview["anomaly_stability"] = stability
+    return overview
 
 
 def _sync_user(username: str) -> dict[str, Any]:
@@ -96,23 +156,38 @@ def get_staking_overview(request: Request, username: str):
     overview = build_staking_overview(user, maps_collection)
     normalized_staked_ids, _ = normalize_staked_map_ids(user, maps_collection)
     normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
+    normalized_started_lookup = normalize_staked_map_started_at(user, normalized_staked_ids, normalized_lock_lookup)
     missing_lock_ids = [map_id for map_id in normalized_staked_ids if map_id not in normalized_lock_lookup]
     if missing_lock_ids:
         for map_id in missing_lock_ids:
             normalized_lock_lookup[map_id] = stake_lock_expires_at().isoformat()
+    missing_started_ids = [map_id for map_id in normalized_staked_ids if map_id not in normalized_started_lookup]
+    if missing_started_ids:
+        normalized_started_lookup = normalize_staked_map_started_at(user, normalized_staked_ids, normalized_lock_lookup)
     current_staked_ids = [str(value or "").strip() for value in list(user.get("staked_map_ids", []) or []) if str(value or "").strip()]
     current_lock_lookup = user.get("staked_map_lock_until") if isinstance(user.get("staked_map_lock_until"), dict) else {}
-    if normalized_staked_ids != current_staked_ids or normalized_lock_lookup != current_lock_lookup:
+    current_started_lookup = user.get("staked_map_started_at") if isinstance(user.get("staked_map_started_at"), dict) else {}
+    if (
+        normalized_staked_ids != current_staked_ids
+        or normalized_lock_lookup != current_lock_lookup
+        or normalized_started_lookup != current_started_lookup
+    ):
         users_collection.update_one(
             {"_id": user["_id"]},
-            {"$set": {"staked_map_ids": normalized_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
+            {
+                "$set": {
+                    "staked_map_ids": normalized_staked_ids,
+                    "staked_map_lock_until": normalized_lock_lookup,
+                    "staked_map_started_at": normalized_started_lookup,
+                }
+            },
         )
         user = users_collection.find_one({"_id": user["_id"]}) or user
         overview = build_staking_overview(user, maps_collection)
 
     return {
         "status": "success",
-        "overview": overview,
+        "overview": _augment_research_metrics(overview),
         "user": serialize_session_user(user, maps_collection),
     }
 
@@ -124,29 +199,42 @@ def stake_map(request: Request, payload: StakeMapPayload):
     user = _sync_user(username)
     normalized_staked_ids, owned_lookup = normalize_staked_map_ids(user, maps_collection)
     normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
+    normalized_started_lookup = normalize_staked_map_started_at(user, normalized_staked_ids, normalized_lock_lookup)
     target_map_id = _resolve_owned_map_id(payload.map_id, payload.map_name, owned_lookup)
 
     should_persist = False
+    now = datetime.now(timezone.utc)
     if target_map_id not in normalized_staked_ids:
         normalized_staked_ids.append(target_map_id)
-        normalized_lock_lookup[target_map_id] = stake_lock_expires_at().isoformat()
+        normalized_lock_lookup[target_map_id] = stake_lock_expires_at(now).isoformat()
+        normalized_started_lookup[target_map_id] = now.isoformat()
         should_persist = True
     elif target_map_id not in normalized_lock_lookup:
         # Legacy safety: if a staked map has no lock metadata, immediately apply a full lock window.
-        normalized_lock_lookup[target_map_id] = stake_lock_expires_at().isoformat()
+        normalized_lock_lookup[target_map_id] = stake_lock_expires_at(now).isoformat()
+        normalized_started_lookup[target_map_id] = now.isoformat()
+        should_persist = True
+    elif target_map_id not in normalized_started_lookup:
+        normalized_started_lookup[target_map_id] = now.isoformat()
         should_persist = True
 
     if should_persist:
         users_collection.update_one(
             {"_id": user["_id"]},
-            {"$set": {"staked_map_ids": normalized_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
+            {
+                "$set": {
+                    "staked_map_ids": normalized_staked_ids,
+                    "staked_map_lock_until": normalized_lock_lookup,
+                    "staked_map_started_at": normalized_started_lookup,
+                }
+            },
         )
 
     refreshed = _sync_user(username)
     overview = build_staking_overview(refreshed, maps_collection)
     return {
         "status": "success",
-        "overview": overview,
+        "overview": _augment_research_metrics(overview),
         "user": serialize_session_user(refreshed, maps_collection),
     }
 
@@ -158,6 +246,7 @@ def unstake_map(request: Request, payload: UnstakeMapPayload):
     user = _sync_user(username)
     normalized_staked_ids, owned_lookup = normalize_staked_map_ids(user, maps_collection)
     normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
+    normalized_started_lookup = normalize_staked_map_started_at(user, normalized_staked_ids, normalized_lock_lookup)
     target_map_id = _resolve_owned_map_id(payload.map_id, payload.map_name, owned_lookup)
     if target_map_id not in normalized_staked_ids:
         raise HTTPException(status_code=409, detail="This map is not currently staked")
@@ -166,9 +255,16 @@ def unstake_map(request: Request, payload: UnstakeMapPayload):
     if not locked_until_iso:
         enforced_lock_until = stake_lock_expires_at()
         normalized_lock_lookup[target_map_id] = enforced_lock_until.isoformat()
+        normalized_started_lookup[target_map_id] = datetime.now(timezone.utc).isoformat()
         users_collection.update_one(
             {"_id": user["_id"]},
-            {"$set": {"staked_map_ids": normalized_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
+            {
+                "$set": {
+                    "staked_map_ids": normalized_staked_ids,
+                    "staked_map_lock_until": normalized_lock_lookup,
+                    "staked_map_started_at": normalized_started_lookup,
+                }
+            },
         )
         raise HTTPException(
             status_code=409,
@@ -187,18 +283,26 @@ def unstake_map(request: Request, payload: UnstakeMapPayload):
     updated_staked_ids = [map_id for map_id in normalized_staked_ids if map_id != target_map_id]
     if target_map_id in normalized_lock_lookup:
         del normalized_lock_lookup[target_map_id]
+    if target_map_id in normalized_started_lookup:
+        del normalized_started_lookup[target_map_id]
 
     if updated_staked_ids != normalized_staked_ids:
         users_collection.update_one(
             {"_id": user["_id"]},
-            {"$set": {"staked_map_ids": updated_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
+            {
+                "$set": {
+                    "staked_map_ids": updated_staked_ids,
+                    "staked_map_lock_until": normalized_lock_lookup,
+                    "staked_map_started_at": normalized_started_lookup,
+                }
+            },
         )
 
     refreshed = _sync_user(username)
     overview = build_staking_overview(refreshed, maps_collection)
     return {
         "status": "success",
-        "overview": overview,
+        "overview": _augment_research_metrics(overview),
         "user": serialize_session_user(refreshed, maps_collection),
     }
 
@@ -216,6 +320,6 @@ def claim_staking_reward(request: Request, payload: ClaimStakingPayload):
         "status": "success",
         "reward_granted": bool(claim_result.get("reward_granted")),
         "rewarded_mn": int(claim_result.get("rewarded_mn", 0) or 0),
-        "overview": overview,
+        "overview": _augment_research_metrics(overview),
         "user": serialize_session_user(refreshed, maps_collection),
     }

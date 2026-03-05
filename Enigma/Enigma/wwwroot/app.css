@@ -7839,6 +7839,22 @@ h1:focus {
     font-weight: 700;
 }
 
+.staking-research-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.staking-research-card {
+    display: grid;
+    gap: 10px;
+}
+
+.staking-research-card h2 {
+    margin: 0;
+    font-size: 1.18rem;
+}
+
 .staking-claim-card {
     position: relative;
     border-radius: 20px;
@@ -8107,6 +8123,48 @@ h1:focus {
     text-shadow: 0 0 18px rgba(125, 211, 252, 0.24);
 }
 
+.staking-ai-note {
+    margin: 0;
+    color: rgba(188, 212, 242, 0.82);
+    font-size: 0.84rem;
+    line-height: 1.35;
+}
+
+.staking-milestone-note {
+    color: rgba(179, 218, 255, 0.92);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.staking-report-card {
+    border-radius: 12px;
+    border: 1px solid rgba(137, 185, 246, 0.22);
+    background: rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+}
+
+.staking-report-card summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 10px 12px;
+    color: rgba(229, 240, 255, 0.92);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.staking-report-card summary::-webkit-details-marker {
+    display: none;
+}
+
+.staking-report-card[open] {
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
+
+.staking-report-card .staking-map-rows,
+.staking-report-card .staking-ai-note {
+    margin: 0 12px 12px;
+}
+
 .staking-empty-state {
     border-radius: 14px;
     border: 1px dashed rgba(155, 189, 238, 0.34);
@@ -8220,6 +8278,10 @@ h1:focus {
 @media (max-width: 1200px) {
     .staking-forecast-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .staking-research-grid {
+        grid-template-columns: 1fr;
     }
 
     .staking-breakdown-layout {

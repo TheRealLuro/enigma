@@ -60,6 +60,18 @@ public sealed class StakingOverviewData
 
     [JsonPropertyName("stake_lock_hours")]
     public int StakeLockHours { get; set; }
+
+    [JsonPropertyName("analysis_full_hours")]
+    public int AnalysisFullHours { get; set; } = 72;
+
+    [JsonPropertyName("research_influence")]
+    public StakingResearchInfluence? ResearchInfluence { get; set; }
+
+    [JsonPropertyName("collective_research")]
+    public StakingCollectiveResearch? CollectiveResearch { get; set; }
+
+    [JsonPropertyName("anomaly_stability")]
+    public StakingAnomalyStability? AnomalyStability { get; set; }
 }
 
 public sealed class StakedMapEntry
@@ -93,6 +105,153 @@ public sealed class StakedMapEntry
 
     [JsonPropertyName("lock_seconds_remaining")]
     public int LockSecondsRemaining { get; set; }
+
+    [JsonPropertyName("analysis_started_at")]
+    public string? AnalysisStartedAt { get; set; }
+
+    [JsonPropertyName("analysis_elapsed_seconds")]
+    public int AnalysisElapsedSeconds { get; set; }
+
+    [JsonPropertyName("analysis_progress_percent")]
+    public double AnalysisProgressPercent { get; set; }
+
+    [JsonPropertyName("analysis_phase_key")]
+    public string AnalysisPhaseKey { get; set; } = string.Empty;
+
+    [JsonPropertyName("analysis_phase_label")]
+    public string AnalysisPhaseLabel { get; set; } = string.Empty;
+
+    [JsonPropertyName("containment_active")]
+    public bool ContainmentActive { get; set; }
+
+    [JsonPropertyName("containment_remaining_seconds")]
+    public int ContainmentRemainingSeconds { get; set; }
+
+    [JsonPropertyName("containment_progress_percent")]
+    public double ContainmentProgressPercent { get; set; }
+
+    [JsonPropertyName("research_depth_level")]
+    public int ResearchDepthLevel { get; set; }
+
+    [JsonPropertyName("research_depth_label")]
+    public string ResearchDepthLabel { get; set; } = string.Empty;
+
+    [JsonPropertyName("research_data_percent")]
+    public double ResearchDataPercent { get; set; }
+
+    [JsonPropertyName("puzzle_structures_identified")]
+    public int PuzzleStructuresIdentified { get; set; }
+
+    [JsonPropertyName("spatial_layers_detected")]
+    public int SpatialLayersDetected { get; set; }
+
+    [JsonPropertyName("anomaly_classification")]
+    public string AnomalyClassification { get; set; } = string.Empty;
+
+    [JsonPropertyName("analysis_eta_seconds")]
+    public int AnalysisEtaSeconds { get; set; }
+
+    [JsonPropertyName("analysis_eta_at")]
+    public string? AnalysisEtaAt { get; set; }
+
+    [JsonPropertyName("analysis_ai_message")]
+    public string AnalysisAiMessage { get; set; } = string.Empty;
+
+    [JsonPropertyName("analysis_unlocks")]
+    public List<StakingAnalysisUnlockEntry> AnalysisUnlocks { get; set; } = [];
+
+    [JsonPropertyName("analysis_deepest_unlock_label")]
+    public string AnalysisDeepestUnlockLabel { get; set; } = string.Empty;
+
+    [JsonPropertyName("analysis_report")]
+    public StakingAnalysisReport? AnalysisReport { get; set; }
+}
+
+public sealed class StakingAnalysisUnlockEntry
+{
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("label")]
+    public string Label { get; set; } = string.Empty;
+
+    [JsonPropertyName("required_hours")]
+    public double RequiredHours { get; set; }
+
+    [JsonPropertyName("unlocked")]
+    public bool Unlocked { get; set; }
+
+    [JsonPropertyName("unlock_at")]
+    public string? UnlockAt { get; set; }
+}
+
+public sealed class StakingAnalysisReport
+{
+    [JsonPropertyName("report_id")]
+    public string ReportId { get; set; } = string.Empty;
+
+    [JsonPropertyName("anomaly_type")]
+    public string AnomalyType { get; set; } = string.Empty;
+
+    [JsonPropertyName("puzzle_structure")]
+    public string PuzzleStructure { get; set; } = string.Empty;
+
+    [JsonPropertyName("stability_rating")]
+    public int StabilityRating { get; set; }
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("conclusion")]
+    public string Conclusion { get; set; } = string.Empty;
+}
+
+public sealed class StakingResearchInfluence
+{
+    [JsonPropertyName("staked_maps_count")]
+    public int StakedMapsCount { get; set; }
+
+    [JsonPropertyName("multiplier")]
+    public double Multiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("stake_component")]
+    public double StakeComponent { get; set; } = 1.0;
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+}
+
+public sealed class StakingCollectiveResearch
+{
+    [JsonPropertyName("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("target_maps")]
+    public int TargetMaps { get; set; }
+
+    [JsonPropertyName("contributed_maps")]
+    public int ContributedMaps { get; set; }
+
+    [JsonPropertyName("contributor_count")]
+    public int ContributorCount { get; set; }
+
+    [JsonPropertyName("progress_percent")]
+    public double ProgressPercent { get; set; }
+}
+
+public sealed class StakingAnomalyStability
+{
+    [JsonPropertyName("percent")]
+    public double Percent { get; set; }
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("required_maps")]
+    public int RequiredMaps { get; set; }
 }
 
 public sealed class GovernanceSessionResponse

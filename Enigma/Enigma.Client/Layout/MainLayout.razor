@@ -16,7 +16,7 @@
             <div class="app-shell-brand">
                 <div class="app-shell-brand-copy">
                     <button class="app-brand-button" @onclick="GoHome">Enigma</button>
-                    <span class="app-shell-brand-tag">Question Everything</span>
+                    <span class="app-shell-brand-tag">Anomaly Research Division</span>
                 </div>
             </div>
 
@@ -80,7 +80,7 @@
             <div class="content app-shell-content">
                 <div class="card enigma-game-message">
                     <div class="loader"></div>
-                    <p>Checking session...</p>
+                    <p>Syncing explorer session...</p>
                 </div>
             </div>
         }
@@ -298,9 +298,9 @@
             Chapter = "Act III - Economy",
             Eyebrow = "Staking",
             Title = "Lock Yield Sources",
-            Description = "Staking converts owned maps into daily MN yield.",
-            Objective = "Open Economy > Staking (or standalone Staking) and review claim timer + stake lists.",
-            HelperText = "Staked maps respect lock windows before unstake.",
+            Description = "Map analysis converts recovered sectors into daily MN research credits.",
+            Objective = "Open Economy > Staking (or standalone Staking) and review containment timer + analysis lists.",
+            HelperText = "Submitted maps stay containment-locked before withdrawal is allowed.",
             Path = "/economy?tab=staking",
             MatchPaths = ["/economy?tab=staking", "/staking"]
         },
@@ -1664,12 +1664,12 @@
         var stakedDelta = latestSession.StakedMapsCount - previousSession.StakedMapsCount;
         if (stakedDelta > 0)
         {
-            Notifications.Info(stakedDelta == 1 ? "1 map was added to staking." : $"{stakedDelta} maps were added to staking.");
+            Notifications.Info(stakedDelta == 1 ? "1 map was submitted for anomaly research." : $"{stakedDelta} maps were submitted for anomaly research.");
         }
         else if (stakedDelta < 0)
         {
             var unstakedCount = Math.Abs(stakedDelta);
-            Notifications.Info(unstakedCount == 1 ? "1 map was removed from staking." : $"{unstakedCount} maps were removed from staking.");
+            Notifications.Info(unstakedCount == 1 ? "1 map was withdrawn from anomaly research." : $"{unstakedCount} maps were withdrawn from anomaly research.");
         }
     }
 

@@ -8,8 +8,8 @@
 
 @if (!Embedded)
 {
-    <SeoHead Title="Enigma Voting | Community Governance"
-             Description="Vote in active Enigma governance sessions using Maze Nuggets with staking-based weighting."
+    <SeoHead Title="Enigma Voting | Research Council"
+             Description="Vote in active Research Council sessions using Maze Nuggets with weighted influence."
              Robots="noindex,follow"
              OpenGraphType="website"
              SchemaType="WebPage" />
@@ -20,7 +20,7 @@
     <div class="@(Embedded ? "economy-embedded-state" : "content")">
         <div class="card enigma-game-message">
             <div class="loader"></div>
-            <p>Loading governance session...</p>
+            <p>Loading council session...</p>
         </div>
     </div>
 }
@@ -28,7 +28,7 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage) && ActiveSession is null && !C
 {
     <div class="@(Embedded ? "economy-embedded-state" : "content")">
         <div class="card enigma-game-message">
-            <h1>Voting unavailable</h1>
+            <h1>Council voting unavailable</h1>
             <p>@ErrorMessage</p>
             <button class="btn btn-primary" type="button" @onclick="ReloadAsync">Retry</button>
         </div>
@@ -39,9 +39,9 @@ else
     <div class="@(Embedded ? "voting-shell economy-embedded-shell" : "content voting-shell")" data-tour-id="voting-shell">
         <section class="voting-banner" data-tour-id="voting-banner">
             <div>
-                <span class="profile-eyebrow">Governance</span>
+                <span class="profile-eyebrow">Research Council</span>
                 <h1>Council Voting</h1>
-                <p>Vote power uses MN spent multiplied by your current staking weight.</p>
+                <p>Voting power = MN committed multiplied by your weighted council multiplier.</p>
             </div>
             <div class="voting-banner-meta">
                 <span class="profile-chip">Balance @(Session?.MazeNuggets.ToString("N0") ?? "0") MN</span>
@@ -68,8 +68,8 @@ else
                 <section class="panel profile-release-panel voting-admin-panel">
                     <div class="panel-heading">
                         <div>
-                            <span class="profile-eyebrow">Bank Controls</span>
-                            <h2>Start Voting Session</h2>
+                            <span class="profile-eyebrow">Council Controls</span>
+                            <h2>Start Council Session</h2>
                         </div>
                     </div>
 
@@ -155,7 +155,7 @@ else
             <section class="panel profile-release-panel voting-session-panel">
                 <div class="panel-heading">
                     <div>
-                        <span class="profile-eyebrow">Active Session</span>
+                        <span class="profile-eyebrow">Live Session</span>
                         <h2>@ActiveSession.Title</h2>
                     </div>
                     <span class="section-count">@ActiveSession.SessionId</span>
@@ -180,13 +180,13 @@ else
                     <label class="form-label">Vote quantity</label>
                     <input class="form-control voting-mn-input" type="number" min="1" max="1000" @bind="VoteQuantity" />
                     <span class="voting-power-preview">
-                        Cost @CurrentVoteCostPreview.ToString("N0") MN | Weight x@CurrentVoteMultiplier.ToString("0.00") | Power @CurrentVotePowerPreview.ToString("N2")
+                        @($"Cost {CurrentVoteCostPreview:N0} MN | Weight x{CurrentVoteMultiplier:0.00} | Power {CurrentVotePowerPreview:N2}")
                     </span>
                 </div>
                 <div class="voting-option-meta">
-                    <span>Stake factor x@CurrentStakeComponent.ToString("0.00")</span>
-                    <span>Participation factor x@CurrentParticipationComponent.ToString("0.00") (@CurrentParticipationVotesCount prior vote batches)</span>
-                    <span>Raw x@CurrentRawVoteMultiplier.ToString("0.00"), capped at x@CurrentMultiplierCap.ToString("0.00")</span>
+                    <span>@($"Stake factor x{CurrentStakeComponent:0.00}")</span>
+                    <span>@($"Participation factor x{CurrentParticipationComponent:0.00} ({CurrentParticipationVotesCount} prior vote batches)")</span>
+                    <span>@($"Raw x{CurrentRawVoteMultiplier:0.00}, capped at x{CurrentMultiplierCap:0.00}")</span>
                 </div>
 
                 @if (ActiveSession.VoteType == "one_choice")

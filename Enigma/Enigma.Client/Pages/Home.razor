@@ -1,8 +1,8 @@
 @page "/home"
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
-<SeoHead Title="Enigma Home | Puzzle Maze Hub"
-         Description="Open the Enigma hub to start runs, view leaderboards, manage your profile, and track the economy."
+<SeoHead Title="Enigma Home | Explorer Command"
+         Description="Open Explorer Command to enter anomaly sectors, track rankings, manage your explorer profile, and monitor the research economy."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -10,7 +10,8 @@
 <div class="home-page-shell" data-tour-id="home-hub">
     <div class="hero hero-panel home-hero-panel" data-tour-id="home-banner">
         <div class="home-hero-copy">
-            <h1>@($"Welcome to Enigma, {Username}")</h1>
+            <h1>@($"Welcome back, {Username}")</h1>
+            <p>Choose where you want to go next.</p>
         </div>
     </div>
 
@@ -20,8 +21,8 @@
                 <img class="menu-card-image" src="/images/mainmenu-tabs/PlayTab.png" alt="Play" />
             </div>
             <div class="game-card-content">
-                <div class="game-card-title">Play</div>
-                <div class="game-card-meta">Generate or load a maze</div>
+                <div class="game-card-title">Enter Anomaly</div>
+                <div class="game-card-meta">Launch or load an expedition sector</div>
             </div>
         </button>
 
@@ -30,8 +31,8 @@
                 <img class="menu-card-image" src="/images/mainmenu-tabs/LeaderboardTab.png" alt="Leaderboard" />
             </div>
             <div class="game-card-content">
-                <div class="game-card-title">Leaderboard</div>
-                <div class="game-card-meta">See top players and maps</div>
+                <div class="game-card-title">Explorer Rankings</div>
+                <div class="game-card-meta">Track top explorers and mapped sectors</div>
             </div>
         </button>
 
@@ -40,8 +41,8 @@
                 <img class="menu-card-image" src="/images/mainmenu-tabs/ProfileTab.png" alt="Profile" />
             </div>
             <div class="game-card-content">
-                <div class="game-card-title">Profile</div>
-                <div class="game-card-meta">Inventory, settings, maps, and stats</div>
+                <div class="game-card-title">Explorer Profile</div>
+                <div class="game-card-meta">Inventory, settings, sectors, and stats</div>
             </div>
         </button>
 
@@ -50,8 +51,8 @@
                 <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Economy" />
             </div>
             <div class="game-card-content">
-                <div class="game-card-title">Economy</div>
-                <div class="game-card-meta">Circulation, marketplace, and staking</div>
+                <div class="game-card-title">Research Economy</div>
+                <div class="game-card-meta">Circulation, marketplace, staking, and council voting</div>
             </div>
         </button>
 
@@ -60,15 +61,15 @@
                 <img class="menu-card-image" src="/images/mainmenu-tabs/PlayersTab.png" alt="Players" />
             </div>
             <div class="game-card-content">
-                <div class="game-card-title">Players</div>
-                <div class="game-card-meta">Find explorers and view profiles</div>
+                <div class="game-card-title">Explorer Network</div>
+                <div class="game-card-meta">Find field agents and view profiles</div>
             </div>
         </button>
     </div>
 </div>
 
 <a class="home-energy-pill" href="https://buymeacoffee.com/enigmamaze" target="_blank" rel="noopener noreferrer">
-    😴Buy us an Energy Drink
+    Buy us an Energy Drink
 </a>
 
 @code {

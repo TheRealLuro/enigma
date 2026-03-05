@@ -9,8 +9,8 @@
 
 @if (!Embedded)
 {
-    <SeoHead Title="Enigma Staking | Daily Map Yield"
-             Description="Stake owned maps to earn daily Maze Nugget rewards based on map difficulty and size."
+    <SeoHead Title="Enigma Research | Anomaly Map Analysis"
+             Description="Submit recovered maps for anomaly research, containment, and long-form analysis while earning daily MN credits."
              Robots="noindex,follow"
              OpenGraphType="website"
              SchemaType="WebPage" />
@@ -18,13 +18,13 @@
 
 @if (IsLoading)
 {
-    <div class="@(Embedded ? "economy-embedded-state" : "content")"><div class="card enigma-game-message"><div class="loader"></div><p>Loading staking...</p></div></div>
+    <div class="@(Embedded ? "economy-embedded-state" : "content")"><div class="card enigma-game-message"><div class="loader"></div><p>Loading anomaly research console...</p></div></div>
 }
 else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 {
     <div class="@(Embedded ? "economy-embedded-state" : "content")">
         <div class="card enigma-game-message">
-            <h1>Staking unavailable</h1>
+            <h1>Research console unavailable</h1>
             <p>@ErrorMessage</p>
             <button class="btn btn-primary" type="button" @onclick="ReloadAsync">Retry</button>
         </div>
@@ -32,21 +32,21 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 }
 else if (Overview is null)
 {
-    <div class="@(Embedded ? "economy-embedded-state" : "content")"><div class="card enigma-game-message"><p>Staking overview is unavailable right now.</p></div></div>
+    <div class="@(Embedded ? "economy-embedded-state" : "content")"><div class="card enigma-game-message"><p>Research telemetry is unavailable right now.</p></div></div>
 }
 else
 {
     <div class="@(Embedded ? "staking-shell economy-embedded-shell" : "content staking-shell")" data-tour-id="staking-shell">
         <section class="staking-banner" data-tour-id="staking-banner">
             <div>
-                <span class="profile-eyebrow">Map Staking</span>
-                <h1>Daily Yield Engine</h1>
-                <p>Stake owned maps to receive daily MN. Claim once per day, or auto-claim on login.</p>
+                <span class="profile-eyebrow">Anomaly Research Assignment</span>
+                <h1>Map Analysis Console</h1>
+                <p>Submit recovered maps for containment, then continuous research. Research output generates daily MN and council influence.</p>
             </div>
             <div class="staking-banner-meta">
                 @if (!string.IsNullOrWhiteSpace(Overview.NextClaimAt) && !Overview.CanClaimToday)
                 {
-                    <span class="profile-chip">Next claim @FormatTimestamp(Overview.NextClaimAt)</span>
+                    <span class="profile-chip">Next payout @FormatTimestamp(Overview.NextClaimAt)</span>
                 }
                 <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="ReloadAsync">
                     @(IsLoading ? "Refreshing..." : "Refresh")
@@ -61,54 +61,82 @@ else
 
         <section class="staking-kpi-grid">
             <article class="staking-kpi-card">
-                <span class="staking-kpi-label">Staked Maps</span>
+                <span class="staking-kpi-label">Maps Under Analysis</span>
                 <strong class="staking-kpi-value" @key="Overview.StakedMapsCount">@Overview.StakedMapsCount</strong>
             </article>
             <article class="staking-kpi-card">
-                <span class="staking-kpi-label">Daily Yield</span>
+                <span class="staking-kpi-label">Daily Research Credits</span>
                 <strong class="staking-kpi-value" @key="Overview.TotalDailyReward">@Overview.TotalDailyReward.ToString("N0") MN/day</strong>
             </article>
             <article class="staking-kpi-card">
-                <span class="staking-kpi-label">Total Balance</span>
+                <span class="staking-kpi-label">Reserve Balance</span>
                 <strong class="staking-kpi-value" @key="Session?.MazeNuggets">@(Session?.MazeNuggets.ToString("N0") ?? "0") MN</strong>
             </article>
         </section>
 
         <section class="staking-forecast-grid">
             <article class="staking-forecast-card">
-                <span>Daily Yield</span>
+                <span>Daily Credits</span>
                 <strong>@DailyYield.ToString("N0") MN</strong>
             </article>
             <article class="staking-forecast-card">
-                <span>Monthly Yield</span>
+                <span>Monthly Credits</span>
                 <strong>~@EstimatedMonthlyYield.ToString("N0") MN</strong>
             </article>
             <article class="staking-forecast-card">
-                <span>Yearly Yield</span>
+                <span>Yearly Credits</span>
                 <strong>~@EstimatedYearlyYield.ToString("N0") MN</strong>
             </article>
             <article class="staking-forecast-card">
-                <span>Yield Efficiency</span>
+                <span>Research Efficiency</span>
                 <strong>@YieldEfficiencyPercent.ToString("0.#")%</strong>
                 <em>@YieldEfficiencyLabel</em>
             </article>
         </section>
 
+        <section class="staking-research-grid">
+            <article class="panel profile-release-panel staking-research-card">
+                <span class="profile-eyebrow">Global Research Objective</span>
+                <h2>@(Overview.CollectiveResearch?.Title ?? "Decode Labyrinth Type IV")</h2>
+                <p>@(Overview.CollectiveResearch?.Description ?? "Contribute maps to expand Enigma anomaly knowledge.")</p>
+                <div class="staking-map-rows">
+                    <div><span>Progress</span><strong>@CollectiveKnowledgePercent.ToString("0.##")%</strong></div>
+                    <div><span>Contributors</span><strong>@(Overview.CollectiveResearch?.ContributorCount ?? 0)</strong></div>
+                    <div><span>Submitted maps</span><strong>@(Overview.CollectiveResearch?.ContributedMaps ?? 0) / @(Overview.CollectiveResearch?.TargetMaps ?? 500)</strong></div>
+                </div>
+                <div class="economy-progress-bar">
+                    <span style="@GetLinearProgressStyle(CollectiveKnowledgePercent)"></span>
+                </div>
+            </article>
+            <article class="panel profile-release-panel staking-research-card">
+                <span class="profile-eyebrow">Containment + Influence</span>
+                <h2>Research System Status</h2>
+                <div class="staking-map-rows">
+                    <div><span>Anomaly Stability</span><strong>@AnomalyStabilityPercent.ToString("0.##")% (@AnomalyStabilityStatus)</strong></div>
+                    <div><span>Research Influence</span><strong>@($"x{ResearchInfluenceMultiplier:0.00}")</strong></div>
+                    <div><span>Stake Component</span><strong>@($"x{ResearchStakeComponent:0.00}")</strong></div>
+                </div>
+                <div class="economy-progress-bar">
+                    <span style="@GetLinearProgressStyle(AnomalyStabilityPercent)"></span>
+                </div>
+            </article>
+        </section>
+
         <section class="staking-claim-card @(ClaimBurstActive ? "claim-success" : string.Empty)">
             <div class="staking-claim-copy">
-                <strong>Daily Claim</strong>
+                <strong>Daily Research Credit Claim</strong>
                 <p>
                     @if (Overview.CanClaimToday)
                     {
-                        <span>Claim is ready for @Overview.TotalDailyReward.ToString("N0") MN.</span>
+                        <span>Claim is ready for @Overview.TotalDailyReward.ToString("N0") MN in recovered research credits.</span>
                     }
                     else if (!string.IsNullOrWhiteSpace(Overview.NextClaimAt))
                     {
-                        <span>Your next payout window is charging now.</span>
+                        <span>Your next research payout window is processing now.</span>
                     }
                     else
                     {
-                        <span>Stake maps to unlock daily payouts.</span>
+                        <span>Submit maps for analysis to unlock daily payouts.</span>
                     }
                 </p>
             </div>
@@ -127,7 +155,7 @@ else
             </div>
 
             <button class="btn btn-primary" type="button" disabled="@(!Overview.CanClaimToday || IsBusy)" @onclick="ClaimDailyAsync">
-                @(IsBusy ? "Processing..." : "Claim Daily MN")
+                @(IsBusy ? "Processing..." : "Claim Daily Credits")
             </button>
 
             @if (ClaimBurstActive && LastClaimReward > 0)
@@ -141,14 +169,14 @@ else
             <section class="panel profile-release-panel staking-breakdown-panel">
                 <div class="panel-heading">
                     <div>
-                        <span class="profile-eyebrow">Yield Sources</span>
-                        <h2>Daily Yield Breakdown</h2>
+                        <span class="profile-eyebrow">Analysis Yield Sources</span>
+                        <h2>Research Credit Breakdown</h2>
                     </div>
                 </div>
                 <div class="staking-breakdown-layout">
                     <div class="staking-breakdown-donut" style="@GetYieldDonutStyle()">
                         <div class="staking-breakdown-donut-core">
-                            <span>Total Yield</span>
+                            <span>Total Credits</span>
                             <strong>@Overview.TotalDailyReward.ToString("N0") MN</strong>
                         </div>
                     </div>
@@ -170,14 +198,14 @@ else
             <section class="staking-column panel profile-release-panel">
                 <div class="panel-heading">
                     <div>
-                        <span class="profile-eyebrow">Active Stake</span>
-                        <h2>Staked Maps</h2>
+                        <span class="profile-eyebrow">Active Analysis</span>
+                        <h2>Maps Under Analysis</h2>
                     </div>
                     <span class="section-count">@Overview.StakedMapsCount</span>
                 </div>
                 @if (Overview.StakedMaps.Count == 0)
                 {
-                    <div class="empty-state-inline">No maps staked yet.</div>
+                    <div class="empty-state-inline">No maps are currently assigned to research.</div>
                 }
                 else
                 {
@@ -192,12 +220,21 @@ else
                                 <div class="staking-map-rows">
                                     <div><span>Difficulty</span><strong>@FormatDifficultyLabel(map.Difficulty)</strong></div>
                                     <div><span>Size</span><strong>@map.Size x @map.Size</strong></div>
-                                    <div><span>Multiplier</span><strong>@($"{map.SizeMultiplier:0.00}x")</strong></div>
-                                    <div><span>Stake Lock</span><strong>@GetStakeLockLabel(map)</strong></div>
+                                    <div><span>Classification</span><strong>@map.AnomalyClassification</strong></div>
+                                    <div><span>Containment</span><strong>@GetContainmentLabel(map)</strong></div>
+                                    <div><span>Research Phase</span><strong>@GetResearchPhaseLabel(map)</strong></div>
+                                    <div><span>Research Depth</span><strong>@GetResearchDepthLabel(map)</strong></div>
+                                    <div><span>Data Collected</span><strong>@GetResearchDataPercent(map).ToString("0.##")%</strong></div>
+                                    <div><span>Puzzle Structures</span><strong>@map.PuzzleStructuresIdentified</strong></div>
+                                    <div><span>Spatial Layers</span><strong>@map.SpatialLayersDetected</strong></div>
+                                </div>
+                                <p class="staking-ai-note">@map.AnalysisAiMessage</p>
+                                <div class="economy-progress-bar">
+                                    <span style="@GetLinearProgressStyle(GetResearchDataPercent(map))"></span>
                                 </div>
                                 <div class="staking-map-footer">
                                     <div>
-                                        <span class="staking-yield-label">Yield</span>
+                                        <span class="staking-yield-label">Daily Credits</span>
                                         <strong class="staking-yield-value">@map.DailyReward.ToString("N0") MN/day</strong>
                                     </div>
                                     <button class="btn btn-secondary"
@@ -205,9 +242,26 @@ else
                                             title="@GetStakeLockTooltip(map)"
                                             disabled="@(IsBusy || IsStakeLocked(map))"
                                             @onclick="() => UnstakeMapAsync(map.MapId)">
-                                        @(IsStakeLocked(map) ? "Locked" : "Unstake")
+                                        @(IsStakeLocked(map) ? "Containment Lock" : "Withdraw")
                                     </button>
                                 </div>
+                                @if (!string.IsNullOrWhiteSpace(GetNextMilestoneLabel(map)))
+                                {
+                                    <div class="staking-milestone-note">@GetNextMilestoneLabel(map)</div>
+                                }
+                                @if (map.AnalysisReport is not null)
+                                {
+                                    <details class="staking-report-card">
+                                        <summary>Expedition Analysis Report @map.AnalysisReport.ReportId</summary>
+                                        <div class="staking-map-rows">
+                                            <div><span>Anomaly Type</span><strong>@map.AnalysisReport.AnomalyType</strong></div>
+                                            <div><span>Puzzle Structure</span><strong>@map.AnalysisReport.PuzzleStructure</strong></div>
+                                            <div><span>Stability Rating</span><strong>@map.AnalysisReport.StabilityRating%</strong></div>
+                                            <div><span>Status</span><strong>@map.AnalysisReport.Status</strong></div>
+                                        </div>
+                                        <p class="staking-ai-note">@map.AnalysisReport.Conclusion</p>
+                                    </details>
+                                }
                             </article>
                         }
                     </div>
@@ -217,8 +271,8 @@ else
             <section class="staking-column staking-available-column panel profile-release-panel">
                 <div class="panel-heading">
                     <div>
-                        <span class="profile-eyebrow">Owned Inventory</span>
-                        <h2>Available to Stake</h2>
+                        <span class="profile-eyebrow">Recovered Sectors</span>
+                        <h2>Ready for Analysis</h2>
                     </div>
                     <span class="section-count">@Overview.AvailableMapsCount</span>
                 </div>
@@ -226,10 +280,10 @@ else
                 {
                     <div class="staking-empty-state">
                         <div class="staking-empty-header">
-                            <span class="staking-empty-icon" aria-hidden="true">ALL STAKED</span>
-                            <strong>No maps available to stake right now.</strong>
+                            <span class="staking-empty-icon" aria-hidden="true">ALL ASSIGNED</span>
+                            <strong>No maps available for new research assignments.</strong>
                         </div>
-                        <p>All owned maps are currently staked or unavailable. Unstake one after its lock expires, or acquire more maps.</p>
+                        <p>All owned maps are already in containment or research. Withdraw one after lock expiry, or recover more sectors.</p>
                     </div>
                 }
                 else
@@ -245,14 +299,15 @@ else
                                 <div class="staking-map-rows">
                                     <div><span>Difficulty</span><strong>@FormatDifficultyLabel(map.Difficulty)</strong></div>
                                     <div><span>Size</span><strong>@map.Size x @map.Size</strong></div>
-                                    <div><span>Multiplier</span><strong>@($"{map.SizeMultiplier:0.00}x")</strong></div>
+                                    <div><span>Classification</span><strong>@map.AnomalyClassification</strong></div>
+                                    <div><span>Containment Lock</span><strong>@Math.Max(0, Overview.StakeLockHours)h</strong></div>
                                 </div>
                                 <div class="staking-map-footer">
                                     <div>
-                                        <span class="staking-yield-label">Yield</span>
+                                        <span class="staking-yield-label">Projected Credits</span>
                                         <strong class="staking-yield-value">@map.DailyReward.ToString("N0") MN/day</strong>
                                     </div>
-                                    <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="() => StakeMapAsync(map.MapId)">Stake</button>
+                                    <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="() => StakeMapAsync(map.MapId)">Submit for Analysis</button>
                                 </div>
                             </article>
                         }
@@ -265,20 +320,21 @@ else
             <div class="panel-heading">
                 <div>
                     <span class="profile-eyebrow">FAQ</span>
-                    <h2>Staking System</h2>
+                    <h2>Anomaly Research Protocol</h2>
                 </div>
             </div>
             <details class="staking-faq-collapsible">
-                <summary>Staking System Rules</summary>
+                <summary>Map Analysis Rules</summary>
                 <ol class="staking-faq-list">
-                    <li>Base daily rewards per map difficulty: Easy = 5 MN, Medium = 15 MN, Hard = 25 MN.</li>
+                    <li>Submitting a map starts the Initial Containment Phase for @Math.Max(0, Overview?.StakeLockHours ?? 48) hours.</li>
+                    <li>Containment lock is enforced in both UI and API. Maps cannot be withdrawn during this window.</li>
+                    <li>After containment, maps enter Continuous Research and progress through deeper Research Depth levels over time.</li>
+                    <li>Base daily credits by difficulty remain: Easy = 5 MN, Medium = 15 MN, Hard = 25 MN.</li>
                     <li>Size multiplier formula: <code>0.7 + (size / 20)</code>, capped at <code>2.0x</code>. Example: 2x2 = 0.8x, 4x4 = 0.9x.</li>
                     <li>Daily reward per map is <code>ceil(base * sizeMultiplier)</code>. Example: Easy 2x2 = <code>ceil(5 * 0.8) = 4 MN/day</code>.</li>
-                    <li>Each map is hard-locked for @Math.Max(0, Overview?.StakeLockHours ?? 48) hours immediately after staking.</li>
-                    <li>While locked, unstake is blocked in both UI and API. There is no bypass until the timer expires.</li>
-                    <li>Staked maps cannot be listed, sold, or recycled until you unstake them after the lock window.</li>
-                    <li>Only maps you currently own can stay staked. If ownership changes, staking data is cleaned up automatically.</li>
-                    <li>Claim once per day, or log in to auto-claim when eligible.</li>
+                    <li>Submitted maps cannot be listed, sold, or recycled until they are withdrawn after lock expiry.</li>
+                    <li>Withdrawing early (after lock) ends research early and may reduce long-form discovery depth.</li>
+                    <li>Longer assignments unlock deeper analysis, stronger reports, and better council influence context.</li>
                 </ol>
             </details>
         </section>
@@ -322,6 +378,11 @@ else
     private int DailyYield => Math.Max(0, Overview?.TotalDailyReward ?? 0);
     private int EstimatedMonthlyYield => DailyYield * 30;
     private int EstimatedYearlyYield => DailyYield * 365;
+    private double CollectiveKnowledgePercent => Math.Clamp(Overview?.CollectiveResearch?.ProgressPercent ?? 0, 0, 100);
+    private double AnomalyStabilityPercent => Math.Clamp(Overview?.AnomalyStability?.Percent ?? 0, 0, 100);
+    private string AnomalyStabilityStatus => string.IsNullOrWhiteSpace(Overview?.AnomalyStability?.Status) ? "Unknown" : Overview!.AnomalyStability!.Status;
+    private double ResearchInfluenceMultiplier => Math.Max(1.0, Overview?.ResearchInfluence?.Multiplier ?? 1.0);
+    private double ResearchStakeComponent => Math.Max(1.0, Overview?.ResearchInfluence?.StakeComponent ?? 1.0);
 
     protected override async Task OnInitializedAsync()
     {
@@ -459,7 +520,7 @@ else
     {
         await ExecuteActionAsync(
             async () => await Api.PostJsonAsync("api/auth/staking/stake", new { mapId }),
-            "Map staked.");
+            "Map submitted for anomaly research.");
     }
 
     private async Task UnstakeMapAsync(string mapId)
@@ -468,21 +529,21 @@ else
         if (selectedMap is not null && IsStakeLocked(selectedMap))
         {
             HasError = true;
-            StatusMessage = $"This map is still stake-locked for {GetStakeLockLabel(selectedMap)}.";
+            StatusMessage = $"Containment is still active for {GetContainmentLabel(selectedMap)}.";
             Notifications.Warning(StatusMessage);
             return;
         }
 
         await ExecuteActionAsync(
             async () => await Api.PostJsonAsync("api/auth/staking/unstake", new { mapId }),
-            "Map unstaked.");
+            "Map withdrawn from anomaly research.");
     }
 
     private async Task ClaimDailyAsync()
     {
         await ExecuteActionAsync(
             async () => await Api.PostJsonAsync("api/auth/staking/claim", new { }),
-            "Daily staking claim processed.");
+            "Daily research credit payout processed.");
     }
 
     private async Task ExecuteActionAsync(Func<Task<HttpResponseMessage>> requestFactory, string successMessage)
@@ -514,7 +575,7 @@ else
             if (payload.RewardGranted && payload.RewardedMn > 0)
             {
                 StartClaimBurst(payload.RewardedMn);
-                StatusMessage = $"+{payload.RewardedMn:N0} MN claimed from staking.";
+                StatusMessage = $"+{payload.RewardedMn:N0} MN claimed from anomaly research.";
                 Notifications.Success(StatusMessage);
             }
             else
@@ -606,6 +667,11 @@ else
         return $"--claim-progress:{GetClaimProgressPercent().ToString("0.##", CultureInfo.InvariantCulture)};";
     }
 
+    private static string GetLinearProgressStyle(double percent)
+    {
+        return $"width:{Math.Clamp(percent, 0, 100).ToString("0.##", CultureInfo.InvariantCulture)}%;";
+    }
+
     private string GetClaimCountdownLabel()
     {
         if (Overview?.CanClaimToday == true)
@@ -680,10 +746,90 @@ else
     {
         if (!IsStakeLocked(map))
         {
-            return "This map can be unstaked now.";
+            return "This map can be withdrawn from research.";
         }
 
-        return $"Unstake unlocks in {GetStakeLockLabel(map)}.";
+        return $"Containment unlocks in {GetStakeLockLabel(map)}.";
+    }
+
+    private double GetResearchDataPercent(StakedMapEntry map)
+    {
+        if (Overview is null || string.IsNullOrWhiteSpace(map.AnalysisStartedAt))
+        {
+            return Math.Clamp(map.ResearchDataPercent, 0, 100);
+        }
+
+        var start = ParseIsoTimestamp(map.AnalysisStartedAt);
+        if (start is null)
+        {
+            return Math.Clamp(map.ResearchDataPercent, 0, 100);
+        }
+
+        var elapsed = (CurrentClientTime.ToUniversalTime() - start.Value).TotalSeconds;
+        if (elapsed <= 0)
+        {
+            return 0;
+        }
+
+        const double fullDepthSeconds = 14 * 24 * 3600;
+        return Math.Clamp((elapsed / fullDepthSeconds) * 100.0, 0, 100);
+    }
+
+    private string GetContainmentLabel(StakedMapEntry map)
+    {
+        if (!map.ContainmentActive)
+        {
+            return "Stabilized";
+        }
+
+        var remaining = TimeSpan.FromSeconds(Math.Max(0, map.ContainmentRemainingSeconds));
+        if (remaining.TotalDays >= 1)
+        {
+            return $"{(int)remaining.TotalDays}d {remaining.Hours}h remaining";
+        }
+
+        if (remaining.TotalHours >= 1)
+        {
+            return $"{(int)remaining.TotalHours}h {remaining.Minutes}m remaining";
+        }
+
+        return $"{Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s remaining";
+    }
+
+    private string GetResearchPhaseLabel(StakedMapEntry map)
+    {
+        if (map.ContainmentActive)
+        {
+            return "Initial Containment";
+        }
+
+        return string.IsNullOrWhiteSpace(map.AnalysisPhaseLabel) ? "Continuous Research" : map.AnalysisPhaseLabel;
+    }
+
+    private string GetResearchDepthLabel(StakedMapEntry map)
+    {
+        var depthLabel = string.IsNullOrWhiteSpace(map.ResearchDepthLabel) ? "Containment Pending" : map.ResearchDepthLabel;
+        return map.ResearchDepthLevel > 0 ? $"Level {map.ResearchDepthLevel}: {depthLabel}" : depthLabel;
+    }
+
+    private string GetNextMilestoneLabel(StakedMapEntry map)
+    {
+        if (map.AnalysisUnlocks is null || map.AnalysisUnlocks.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var next = map.AnalysisUnlocks
+            .Where(static unlock => !unlock.Unlocked)
+            .OrderBy(static unlock => unlock.RequiredHours)
+            .FirstOrDefault();
+
+        if (next is null)
+        {
+            return "All research milestones unlocked.";
+        }
+
+        return $"Next milestone: {next.Label} at {next.RequiredHours:0.##}h";
     }
 
     private IReadOnlyList<YieldSlice> GetYieldSlices()

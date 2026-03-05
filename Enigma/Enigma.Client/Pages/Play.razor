@@ -4,8 +4,8 @@
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @using Microsoft.JSInterop
 
-<SeoHead Title="Play Enigma | Generate or Load a Maze"
-         Description="Generate a new Enigma maze, load a saved map, choose items, and start a new puzzle run."
+<SeoHead Title="Enigma Play | Enter Anomaly Sector"
+         Description="Initialize a new anomaly sector, load a mapped sector, assign field tools, and begin your expedition."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -14,17 +14,17 @@
 
     <section class="play-page-header play-page-banner" data-tour-id="play-banner">
         <div class="play-page-header-copy">
-            <h1 class="mb-2">Start a Discovery</h1>
+            <h1 class="mb-2">Enter Anomaly Sector</h1>
         </div>
         <div class="play-header-actions">
-            <button class="btn btn-secondary" type="button" data-tour-id="play-open-coop" @onclick="OpenCoopLobby">Co-op Lobby</button>
+            <button class="btn btn-secondary" type="button" data-tour-id="play-open-coop" @onclick="OpenCoopLobby">Co-op Command</button>
         </div>
     </section>
 
     <div class="play-setup-grid" data-tour-id="play-setup-grid">
         <div class="play-forms-column">
             <div class="card shadow-sm p-4 mb-4 play-card">
-                <h4 class="mb-3">Generate New Maze</h4>
+                <h4 class="mb-3">Initialize New Sector</h4>
 
                 <EditForm FormName="NewForm" OnValidSubmit="OnNewClick" Model="newMazeRequest">
                     <DataAnnotationsValidator />
@@ -38,7 +38,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Size</label>
+                        <label class="form-label">Sector Size</label>
                         <EnigmaIntStepper Class="form-control"
                                           Min="2"
                                           Max="250"
@@ -47,28 +47,28 @@
                     </div>
 
                     <button class="btn btn-success w-100" disabled="@IsBusy">
-                        @(IsBusy ? "Generating..." : "Generate Maze")
+                        @(IsBusy ? "Initializing..." : "Initialize Sector")
                     </button>
                 </EditForm>
             </div>
 
             <div class="card shadow-sm p-4 mb-4 play-card">
-                <h4 class="mb-3">Load Maze by Name</h4>
+                <h4 class="mb-3">Load Sector by Name</h4>
 
                 <EditForm FormName="FromNameForm" OnValidSubmit="OnSeedClick" Model="loadMazeRequest">
                     <DataAnnotationsValidator />
 
                     <div class="mb-3">
-                        <MapSearchBox Label="Map Name"
+                        <MapSearchBox Label="Sector Name"
                                       InputId="play-map-search"
-                                      Placeholder="type a saved maze name"
+                                      Placeholder="type a mapped sector name"
                                       Value="@loadMazeRequest.MapName"
                                       ValueChanged="OnPlayMapNameChanged" />
                         <ValidationMessage For="() => loadMazeRequest.MapName" />
                     </div>
 
                     <button class="btn btn-primary w-100" disabled="@IsBusy">
-                        @(IsBusy ? "Loading..." : "Load Maze")
+                        @(IsBusy ? "Loading..." : "Load Sector")
                     </button>
                 </EditForm>
             </div>
@@ -77,12 +77,12 @@
         <div class="card shadow-sm p-4 play-card play-loadout-card">
             <div class="play-loadout-heading">
                 <div>
-                    <span class="profile-kicker">Inventory</span>
-                    <h4 class="mb-1">Select Your Loadout</h4>
+                    <span class="profile-kicker">Field Gear</span>
+                    <h4 class="mb-1">Select Your Field Kit</h4>
                 </div>
                 <span class="section-count">@SelectedItems.Count / 3</span>
             </div>
-            <p class="play-loadout-copy">Pick up to three items. Passive items count toward the same cap.</p>
+            <p class="play-loadout-copy">Assign up to three items. Passive items count toward the same cap.</p>
 
             @if (Inventory.Count == 0)
             {
