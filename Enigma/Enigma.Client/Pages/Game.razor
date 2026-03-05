@@ -277,11 +277,24 @@ else
                             else
                             {
                                 <div class="enigma-stage-run-pill-list">
-                                    @foreach (var item in EquippedLoadout)
+                                    @foreach (var item in GetVisibleLoadoutItems())
                                     {
                                         <div class="enigma-stage-run-pill">
                                             <strong>@item.Name</strong>
-                                            <span>x@item.Quantity</span>
+                                            <span>@($"x{item.Quantity}")</span>
+                                            @if (CanActivateLoadoutItem(item))
+                                            {
+                                                <button type="button"
+                                                        class="enigma-item-use-button"
+                                                        disabled="@(!CanUseLoadoutItem(item))"
+                                                        @onclick="() => UseLoadoutItemFromUiAsync(item.ItemId)">
+                                                    Use @GetLoadoutHotkeyLabel(item)
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="enigma-item-passive-tag">Passive</span>
+                                            }
                                         </div>
                                     }
                                 </div>
@@ -329,11 +342,24 @@ else
                             else
                             {
                                 <div class="enigma-status-loadout-list">
-                                    @foreach (var item in EquippedLoadout)
+                                    @foreach (var item in GetVisibleLoadoutItems())
                                     {
                                         <div class="enigma-status-loadout-pill">
                                             <strong>@item.Name</strong>
-                                            <span>x@item.Quantity</span>
+                                            <span>@($"x{item.Quantity}")</span>
+                                            @if (CanActivateLoadoutItem(item))
+                                            {
+                                                <button type="button"
+                                                        class="enigma-item-use-button"
+                                                        disabled="@(!CanUseLoadoutItem(item))"
+                                                        @onclick="() => UseLoadoutItemFromUiAsync(item.ItemId)">
+                                                    Use @GetLoadoutHotkeyLabel(item)
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="enigma-item-passive-tag">Passive</span>
+                                            }
                                         </div>
                                     }
                                 </div>
