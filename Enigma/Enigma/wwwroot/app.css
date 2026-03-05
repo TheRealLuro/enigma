@@ -5565,24 +5565,92 @@ h1:focus {
     gap: 14px;
 }
 
+.coop-session-meta-compact {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.coop-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.coop-meta-pill span {
+    color: rgba(214, 232, 255, 0.74);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.coop-meta-pill strong {
+    display: block;
+    max-width: 210px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--epic-text);
+    font-size: 0.92rem;
+    line-height: 1;
+}
+
+.coop-meta-pill.map strong {
+    max-width: 280px;
+}
+
+.coop-player-stack {
+    gap: 10px;
+}
+
 .coop-player-card {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 18px;
-    padding: 22px 24px;
-    border-radius: 18px;
+    gap: 12px;
+    padding: 16px 18px;
+    border-radius: 14px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .coop-player-card.you {
-    border-color: rgba(96, 182, 255, 0.28);
-    background: linear-gradient(135deg, rgba(19, 47, 88, 0.5), rgba(18, 25, 39, 0.8));
+    border-color: rgba(96, 182, 255, 0.24);
+    background: linear-gradient(135deg, rgba(19, 47, 88, 0.34), rgba(18, 25, 39, 0.72));
 }
 
 .coop-player-card.partner {
-    border-color: rgba(255, 114, 114, 0.24);
-    background: linear-gradient(135deg, rgba(66, 18, 18, 0.42), rgba(24, 17, 24, 0.82));
+    border-color: rgba(255, 114, 114, 0.2);
+    background: linear-gradient(135deg, rgba(66, 18, 18, 0.3), rgba(24, 17, 24, 0.74));
+}
+
+.coop-player-main {
+    display: grid;
+    gap: 4px;
+}
+
+.coop-player-main strong {
+    margin: 0;
+    color: #f7f9ff;
+    font-size: 1.05rem;
+    line-height: 1.12;
+}
+
+.coop-player-context {
+    color: rgba(190, 214, 247, 0.8);
+    font-size: 0.77rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.coop-player-card.partner .coop-player-context {
+    color: rgba(255, 195, 195, 0.78);
 }
 
 .coop-invite-card {
@@ -5598,9 +5666,9 @@ h1:focus {
 
 .coop-player-meta {
     justify-items: end;
-    gap: 10px;
-    color: rgba(255, 255, 255, 0.72);
-    font-size: 0.86rem;
+    gap: 6px;
+    color: rgba(255, 255, 255, 0.74);
+    font-size: 0.82rem;
 }
 
 .coop-setup-grid .coop-join-panel,
@@ -5631,6 +5699,46 @@ h1:focus {
 
 .coop-action-row .btn {
     min-width: 136px;
+}
+
+.coop-inline-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.coop-inline-form .btn {
+    min-width: 120px;
+}
+
+.coop-invited-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 0 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.coop-invited-strip span {
+    color: rgba(214, 232, 255, 0.74);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.coop-invited-strip strong {
+    color: var(--epic-text);
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.coop-session-note {
+    padding: 14px 16px;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.07);
+    color: rgba(228, 239, 255, 0.78);
 }
 
 .coop-catalog-grid {

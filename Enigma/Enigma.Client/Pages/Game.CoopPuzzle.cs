@@ -491,7 +491,7 @@ public partial class Game
         _coopPuzzleActionInFlight = true;
         try
         {
-            using var response = await Api.PostJsonAsync("api/auth/multiplayer/session/puzzle/action", new
+            using var response = await Api.PostJsonAsync("api/auth/multiplayer/session/puzzle_action", new
             {
                 sessionId = CoopSessionId,
                 action,

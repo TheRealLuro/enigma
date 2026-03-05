@@ -41,7 +41,7 @@ from .redis_store import (
 router = APIRouter(prefix="/database/multiplayer")
 _SESSION_SOCKETS: dict[str, list[tuple[str, WebSocket]]] = {}
 _PENDING_SOCKET_ABANDON_TASKS: dict[tuple[str, str], asyncio.Task[None]] = {}
-SOCKET_ABANDON_GRACE_SECONDS = 4.0
+SOCKET_ABANDON_GRACE_SECONDS = 22.0
 
 
 class MultiplayerCreatePayload(BaseModel):
@@ -170,6 +170,11 @@ def _get_room_progress(session: dict[str, Any], room_key: str) -> dict[str, Any]
     }
     room_progress[room_key] = progress
     return progress
+
+
+def _room_key(session: dict[str, Any]) -> str:
+    room = session.get("current_room", {})
+    return f"{room.get('x')},{room.get('y')}"
 
 
 def _get_puzzle_reward(seed: str, difficulty: str, room_x: int, room_y: int) -> int:
@@ -360,6 +365,9 @@ async def _abandon_session_after_socket_disconnect(session_id: str, username: st
                 return
 
             if _session_has_live_socket(session_id, username):
+                return
+
+            if not _session_should_soft_close(session_id, session, username):
                 return
 
             _leave_multiplayer_session_locked(session_id, session, _normalize_username(username), "socket_disconnect")
@@ -1119,6 +1127,7 @@ def update_multiplayer_state(request: Request, payload: MultiplayerStatePayload)
 
 
 @router.post("/session/puzzle_action")
+@router.post("/session/puzzle/action")
 @limiter.limit("240/minute")
 def multiplayer_puzzle_action(request: Request, payload: MultiplayerPuzzleActionPayload):
     username = _normalize_username(payload.username)
@@ -1254,7 +1263,9 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
                     _assert_session_member(session, normalized_username)
 
                     if message_type in {"ping", "heartbeat"}:
-                        pass
+                        player = _assert_session_member(session, normalized_username)
+                        player["last_seen_at"] = _utc_now_iso()
+                        save_json(session_key(session_id), session)
                     elif message_type == "state":
                         payload = MultiplayerStatePayload.model_validate(
                             {
@@ -1318,6 +1329,9 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
                 continue
             except HTTPException as exc:
                 await _send_ws_error(websocket, str(exc.detail), exc.status_code)
+                continue
+            except Exception:
+                await _send_ws_error(websocket, "Unexpected multiplayer server error.", 500)
                 continue
 
             if message_type in {"ping", "heartbeat"}:

@@ -209,32 +209,44 @@ else
                         <span class="section-count">@CurrentSession.SessionId</span>
                     </div>
 
-                    <div class="coop-session-meta">
-                        <div><span>Status</span><strong>@FormatSessionStatus(CurrentSession.Status)</strong></div>
-                        <div><span>Map</span><strong>@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Seed" : CurrentSession.MapName)</strong></div>
-                        <div><span>Difficulty</span><strong>@CurrentSession.Difficulty</strong></div>
-                        <div><span>Size</span><strong>@CurrentSession.Size x @CurrentSession.Size</strong></div>
+                    <div class="coop-session-meta-compact">
+                        <div class="coop-meta-pill">
+                            <span>Status</span>
+                            <strong>@FormatSessionStatus(CurrentSession.Status)</strong>
+                        </div>
+                        <div class="coop-meta-pill map" title="@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Seed" : CurrentSession.MapName)">
+                            <span>Map</span>
+                            <strong>@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Seed" : CurrentSession.MapName)</strong>
+                        </div>
+                        <div class="coop-meta-pill">
+                            <span>Difficulty</span>
+                            <strong>@CurrentSession.Difficulty</strong>
+                        </div>
+                        <div class="coop-meta-pill">
+                            <span>Size</span>
+                            <strong>@CurrentSession.Size x @CurrentSession.Size</strong>
+                        </div>
                     </div>
 
                     <div class="coop-player-stack">
                         @if (CurrentSession.You is not null)
                         {
                             <article class="coop-player-card you">
-                                <div>
-                                    <span class="profile-eyebrow">You</span>
+                                <div class="coop-player-main">
                                     <strong>@CurrentSession.You.Username</strong>
+                                    <span class="coop-player-context">Blue console</span>
                                 </div>
                                 <div class="coop-player-meta">
                                     <span>@(CurrentSession.You.Ready ? "Ready" : "Not ready")</span>
-                                    <span>Team MN @CurrentSession.TeamGold</span>
+                                    <span>MN @CurrentSession.TeamGold</span>
                                 </div>
                             </article>
                         }
 
                         <article class="coop-player-card partner">
-                            <div>
-                                <span class="profile-eyebrow">Partner</span>
+                            <div class="coop-player-main">
                                 <strong>@(CurrentSession.OtherPlayer?.Username ?? CurrentSession.GuestUsername ?? "Waiting for invited friend")</strong>
+                                <span class="coop-player-context">Red console</span>
                             </div>
                             <div class="coop-player-meta">
                                 <span>@(CurrentSession.OtherPlayer?.Ready == true ? "Ready" : "Not ready")</span>
@@ -258,8 +270,9 @@ else
 
                     @if (CurrentSession.InvitedFriends.Count > 0)
                     {
-                        <div class="marketplace-bullet-list">
-                            <div><strong>Invited friends:</strong> @string.Join(", ", CurrentSession.InvitedFriends)</div>
+                        <div class="coop-invited-strip">
+                            <span>Invited</span>
+                            <strong>@string.Join(", ", CurrentSession.InvitedFriends)</strong>
                         </div>
                     }
 
@@ -284,7 +297,7 @@ else
                         </button>
                     </div>
 
-                    <div class="empty-state-inline">The maze starts once both players are present and ready. Movement and room changes stay synchronized after entry.</div>
+                    <div class="empty-state-inline coop-session-note">The maze starts once both players are present and ready. Movement and room changes stay synchronized after entry.</div>
                 </section>
 
             </div>

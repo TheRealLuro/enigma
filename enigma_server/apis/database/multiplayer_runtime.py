@@ -370,7 +370,7 @@ def _create_riddle_state(seed: str, difficulty: str) -> dict[str, Any]:
 
 
 def _create_memory_state(seed: str, difficulty: str) -> dict[str, Any]:
-    symbols = ["A", "B", "C", "D", "E", "F", "G", "H"]
+    symbols = ["A", "B", "C", "D", "E", "F"]
     length = 6 if difficulty == "easy" else 7 if difficulty == "medium" else 8
     sequence = [symbols[_stable_hash(f"{seed}|memory|{difficulty}|{index}") % len(symbols)] for index in range(length)]
     if difficulty == "easy":
@@ -388,7 +388,7 @@ def _create_memory_state(seed: str, difficulty: str) -> dict[str, Any]:
         "view_type": "split_memory",
         "name": CO_OP_PUZZLE_CATALOG[difficulty]["s"]["name"],
         "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["s"]["description"],
-        "symbols": symbols[:6],
+        "symbols": symbols,
         "sequence": sequence,
         "owner_view": owner_view,
         "guest_view": guest_view,
