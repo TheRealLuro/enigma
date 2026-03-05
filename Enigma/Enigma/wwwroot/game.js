@@ -27,6 +27,9 @@
     let coopSocketSessionId = null;
     let coopSocketDotNetRef = null;
     let coopSocketReconnectHandle = null;
+    const desktopZoomOutValue = 0.8;
+    const desktopZoomOutMinWidth = 1024;
+    let viewportZoomHandler = null;
     const storageFallback = {
         session: Object.create(null),
         local: Object.create(null)
@@ -200,6 +203,66 @@
         } catch {
             window.addEventListener(name, handler);
         }
+    }
+
+    function shouldApplyDesktopZoomOut() {
+        if (typeof window.matchMedia === "function") {
+            return window.matchMedia(`(min-width: ${desktopZoomOutMinWidth}px)`).matches;
+        }
+
+        return window.innerWidth >= desktopZoomOutMinWidth;
+    }
+
+    function applyDesktopZoomOut() {
+        const root = document.documentElement;
+        const body = document.body;
+        if (!root || !body) {
+            return;
+        }
+
+        const enabled = shouldApplyDesktopZoomOut();
+        if (!enabled) {
+            root.style.removeProperty("zoom");
+            root.classList.remove("enigma-global-zoom-fallback");
+            body.style.removeProperty("transform");
+            body.style.removeProperty("transform-origin");
+            body.style.removeProperty("width");
+            return;
+        }
+
+        const supportsZoom = !!(window.CSS && typeof window.CSS.supports === "function" && window.CSS.supports("zoom", "1"));
+        if (supportsZoom) {
+            root.style.setProperty("zoom", String(desktopZoomOutValue));
+            root.classList.remove("enigma-global-zoom-fallback");
+            body.style.removeProperty("transform");
+            body.style.removeProperty("transform-origin");
+            body.style.removeProperty("width");
+            return;
+        }
+
+        root.style.removeProperty("zoom");
+        root.classList.add("enigma-global-zoom-fallback");
+        body.style.setProperty("transform", `scale(${desktopZoomOutValue})`);
+        body.style.setProperty("transform-origin", "top left");
+        body.style.setProperty("width", `${100 / desktopZoomOutValue}vw`);
+    }
+
+    function registerDesktopZoomOut() {
+        if (viewportZoomHandler) {
+            return;
+        }
+
+        viewportZoomHandler = function () {
+            applyDesktopZoomOut();
+        };
+
+        addWindowListener("resize", viewportZoomHandler, { passive: true });
+        addWindowListener("orientationchange", viewportZoomHandler, { passive: true });
+        if (document.readyState === "loading") {
+            addWindowListener("DOMContentLoaded", viewportZoomHandler, { once: true });
+        }
+
+        applyDesktopZoomOut();
     }
 
     function setStoredJson(storageName, key, value) {
@@ -875,4 +938,6 @@
             notifyCoopSocketStatus(false);
         }
     };
+
+    registerDesktopZoomOut();
 })();

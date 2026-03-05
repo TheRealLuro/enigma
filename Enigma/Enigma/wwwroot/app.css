@@ -76,6 +76,10 @@ html, body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+html.enigma-global-zoom-fallback body {
+    min-height: 125vh;
+}
+
 #app {
     min-height: 100vh;
     min-height: -webkit-fill-available;

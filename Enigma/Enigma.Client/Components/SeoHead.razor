@@ -53,13 +53,27 @@
     {
         get
         {
-            var uri = new Uri(NavigationManager.Uri, UriKind.Absolute);
-            var builder = new UriBuilder(uri)
+            var raw = (NavigationManager.Uri ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(raw))
             {
-                Query = string.Empty,
-                Fragment = string.Empty,
-            };
-            return builder.Uri.ToString();
+                return NavigationManager.BaseUri;
+            }
+
+            var noFragment = raw;
+            var fragmentIndex = noFragment.IndexOf('#');
+            if (fragmentIndex >= 0)
+            {
+                noFragment = noFragment[..fragmentIndex];
+            }
+
+            var noQuery = noFragment;
+            var queryIndex = noQuery.IndexOf('?');
+            if (queryIndex >= 0)
+            {
+                noQuery = noQuery[..queryIndex];
+            }
+
+            return noQuery;
         }
     }
 

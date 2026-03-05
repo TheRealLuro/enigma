@@ -396,8 +396,8 @@
 
     private static string GetCleanPath(string uri)
     {
-        var relativePath = new Uri(uri, UriKind.Absolute).AbsolutePath.Trim('/');
-        return relativePath.ToLowerInvariant();
+        var (path, _) = SplitPathAndQuery(uri);
+        return path;
     }
 
     private async Task EnsureTutorialStateAsync(LoginUserSummary session)
@@ -472,9 +472,7 @@
 
     private int GetTutorialIndexForUri(string uri)
     {
-        var current = new Uri(uri, UriKind.Absolute);
-        var path = current.AbsolutePath.Trim('/').ToLowerInvariant();
-        var query = current.Query.ToLowerInvariant();
+        var (path, query) = SplitPathAndQuery(uri);
 
         if (path == "play/coop")
         {
@@ -522,6 +520,42 @@
         }
 
         return 0;
+    }
+
+    private static (string Path, string Query) SplitPathAndQuery(string? uri)
+    {
+        var raw = (uri ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return (string.Empty, string.Empty);
+        }
+
+        var withoutFragment = raw;
+        var fragmentIndex = withoutFragment.IndexOf('#');
+        if (fragmentIndex >= 0)
+        {
+            withoutFragment = withoutFragment[..fragmentIndex];
+        }
+
+        var query = string.Empty;
+        var pathPortion = withoutFragment;
+        var queryIndex = withoutFragment.IndexOf('?');
+        if (queryIndex >= 0)
+        {
+            query = withoutFragment[queryIndex..].ToLowerInvariant();
+            pathPortion = withoutFragment[..queryIndex];
+        }
+
+        var path = pathPortion;
+        var schemeIndex = path.IndexOf("://", StringComparison.Ordinal);
+        if (schemeIndex >= 0)
+        {
+            var firstSlashAfterHost = path.IndexOf('/', schemeIndex + 3);
+            path = firstSlashAfterHost >= 0 ? path[firstSlashAfterHost..] : "/";
+        }
+
+        path = path.Trim('/').ToLowerInvariant();
+        return (path, query);
     }
 
     private string GetTutorialRouteLabel()
