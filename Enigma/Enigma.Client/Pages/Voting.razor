@@ -348,7 +348,7 @@ else
     private bool CanCloseSession => IsBankUser && ActiveSession is not null;
 
     private int CurrentStakedCount => ActiveSession?.UserVoteSummary?.StakedMapsCount ?? Session?.StakedMapsCount ?? 0;
-    private double CurrentStakeMultiplier => ActiveSession?.UserVoteSummary?.StakeWeightMultiplier ?? 1.0;
+    private double CurrentStakeMultiplier => ActiveSession?.UserVoteSummary?.StakeWeightMultiplier ?? ComputeStakeMultiplier(CurrentStakedCount);
 
     private int CurrentSelectionCount =>
         ActiveSession?.VoteType switch
@@ -756,6 +756,18 @@ else
             "number_selection" => "Number selection",
             _ => string.IsNullOrWhiteSpace(voteType) ? "Unknown" : voteType,
         };
+    }
+
+    private static double ComputeStakeMultiplier(int stakedMapsCount)
+    {
+        var count = Math.Max(1, stakedMapsCount);
+        if (count <= 1)
+        {
+            return 1.0;
+        }
+
+        var bonus = (Math.Sqrt(count) - 1.0) * 0.35;
+        return Math.Round(1.0 + Math.Min(1.25, Math.Max(0.0, bonus)), 4);
     }
 
     private async Task SyncClientSessionAsync(LoginUserSummary? session)

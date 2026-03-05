@@ -26,6 +26,17 @@ def recycle_map(request: Request, username: str, map_name: str):
     map_doc = maps_collection.find_one({"map_name": map_name, "owner": username})
     if not map_doc:
         raise HTTPException(status_code=404, detail="Only the current owner can recycle this map")
+    map_id = map_doc["_id"]
+    user_doc = users_collection.find_one({"username": username}, {"staked_map_ids": 1})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    staked_map_ids = {
+        str(value or "").strip()
+        for value in list(user_doc.get("staked_map_ids", []) or [])
+        if str(value or "").strip()
+    }
+    if str(map_id) in staked_map_ids:
+        raise HTTPException(status_code=409, detail="Staked maps cannot be recycled. Unstake this map first.")
 
     bank_user = users_collection.find_one({"username": SYSTEM_BANK_USERNAME})
     if not bank_user:
@@ -34,7 +45,6 @@ def recycle_map(request: Request, username: str, map_name: str):
     map_value = int(map_doc.get("value", 0) or 0)
     payout_to_user = int(round(map_value * 0.70))
     payout_to_bank = max(0, map_value - payout_to_user)
-    map_id = map_doc["_id"]
 
     users_collection.update_one(
         {"username": username},

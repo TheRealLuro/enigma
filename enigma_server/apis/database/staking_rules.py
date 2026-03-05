@@ -12,6 +12,7 @@ DAILY_STAKE_BASE_BY_DIFFICULTY = {
     "hard": 25,
 }
 SIZE_MULTIPLIER_CAP = 2.0
+STAKED_MAP_LOCK_HOURS = 48
 
 
 def _utc_now() -> datetime:
@@ -35,6 +36,13 @@ def _parse_utc_datetime(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def stake_lock_expires_at(staked_at: datetime | None = None) -> datetime:
+    current = staked_at or _utc_now()
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return current.astimezone(timezone.utc) + timedelta(hours=STAKED_MAP_LOCK_HOURS)
 
 
 def normalize_difficulty(value: Any) -> str:
@@ -94,12 +102,33 @@ def normalize_staked_map_ids(user: dict[str, Any], maps_collection) -> tuple[lis
     return normalized, owned_lookup
 
 
-def serialize_staked_map(map_doc: dict[str, Any]) -> dict[str, Any]:
+def normalize_staked_map_lock_until(user: dict[str, Any], staked_map_ids: list[str]) -> dict[str, str]:
+    raw_lookup = user.get("staked_map_lock_until") if isinstance(user.get("staked_map_lock_until"), dict) else {}
+    normalized: dict[str, str] = {}
+
+    for staked_map_id in staked_map_ids:
+        parsed = _parse_utc_datetime(raw_lookup.get(staked_map_id))
+        if parsed is None:
+            continue
+        normalized[staked_map_id] = parsed.isoformat()
+
+    return normalized
+
+
+def serialize_staked_map(
+    map_doc: dict[str, Any],
+    lock_until: datetime | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     difficulty = normalize_difficulty(map_doc.get("difficulty"))
     size = max(1, normalize_int(map_doc.get("size"), 1))
     base_reward = base_stake_reward_for_difficulty(difficulty)
     size_multiplier = size_multiplier_for_size(size)
     daily_reward = int(math.ceil(base_reward * size_multiplier))
+    current = now or _utc_now()
+    lock_end = lock_until.astimezone(timezone.utc) if isinstance(lock_until, datetime) else None
+    is_locked = bool(lock_end and lock_end > current)
+    lock_seconds_remaining = max(0, int((lock_end - current).total_seconds())) if is_locked else 0
     return {
         "map_id": str(map_doc.get("_id") or ""),
         "map_name": str(map_doc.get("map_name") or "Unnamed Map"),
@@ -108,16 +137,24 @@ def serialize_staked_map(map_doc: dict[str, Any]) -> dict[str, Any]:
         "base_reward": base_reward,
         "size_multiplier": size_multiplier,
         "daily_reward": daily_reward,
+        "locked_until": lock_end.isoformat() if lock_end else None,
+        "is_locked": is_locked,
+        "lock_seconds_remaining": lock_seconds_remaining,
     }
 
 
 def build_staking_overview(user: dict[str, Any], maps_collection, now: datetime | None = None) -> dict[str, Any]:
     current = now or _utc_now()
     normalized_staked_ids, owned_lookup = normalize_staked_map_ids(user, maps_collection)
+    normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
     staked_id_set = set(normalized_staked_ids)
 
     staked_maps = [
-        serialize_staked_map(owned_lookup[map_id])
+        serialize_staked_map(
+            owned_lookup[map_id],
+            lock_until=_parse_utc_datetime(normalized_lock_lookup.get(map_id)),
+            now=current,
+        )
         for map_id in normalized_staked_ids
         if map_id in owned_lookup
     ]
@@ -143,14 +180,18 @@ def build_staking_overview(user: dict[str, Any], maps_collection, now: datetime 
         "last_claim_at": last_claim_at.isoformat() if last_claim_at else None,
         "next_claim_at": next_claim_at,
         "can_claim_today": can_claim_today,
+        "stake_lock_hours": STAKED_MAP_LOCK_HOURS,
     }
 
 
 def claim_daily_staking_reward(users_collection, maps_collection, user: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
     current = now or _utc_now()
     normalized_staked_ids, owned_lookup = normalize_staked_map_ids(user, maps_collection)
+    normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
     current_staked_ids = [str(value or "").strip() for value in list(user.get("staked_map_ids", []) or []) if str(value or "").strip()]
+    current_lock_lookup = user.get("staked_map_lock_until") if isinstance(user.get("staked_map_lock_until"), dict) else {}
     needs_stake_cleanup = normalized_staked_ids != current_staked_ids
+    needs_lock_cleanup = normalized_lock_lookup != current_lock_lookup
 
     last_claim_at = _parse_utc_datetime(user.get("last_staking_reward_at"))
     claim_due = last_claim_at is None or last_claim_at.date() < current.date()
@@ -163,15 +204,16 @@ def claim_daily_staking_reward(users_collection, maps_collection, user: dict[str
     )
 
     if not claim_due or reward_total <= 0:
-        if needs_stake_cleanup:
+        if needs_stake_cleanup or needs_lock_cleanup:
             users_collection.update_one(
                 {"_id": user["_id"]},
-                {"$set": {"staked_map_ids": normalized_staked_ids}},
+                {"$set": {"staked_map_ids": normalized_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
             )
         return {
             "rewarded_mn": 0,
             "reward_granted": False,
             "staked_map_ids": normalized_staked_ids,
+            "staked_map_lock_until": normalized_lock_lookup,
             "last_claim_at": last_claim_at.isoformat() if last_claim_at else None,
         }
 
@@ -188,6 +230,8 @@ def claim_daily_staking_reward(users_collection, maps_collection, user: dict[str
     set_update: dict[str, Any] = {"last_staking_reward_at": current}
     if needs_stake_cleanup:
         set_update["staked_map_ids"] = normalized_staked_ids
+    if needs_lock_cleanup:
+        set_update["staked_map_lock_until"] = normalized_lock_lookup
 
     update_result = users_collection.update_one(
         update_filter,
@@ -208,6 +252,7 @@ def claim_daily_staking_reward(users_collection, maps_collection, user: dict[str
         "rewarded_mn": reward_total,
         "reward_granted": True,
         "staked_map_ids": normalized_staked_ids,
+        "staked_map_lock_until": normalized_lock_lookup,
         "last_claim_at": current.isoformat(),
     }
 

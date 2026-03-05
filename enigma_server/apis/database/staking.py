@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -8,7 +9,13 @@ from pydantic import BaseModel
 from main import limiter
 
 from .db import maps_collection, users_collection
-from .staking_rules import build_staking_overview, claim_daily_staking_reward, normalize_staked_map_ids
+from .staking_rules import (
+    build_staking_overview,
+    claim_daily_staking_reward,
+    normalize_staked_map_ids,
+    normalize_staked_map_lock_until,
+    stake_lock_expires_at,
+)
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
     build_owned_maps_sync_update,
@@ -88,8 +95,14 @@ def get_staking_overview(request: Request, username: str):
     user = _sync_user(username)
     overview = build_staking_overview(user, maps_collection)
     normalized_staked_ids, _ = normalize_staked_map_ids(user, maps_collection)
-    if normalized_staked_ids != list(user.get("staked_map_ids", []) or []):
-        users_collection.update_one({"_id": user["_id"]}, {"$set": {"staked_map_ids": normalized_staked_ids}})
+    normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
+    current_staked_ids = [str(value or "").strip() for value in list(user.get("staked_map_ids", []) or []) if str(value or "").strip()]
+    current_lock_lookup = user.get("staked_map_lock_until") if isinstance(user.get("staked_map_lock_until"), dict) else {}
+    if normalized_staked_ids != current_staked_ids or normalized_lock_lookup != current_lock_lookup:
+        users_collection.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"staked_map_ids": normalized_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
+        )
         user = users_collection.find_one({"_id": user["_id"]}) or user
         overview = build_staking_overview(user, maps_collection)
 
@@ -106,11 +119,16 @@ def stake_map(request: Request, payload: StakeMapPayload):
     username = str(payload.username or "").strip()
     user = _sync_user(username)
     normalized_staked_ids, owned_lookup = normalize_staked_map_ids(user, maps_collection)
+    normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
     target_map_id = _resolve_owned_map_id(payload.map_id, payload.map_name, owned_lookup)
 
     if target_map_id not in normalized_staked_ids:
         normalized_staked_ids.append(target_map_id)
-        users_collection.update_one({"_id": user["_id"]}, {"$set": {"staked_map_ids": normalized_staked_ids}})
+        normalized_lock_lookup[target_map_id] = stake_lock_expires_at().isoformat()
+        users_collection.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"staked_map_ids": normalized_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
+        )
 
     refreshed = _sync_user(username)
     overview = build_staking_overview(refreshed, maps_collection)
@@ -127,11 +145,27 @@ def unstake_map(request: Request, payload: UnstakeMapPayload):
     username = str(payload.username or "").strip()
     user = _sync_user(username)
     normalized_staked_ids, owned_lookup = normalize_staked_map_ids(user, maps_collection)
+    normalized_lock_lookup = normalize_staked_map_lock_until(user, normalized_staked_ids)
     target_map_id = _resolve_owned_map_id(payload.map_id, payload.map_name, owned_lookup)
+    locked_until_iso = normalized_lock_lookup.get(target_map_id)
+    if locked_until_iso:
+        lock_expires_at = datetime.fromisoformat(locked_until_iso.replace("Z", "+00:00"))
+        if lock_expires_at.tzinfo is None:
+            lock_expires_at = lock_expires_at.replace(tzinfo=timezone.utc)
+        if lock_expires_at.astimezone(timezone.utc) > datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=409,
+                detail=f"This map is locked in staking until {lock_expires_at.astimezone(timezone.utc).isoformat()}",
+            )
     updated_staked_ids = [map_id for map_id in normalized_staked_ids if map_id != target_map_id]
+    if target_map_id in normalized_lock_lookup:
+        del normalized_lock_lookup[target_map_id]
 
     if updated_staked_ids != normalized_staked_ids:
-        users_collection.update_one({"_id": user["_id"]}, {"$set": {"staked_map_ids": updated_staked_ids}})
+        users_collection.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"staked_map_ids": updated_staked_ids, "staked_map_lock_until": normalized_lock_lookup}},
+        )
 
     refreshed = _sync_user(username)
     overview = build_staking_overview(refreshed, maps_collection)

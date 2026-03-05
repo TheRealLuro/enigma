@@ -1,8 +1,10 @@
 @page "/staking"
+@using System.Globalization
 @using Enigma.Client.Models
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @if (!Embedded)
 {
@@ -41,9 +43,13 @@ else
                 <p>Stake owned maps to receive daily MN. Claim once per day, or auto-claim on login.</p>
             </div>
             <div class="staking-banner-meta">
-                <span class="profile-chip">@Overview.StakedMapsCount staked</span>
-                <span class="profile-chip">@Overview.TotalDailyReward.ToString("N0") MN/day</span>
-                <span class="profile-chip">Balance @(Session?.MazeNuggets.ToString("N0") ?? "0") MN</span>
+                @if (!string.IsNullOrWhiteSpace(Overview.NextClaimAt) && !Overview.CanClaimToday)
+                {
+                    <span class="profile-chip">Next claim @FormatTimestamp(Overview.NextClaimAt)</span>
+                }
+                <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="ReloadAsync">
+                    @(IsLoading ? "Refreshing..." : "Refresh")
+                </button>
             </div>
         </section>
 
@@ -52,8 +58,43 @@ else
             <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
         }
 
-        <section class="staking-claim-card">
-            <div>
+        <section class="staking-kpi-grid">
+            <article class="staking-kpi-card">
+                <span class="staking-kpi-label">Staked Maps</span>
+                <strong class="staking-kpi-value" @key="Overview.StakedMapsCount">@Overview.StakedMapsCount</strong>
+            </article>
+            <article class="staking-kpi-card">
+                <span class="staking-kpi-label">Daily Yield</span>
+                <strong class="staking-kpi-value" @key="Overview.TotalDailyReward">@Overview.TotalDailyReward.ToString("N0") MN/day</strong>
+            </article>
+            <article class="staking-kpi-card">
+                <span class="staking-kpi-label">Total Balance</span>
+                <strong class="staking-kpi-value" @key="Session?.MazeNuggets">@(Session?.MazeNuggets.ToString("N0") ?? "0") MN</strong>
+            </article>
+        </section>
+
+        <section class="staking-forecast-grid">
+            <article class="staking-forecast-card">
+                <span>Daily Yield</span>
+                <strong>@DailyYield.ToString("N0") MN</strong>
+            </article>
+            <article class="staking-forecast-card">
+                <span>Monthly Yield</span>
+                <strong>~@EstimatedMonthlyYield.ToString("N0") MN</strong>
+            </article>
+            <article class="staking-forecast-card">
+                <span>Yearly Yield</span>
+                <strong>~@EstimatedYearlyYield.ToString("N0") MN</strong>
+            </article>
+            <article class="staking-forecast-card">
+                <span>Yield Efficiency</span>
+                <strong>@YieldEfficiencyPercent.ToString("0.#")%</strong>
+                <em>@YieldEfficiencyLabel</em>
+            </article>
+        </section>
+
+        <section class="staking-claim-card @(ClaimBurstActive ? "claim-success" : string.Empty)">
+            <div class="staking-claim-copy">
                 <strong>Daily Claim</strong>
                 <p>
                     @if (Overview.CanClaimToday)
@@ -62,7 +103,7 @@ else
                     }
                     else if (!string.IsNullOrWhiteSpace(Overview.NextClaimAt))
                     {
-                        <span>Next claim available: @FormatTimestamp(Overview.NextClaimAt).</span>
+                        <span>Your next payout window is charging now.</span>
                     }
                     else
                     {
@@ -70,10 +111,59 @@ else
                     }
                 </p>
             </div>
+
+            <div class="staking-claim-ring-wrap">
+                <div class="staking-claim-ring" style="@GetClaimRingStyle()">
+                    <div class="staking-claim-ring-core">
+                        <strong>@GetClaimProgressPercent().ToString("0")%</strong>
+                        <span>@(Overview.CanClaimToday ? "Ready" : "Progress")</span>
+                    </div>
+                </div>
+                <div class="staking-claim-countdown">
+                    <strong>Next Claim</strong>
+                    <span>@GetClaimCountdownLabel()</span>
+                </div>
+            </div>
+
             <button class="btn btn-primary" type="button" disabled="@(!Overview.CanClaimToday || IsBusy)" @onclick="ClaimDailyAsync">
                 @(IsBusy ? "Processing..." : "Claim Daily MN")
             </button>
+
+            @if (ClaimBurstActive && LastClaimReward > 0)
+            {
+                <span class="staking-claim-burst">+@LastClaimReward.ToString("N0") MN</span>
+            }
         </section>
+
+        @if (Overview.StakedMaps.Count > 0)
+        {
+            <section class="panel profile-release-panel staking-breakdown-panel">
+                <div class="panel-heading">
+                    <div>
+                        <span class="profile-eyebrow">Yield Sources</span>
+                        <h2>Daily Yield Breakdown</h2>
+                    </div>
+                </div>
+                <div class="staking-breakdown-layout">
+                    <div class="staking-breakdown-donut" style="@GetYieldDonutStyle()">
+                        <div class="staking-breakdown-donut-core">
+                            <span>Total Yield</span>
+                            <strong>@Overview.TotalDailyReward.ToString("N0") MN</strong>
+                        </div>
+                    </div>
+                    <div class="staking-breakdown-legend">
+                        @foreach (var slice in GetYieldSlices())
+                        {
+                            <div class="staking-breakdown-row">
+                                <span class="staking-breakdown-dot" style="@($"background:{slice.Color};")"></span>
+                                <span class="staking-breakdown-map">@slice.Label</span>
+                                <strong>@slice.Value.ToString("N0") MN (@slice.Share.ToString("0.#")%)</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
 
         <div class="staking-grid">
             <section class="staking-column panel profile-release-panel">
@@ -94,17 +184,20 @@ else
                         @foreach (var map in Overview.StakedMaps.OrderBy(static item => item.MapName, StringComparer.OrdinalIgnoreCase))
                         {
                             <article class="staking-map-card">
-                                <div>
-                                    <strong>@map.MapName</strong>
-                                    <div class="staking-map-meta">
-                                        <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
-                                        <span>@map.Size x @map.Size</span>
-                                        <span>@map.BaseReward MN base</span>
-                                        <span>x@map.SizeMultiplier.ToString("0.00") size</span>
-                                    </div>
+                                <div class="staking-map-card-head">
+                                    <h3>@map.MapName</h3>
+                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@FormatDifficultyLabel(map.Difficulty)</span>
                                 </div>
-                                <div class="staking-map-actions">
-                                    <strong>@map.DailyReward.ToString("N0") MN/day</strong>
+                                <div class="staking-map-rows">
+                                    <div><span>Difficulty</span><strong>@FormatDifficultyLabel(map.Difficulty)</strong></div>
+                                    <div><span>Size</span><strong>@map.Size x @map.Size</strong></div>
+                                    <div><span>Multiplier</span><strong>@($"{map.SizeMultiplier:0.00}x")</strong></div>
+                                </div>
+                                <div class="staking-map-footer">
+                                    <div>
+                                        <span class="staking-yield-label">Yield</span>
+                                        <strong class="staking-yield-value">@map.DailyReward.ToString("N0") MN/day</strong>
+                                    </div>
                                     <button class="btn btn-secondary" type="button" disabled="@IsBusy" @onclick="() => UnstakeMapAsync(map.MapId)">Unstake</button>
                                 </div>
                             </article>
@@ -123,7 +216,11 @@ else
                 </div>
                 @if (Overview.AvailableMaps.Count == 0)
                 {
-                    <div class="empty-state-inline">All owned maps are already staked.</div>
+                    <div class="staking-empty-state">
+                        <span class="staking-empty-icon" aria-hidden="true">MAP</span>
+                        <strong>All maps are currently staked.</strong>
+                        <p>Acquire more maps to increase yield.</p>
+                    </div>
                 }
                 else
                 {
@@ -131,17 +228,20 @@ else
                         @foreach (var map in Overview.AvailableMaps.OrderBy(static item => item.MapName, StringComparer.OrdinalIgnoreCase))
                         {
                             <article class="staking-map-card muted">
-                                <div>
-                                    <strong>@map.MapName</strong>
-                                    <div class="staking-map-meta">
-                                        <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
-                                        <span>@map.Size x @map.Size</span>
-                                        <span>@map.BaseReward MN base</span>
-                                        <span>x@map.SizeMultiplier.ToString("0.00") size</span>
-                                    </div>
+                                <div class="staking-map-card-head">
+                                    <h3>@map.MapName</h3>
+                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@FormatDifficultyLabel(map.Difficulty)</span>
                                 </div>
-                                <div class="staking-map-actions">
-                                    <strong>@map.DailyReward.ToString("N0") MN/day</strong>
+                                <div class="staking-map-rows">
+                                    <div><span>Difficulty</span><strong>@FormatDifficultyLabel(map.Difficulty)</strong></div>
+                                    <div><span>Size</span><strong>@map.Size x @map.Size</strong></div>
+                                    <div><span>Multiplier</span><strong>@($"{map.SizeMultiplier:0.00}x")</strong></div>
+                                </div>
+                                <div class="staking-map-footer">
+                                    <div>
+                                        <span class="staking-yield-label">Yield</span>
+                                        <strong class="staking-yield-value">@map.DailyReward.ToString("N0") MN/day</strong>
+                                    </div>
                                     <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="() => StakeMapAsync(map.MapId)">Stake</button>
                                 </div>
                             </article>
@@ -158,13 +258,16 @@ else
                     <h2>Staking System</h2>
                 </div>
             </div>
-            <ol class="staking-faq-list">
-                <li>Base daily rewards per map difficulty: Easy = 5 MN, Medium = 15 MN, Hard = 25 MN.</li>
-                <li>Size multiplier formula: <code>0.7 + (size / 20)</code>, capped at <code>2.0x</code>. Example: 2x2 = 0.8x, 4x4 = 0.9x.</li>
-                <li>Daily reward per map is <code>ceil(base * sizeMultiplier)</code>. Example: Easy 2x2 = <code>ceil(5 * 0.8) = 4 MN/day</code>.</li>
-                <li>Only maps you currently own can stay staked. Sold/recycled maps are automatically removed from stake.</li>
-                <li>Claim once per day, or log in to auto-claim when eligible.</li>
-            </ol>
+            <details class="staking-faq-collapsible">
+                <summary>Staking System Rules</summary>
+                <ol class="staking-faq-list">
+                    <li>Base daily rewards per map difficulty: Easy = 5 MN, Medium = 15 MN, Hard = 25 MN.</li>
+                    <li>Size multiplier formula: <code>0.7 + (size / 20)</code>, capped at <code>2.0x</code>. Example: 2x2 = 0.8x, 4x4 = 0.9x.</li>
+                    <li>Daily reward per map is <code>ceil(base * sizeMultiplier)</code>. Example: Easy 2x2 = <code>ceil(5 * 0.8) = 4 MN/day</code>.</li>
+                    <li>Only maps you currently own can stay staked. Sold or recycled maps are automatically removed from stake.</li>
+                    <li>Claim once per day, or log in to auto-claim when eligible.</li>
+                </ol>
+            </details>
         </section>
     </div>
 }
@@ -172,17 +275,70 @@ else
 @code {
     [Parameter] public bool Embedded { get; set; }
 
+    private static readonly string[] YieldColors =
+    [
+        "#5ba8ff",
+        "#8f74ff",
+        "#54c8a3",
+        "#f8ba68",
+        "#ff7a9d",
+        "#7dd3fc",
+        "#b8f47a",
+        "#fca5a5",
+    ];
+
+    private sealed record YieldSlice(string Label, int Value, double Share, string Color);
+
     private bool IsLoading { get; set; } = true;
     private bool IsBusy { get; set; }
     private bool HasError { get; set; }
+    private bool ClaimBurstActive { get; set; }
+    private int LastClaimReward { get; set; }
     private string? ErrorMessage { get; set; }
     private string? StatusMessage { get; set; }
     private LoginUserSummary? Session { get; set; }
     private StakingOverviewData? Overview { get; set; }
+    private DateTimeOffset CurrentClientTime { get; set; } = DateTimeOffset.UtcNow;
+    private CancellationTokenSource? _clockCancellation;
+    private Task? _clockTask;
+    private CancellationTokenSource? _claimBurstCancellation;
+
+    private int DailyYield => Math.Max(0, Overview?.TotalDailyReward ?? 0);
+    private int EstimatedMonthlyYield => DailyYield * 30;
+    private int EstimatedYearlyYield => DailyYield * 365;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        StartClockLoop();
+    }
+
+    private void StartClockLoop()
+    {
+        if (_clockTask is not null)
+        {
+            return;
+        }
+
+        _clockCancellation = new CancellationTokenSource();
+        _clockTask = ClockLoopAsync(_clockCancellation.Token);
+    }
+
+    private async Task ClockLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                CurrentClientTime = DateTimeOffset.UtcNow;
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
     }
 
     private async Task ReloadAsync()
@@ -196,6 +352,7 @@ else
         HasError = false;
         ErrorMessage = null;
         StatusMessage = null;
+        CurrentClientTime = DateTimeOffset.UtcNow;
         await InvokeAsync(StateHasChanged);
 
         try
@@ -267,9 +424,11 @@ else
             Overview = payload.Overview ?? Overview;
             Session = payload.User ?? Session;
             await SyncClientSessionAsync(payload.User);
+            CurrentClientTime = DateTimeOffset.UtcNow;
 
             if (payload.RewardGranted && payload.RewardedMn > 0)
             {
+                StartClaimBurst(payload.RewardedMn);
                 StatusMessage = $"+{payload.RewardedMn:N0} MN claimed from staking.";
             }
             else
@@ -288,6 +447,204 @@ else
             await InvokeAsync(StateHasChanged);
         }
     }
+
+    private void StartClaimBurst(int rewardedMn)
+    {
+        LastClaimReward = Math.Max(0, rewardedMn);
+        ClaimBurstActive = LastClaimReward > 0;
+        _claimBurstCancellation?.Cancel();
+        _claimBurstCancellation?.Dispose();
+
+        if (!ClaimBurstActive)
+        {
+            return;
+        }
+
+        _claimBurstCancellation = new CancellationTokenSource();
+        _ = HideClaimBurstAsync(_claimBurstCancellation.Token);
+    }
+
+    private async Task HideClaimBurstAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(1300), cancellationToken);
+            ClaimBurstActive = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
+    }
+
+    private static DateTimeOffset? ParseIsoTimestamp(string? isoUtc)
+    {
+        if (string.IsNullOrWhiteSpace(isoUtc))
+        {
+            return null;
+        }
+
+        return DateTimeOffset.TryParse(isoUtc, out var parsed)
+            ? parsed.ToUniversalTime()
+            : null;
+    }
+
+    private double GetClaimProgressPercent()
+    {
+        if (Overview is null)
+        {
+            return 0;
+        }
+
+        if (Overview.CanClaimToday)
+        {
+            return 100;
+        }
+
+        var nextClaim = ParseIsoTimestamp(Overview.NextClaimAt);
+        if (nextClaim is null)
+        {
+            return 0;
+        }
+
+        var start = nextClaim.Value - TimeSpan.FromDays(1);
+        var progress = (CurrentClientTime.ToUniversalTime() - start).TotalSeconds / TimeSpan.FromDays(1).TotalSeconds;
+        return Math.Clamp(progress * 100, 0, 100);
+    }
+
+    private string GetClaimRingStyle()
+    {
+        return $"--claim-progress:{GetClaimProgressPercent().ToString("0.##", CultureInfo.InvariantCulture)};";
+    }
+
+    private string GetClaimCountdownLabel()
+    {
+        if (Overview?.CanClaimToday == true)
+        {
+            return "Ready now";
+        }
+
+        var nextClaim = ParseIsoTimestamp(Overview?.NextClaimAt);
+        if (nextClaim is null)
+        {
+            return "No active timer";
+        }
+
+        var remaining = nextClaim.Value - CurrentClientTime.ToUniversalTime();
+        if (remaining <= TimeSpan.Zero)
+        {
+            return "Any moment now";
+        }
+
+        if (remaining.TotalDays >= 1)
+        {
+            return $"{(int)remaining.TotalDays}d {remaining.Hours}h";
+        }
+
+        if (remaining.TotalHours >= 1)
+        {
+            return $"{(int)remaining.TotalHours}h {remaining.Minutes}m";
+        }
+
+        return $"{Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s";
+    }
+
+    private IReadOnlyList<YieldSlice> GetYieldSlices()
+    {
+        if (Overview is null || Overview.StakedMaps.Count == 0)
+        {
+            return [];
+        }
+
+        var orderedMaps = Overview.StakedMaps
+            .Where(static map => map.DailyReward > 0)
+            .OrderByDescending(static map => map.DailyReward)
+            .ThenBy(static map => map.MapName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (orderedMaps.Count == 0)
+        {
+            return [];
+        }
+
+        var totalReward = orderedMaps.Sum(static map => map.DailyReward);
+        if (totalReward <= 0)
+        {
+            return [];
+        }
+
+        var slices = new List<YieldSlice>(orderedMaps.Count);
+        for (var index = 0; index < orderedMaps.Count; index += 1)
+        {
+            var map = orderedMaps[index];
+            var share = (map.DailyReward * 100.0) / totalReward;
+            slices.Add(new YieldSlice(map.MapName, map.DailyReward, share, YieldColors[index % YieldColors.Length]));
+        }
+
+        return slices;
+    }
+
+    private string GetYieldDonutStyle()
+    {
+        var slices = GetYieldSlices();
+        if (slices.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var segments = new List<string>(slices.Count + 1);
+        var cursor = 0.0;
+        foreach (var slice in slices)
+        {
+            var end = Math.Min(100, cursor + slice.Share);
+            segments.Add(
+                $"{slice.Color} {cursor.ToString("0.##", CultureInfo.InvariantCulture)}% {end.ToString("0.##", CultureInfo.InvariantCulture)}%"
+            );
+            cursor = end;
+        }
+
+        if (cursor < 100)
+        {
+            segments.Add($"rgba(74, 88, 117, 0.72) {cursor.ToString("0.##", CultureInfo.InvariantCulture)}% 100%");
+        }
+
+        return $"--yield-breakdown: conic-gradient({string.Join(", ", segments)});";
+    }
+
+    private double YieldEfficiencyPercent
+    {
+        get
+        {
+            if (Overview is null || Overview.StakedMaps.Count == 0)
+            {
+                return 0;
+            }
+
+            var count = Overview.StakedMaps.Count;
+            var countFactor = Math.Clamp(count / 10.0, 0, 1);
+
+            var scoreTotal = 0.0;
+            foreach (var map in Overview.StakedMaps)
+            {
+                var difficultyScore = Math.Clamp(map.BaseReward / 25.0, 0, 1);
+                var sizeScore = Math.Clamp(map.SizeMultiplier / 2.0, 0, 1);
+                scoreTotal += (difficultyScore * 0.6) + (sizeScore * 0.4);
+            }
+
+            var qualityAverage = scoreTotal / count;
+            var efficiency = ((qualityAverage * 0.8) + (countFactor * 0.2)) * 100;
+            return Math.Round(Math.Clamp(efficiency, 0, 100), 1);
+        }
+    }
+
+    private string YieldEfficiencyLabel =>
+        YieldEfficiencyPercent switch
+        {
+            >= 85 => "Elite",
+            >= 70 => "Strong",
+            >= 50 => "Balanced",
+            _ => "Needs tuning",
+        };
 
     private async Task SyncClientSessionAsync(LoginUserSummary? session)
     {
@@ -319,7 +676,54 @@ else
             "easy" => "easy",
             "medium" => "medium",
             "hard" => "hard",
+            "elite" => "elite",
             _ => "default",
         };
+    }
+
+    private static string FormatDifficultyLabel(string difficulty)
+    {
+        return difficulty?.Trim().ToLowerInvariant() switch
+        {
+            "easy" => "Easy",
+            "medium" => "Medium",
+            "hard" => "Hard",
+            "elite" => "Elite",
+            _ => "Unknown",
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_clockCancellation is not null)
+        {
+            try
+            {
+                await _clockCancellation.CancelAsync();
+            }
+            catch
+            {
+                // ignored
+            }
+
+            if (_clockTask is not null)
+            {
+                try
+                {
+                    await _clockTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // ignored
+                }
+            }
+
+            _clockCancellation.Dispose();
+            _clockCancellation = null;
+        }
+
+        _claimBurstCancellation?.Cancel();
+        _claimBurstCancellation?.Dispose();
+        _claimBurstCancellation = null;
     }
 }

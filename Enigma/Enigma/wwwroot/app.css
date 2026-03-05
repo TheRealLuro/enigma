@@ -7208,13 +7208,13 @@ h1:focus {
 
 .economy-grid {
     display: grid;
-    gap: 14px;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .economy-card {
     display: grid;
-    gap: 12px;
+    gap: 14px;
     border: 1px solid rgba(255, 255, 255, 0.07);
     background:
         linear-gradient(180deg, rgba(25, 30, 45, 0.8), rgba(12, 14, 20, 0.9));
@@ -7223,15 +7223,22 @@ h1:focus {
         0 10px 28px rgba(0, 0, 0, 0.35);
 }
 
+.economy-card h2 {
+    margin: 4px 0 0;
+    font-size: clamp(1.8rem, 2.8vw, 2.3rem);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+}
+
 .economy-card-span {
     grid-column: 1 / -1;
 }
 
 .economy-donut-layout {
     display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
-    gap: 16px;
-    align-items: center;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    align-items: start;
 }
 
 .economy-donut {
@@ -7292,7 +7299,7 @@ h1:focus {
 
 .economy-donut-legend {
     display: grid;
-    gap: 8px;
+    gap: 9px;
 }
 
 .economy-legend-row {
@@ -7309,7 +7316,8 @@ h1:focus {
 }
 
 .economy-legend-row strong {
-    white-space: nowrap;
+    white-space: normal;
+    text-align: right;
     color: #f3f9ff;
 }
 
@@ -7376,29 +7384,40 @@ h1:focus {
     transition: width 360ms ease;
 }
 
-.economy-flow-loop {
-    margin-top: 4px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    color: rgba(208, 222, 241, 0.85);
+.economy-market-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
 }
 
-.economy-flow-loop span {
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+.economy-market-item {
+    display: grid;
+    gap: 5px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     background: rgba(255, 255, 255, 0.03);
-    font-size: 0.82rem;
-    font-weight: 600;
+    padding: 11px 12px;
 }
 
-.economy-flow-loop .economy-flow-arrow {
-    border: none;
-    background: none;
-    padding: 0 2px;
-    color: rgba(156, 194, 248, 0.82);
+.economy-market-item span {
+    color: rgba(192, 210, 233, 0.74);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.economy-market-item strong {
+    color: #eef6ff;
+    font-size: 1.04rem;
+    line-height: 1.2;
+}
+
+.economy-market-item em {
+    color: rgba(159, 188, 227, 0.82);
+    font-style: normal;
+    font-size: 0.82rem;
+    line-height: 1.25;
 }
 
 .economy-health-grid {
@@ -7536,11 +7555,15 @@ h1:focus {
         grid-template-columns: 1fr;
     }
 
-    .economy-donut-layout {
+    .economy-grid {
         grid-template-columns: 1fr;
     }
 
     .economy-health-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .economy-market-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -7556,5 +7579,475 @@ h1:focus {
 
     .economy-card {
         padding: 18px;
+    }
+}
+
+/* Staking Tab Refresh */
+.staking-shell {
+    gap: 22px;
+}
+
+.staking-banner {
+    border: 1px solid rgba(93, 184, 255, 0.26);
+    background:
+        radial-gradient(circle at 9% 0%, rgba(95, 176, 255, 0.14), transparent 52%),
+        linear-gradient(120deg, rgba(25, 42, 74, 0.82), rgba(16, 22, 36, 0.94));
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.02),
+        0 12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.staking-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.staking-kpi-card {
+    border-radius: 18px;
+    padding: 16px 18px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background:
+        linear-gradient(180deg, rgba(16, 23, 39, 0.9), rgba(11, 16, 28, 0.92));
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.02),
+        0 8px 22px rgba(0, 0, 0, 0.3);
+    display: grid;
+    gap: 6px;
+}
+
+.staking-kpi-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(178, 200, 232, 0.76);
+    font-weight: 700;
+}
+
+.staking-kpi-value {
+    font-size: clamp(1.15rem, 2vw, 1.55rem);
+    font-weight: 800;
+    color: #eef7ff;
+    letter-spacing: -0.02em;
+    animation: staking-kpi-rise 280ms ease-out;
+}
+
+@keyframes staking-kpi-rise {
+    from {
+        opacity: 0.35;
+        transform: translateY(3px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.staking-forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.staking-forecast-card {
+    border-radius: 14px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    display: grid;
+    gap: 6px;
+}
+
+.staking-forecast-card span {
+    color: rgba(196, 214, 237, 0.76);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.staking-forecast-card strong {
+    color: #f2f9ff;
+    font-size: 1.03rem;
+}
+
+.staking-forecast-card em {
+    color: rgba(161, 217, 255, 0.92);
+    font-style: normal;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.staking-claim-card {
+    position: relative;
+    border-radius: 20px;
+    border: 1px solid rgba(120, 176, 255, 0.22);
+    background:
+        linear-gradient(180deg, rgba(18, 25, 39, 0.82), rgba(12, 17, 28, 0.92));
+    padding: 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 14px;
+    overflow: hidden;
+}
+
+.staking-claim-card.claim-success {
+    box-shadow:
+        0 0 0 1px rgba(124, 214, 174, 0.24),
+        0 12px 30px rgba(18, 128, 86, 0.26);
+}
+
+.staking-claim-copy p {
+    margin: 6px 0 0;
+    color: rgba(224, 231, 241, 0.78);
+}
+
+.staking-claim-ring-wrap {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+}
+
+.staking-claim-ring {
+    --claim-progress: 0;
+    width: 116px;
+    height: 116px;
+    border-radius: 999px;
+    background:
+        conic-gradient(
+            #57b0ff 0 calc(var(--claim-progress) * 1%),
+            rgba(255, 255, 255, 0.12) calc(var(--claim-progress) * 1%) 100%
+        );
+    position: relative;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+
+.staking-claim-ring-core {
+    position: absolute;
+    inset: 14px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(11, 17, 29, 0.95), rgba(15, 22, 36, 0.94));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    display: grid;
+    place-content: center;
+    text-align: center;
+    gap: 3px;
+}
+
+.staking-claim-ring-core strong {
+    color: #f0f7ff;
+    font-size: 1.12rem;
+    line-height: 1;
+}
+
+.staking-claim-ring-core span {
+    color: rgba(182, 206, 235, 0.78);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+}
+
+.staking-claim-countdown {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+}
+
+.staking-claim-countdown strong {
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(177, 201, 232, 0.82);
+}
+
+.staking-claim-countdown span {
+    color: #ebf5ff;
+    font-weight: 700;
+}
+
+.staking-claim-burst {
+    position: absolute;
+    right: 16px;
+    top: 10px;
+    color: #8df0b7;
+    font-weight: 800;
+    font-size: 0.88rem;
+    animation: staking-claim-pop 1.2s ease-out;
+    pointer-events: none;
+}
+
+@keyframes staking-claim-pop {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.92);
+    }
+    20% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 0.92;
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-12px) scale(1.02);
+    }
+}
+
+.staking-breakdown-panel {
+    display: grid;
+    gap: 12px;
+}
+
+.staking-breakdown-layout {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+}
+
+.staking-breakdown-donut {
+    --yield-breakdown: conic-gradient(#5ba8ff 0 100%);
+    width: 180px;
+    height: 180px;
+    margin-inline: auto;
+    border-radius: 999px;
+    background: var(--yield-breakdown);
+    position: relative;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+        0 12px 28px rgba(0, 0, 0, 0.32);
+}
+
+.staking-breakdown-donut-core {
+    position: absolute;
+    inset: 18px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(10, 15, 25, 0.95), rgba(14, 20, 31, 0.94));
+    display: grid;
+    place-content: center;
+    text-align: center;
+    gap: 4px;
+}
+
+.staking-breakdown-donut-core span {
+    font-size: 0.74rem;
+    color: rgba(180, 203, 232, 0.74);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.staking-breakdown-donut-core strong {
+    color: #f1f8ff;
+    font-size: 1.06rem;
+    line-height: 1.25;
+}
+
+.staking-breakdown-legend {
+    display: grid;
+    gap: 8px;
+}
+
+.staking-breakdown-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.03);
+    padding: 9px 10px;
+    color: rgba(215, 227, 244, 0.9);
+    font-size: 0.88rem;
+}
+
+.staking-breakdown-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.staking-breakdown-map {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.staking-map-card {
+    border-radius: 16px;
+    border: 1px solid rgba(120, 176, 255, 0.18);
+    background: rgba(16, 23, 36, 0.9);
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+}
+
+.staking-map-card.muted {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.staking-map-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.staking-map-card-head h3 {
+    margin: 0;
+    font-size: 1.06rem;
+    line-height: 1.2;
+}
+
+.staking-map-rows {
+    display: grid;
+    gap: 6px;
+}
+
+.staking-map-rows > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: rgba(212, 224, 241, 0.84);
+    font-size: 0.88rem;
+}
+
+.staking-map-rows > div > span {
+    color: rgba(180, 199, 224, 0.74);
+}
+
+.staking-map-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.staking-yield-label {
+    display: block;
+    font-size: 0.76rem;
+    color: rgba(180, 200, 227, 0.74);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 2px;
+}
+
+.staking-yield-value {
+    color: #7dd3fc;
+    font-weight: 800;
+    font-size: 1.08rem;
+    text-shadow: 0 0 18px rgba(125, 211, 252, 0.24);
+}
+
+.staking-empty-state {
+    border-radius: 14px;
+    border: 1px dashed rgba(155, 189, 238, 0.28);
+    background: rgba(255, 255, 255, 0.02);
+    padding: 18px;
+    display: grid;
+    gap: 7px;
+    justify-items: start;
+}
+
+.staking-empty-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 54px;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(127, 176, 245, 0.42);
+    color: rgba(185, 218, 255, 0.92);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    font-weight: 800;
+}
+
+.staking-empty-state p {
+    margin: 0;
+    color: rgba(201, 215, 236, 0.74);
+}
+
+.staking-faq-collapsible {
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+}
+
+.staking-faq-collapsible summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 14px 16px;
+    font-weight: 700;
+    color: rgba(228, 239, 255, 0.92);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.staking-faq-collapsible summary::-webkit-details-marker {
+    display: none;
+}
+
+.staking-faq-collapsible summary::before {
+    content: ">";
+    transition: transform 0.18s ease;
+    color: rgba(152, 191, 248, 0.94);
+}
+
+.staking-faq-collapsible[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.staking-faq-collapsible .staking-faq-list {
+    margin-left: 16px;
+    margin-right: 16px;
+    margin-top: 2px;
+    margin-bottom: 12px;
+}
+
+.difficulty-elite {
+    background: rgba(168, 85, 247, 0.22);
+    color: #ddb8ff;
+}
+
+@media (max-width: 1200px) {
+    .staking-forecast-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .staking-breakdown-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 1100px) {
+    .staking-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .staking-claim-card {
+        grid-template-columns: 1fr;
+        justify-items: start;
+    }
+
+    .staking-claim-ring-wrap {
+        justify-items: start;
+    }
+}
+
+@media (max-width: 720px) {
+    .staking-forecast-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .staking-map-footer {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }

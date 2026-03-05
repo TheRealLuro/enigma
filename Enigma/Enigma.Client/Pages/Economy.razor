@@ -186,24 +186,28 @@ else
 
                 <article class="panel profile-release-panel economy-card">
                     <span class="profile-eyebrow">Marketplace + Voting</span>
-                    <h2>Economic Flow</h2>
-                    <div class="economy-stat-line"><span>Listing value total</span><strong>@((Overview?.MarketplaceListingValueTotal ?? 0).ToString("N0")) MN</strong></div>
-                    <div class="economy-stat-line"><span>Avg listing price</span><strong>@((Overview?.MarketplaceListingPriceAvg ?? 0).ToString("N2")) MN</strong></div>
-                    <div class="economy-stat-line"><span>Voting status</span><strong>@(Overview?.GovernanceVotingOpen == true ? "Open" : "Closed")</strong></div>
-                    <div class="economy-stat-line"><span>MN spent in voting</span><strong>@((Overview?.GovernanceTotalMnSpent ?? 0).ToString("N0")) MN</strong></div>
-                    @if (!string.IsNullOrWhiteSpace(Overview?.GovernanceActiveTitle))
-                    {
-                        <p class="economy-card-footnote">Active vote: @Overview.GovernanceActiveTitle</p>
-                    }
-
-                    <div class="economy-flow-loop">
-                        <span>Players</span>
-                        <span class="economy-flow-arrow">→</span>
-                        <span>Marketplace</span>
-                        <span class="economy-flow-arrow">→</span>
-                        <span>Bank</span>
-                        <span class="economy-flow-arrow">→</span>
-                        <span>Rewards</span>
+                    <h2>Market Signals</h2>
+                    <div class="economy-market-grid">
+                        <div class="economy-market-item">
+                            <span>Listing value total</span>
+                            <strong>@((Overview?.MarketplaceListingValueTotal ?? 0).ToString("N0")) MN</strong>
+                            <em>@GetListingValueShareOfSupply().ToString("0.##")% of known MN supply</em>
+                        </div>
+                        <div class="economy-market-item">
+                            <span>Average listing ticket</span>
+                            <strong>@((Overview?.MarketplaceListingPriceAvg ?? 0).ToString("N2")) MN</strong>
+                            <em>Across @((Overview?.MapsListed ?? 0).ToString("N0")) live listing(s)</em>
+                        </div>
+                        <div class="economy-market-item">
+                            <span>Governance spend total</span>
+                            <strong>@((Overview?.GovernanceTotalMnSpent ?? 0).ToString("N0")) MN</strong>
+                            <em>@GetGovernanceSpendLabel()</em>
+                        </div>
+                        <div class="economy-market-item">
+                            <span>Council status</span>
+                            <strong>@(Overview?.GovernanceVotingOpen == true ? "Open" : "Closed")</strong>
+                            <em>@GetGovernanceSessionLabel()</em>
+                        </div>
                     </div>
                 </article>
 
@@ -244,7 +248,7 @@ else
                         <li>MN circulation shows player-held balance and bank-held reserve.</li>
                         <li>Map circulation shows listed, staked, and currently unlisted maps.</li>
                         <li>Activity uses two windows: online now and active in the last 24 hours.</li>
-                        <li>Economic flow tracks listing value, average listing price, and governance spend.</li>
+                        <li>Market signals track listing value, average listing price, and governance spend.</li>
                         <li>Use Marketplace, Staking, and Voting subtabs to take direct action from here.</li>
                     </ol>
                     @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))
@@ -460,6 +464,54 @@ else
         return Math.Clamp((Overview?.UsersActive24h ?? 0) * 100.0 / total, 0, 100);
     }
 
+    private double GetListingValueShareOfSupply()
+    {
+        var listingValue = Math.Max(0L, Overview?.MarketplaceListingValueTotal ?? 0L);
+        var totalSupply = Math.Max(0L, Overview?.MnTotalKnown ?? 0L);
+        if (totalSupply <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp((listingValue * 100.0) / totalSupply, 0, 100);
+    }
+
+    private string GetGovernanceSpendLabel()
+    {
+        var mnSpent = Math.Max(0L, Overview?.GovernanceTotalMnSpent ?? 0L);
+        if (mnSpent <= 0)
+        {
+            return "No MN committed yet";
+        }
+
+        var supplyShare = GetGovernanceSpendShareOfSupply();
+        return $"{supplyShare.ToString("0.##")}% of known MN supply";
+    }
+
+    private double GetGovernanceSpendShareOfSupply()
+    {
+        var mnSpent = Math.Max(0L, Overview?.GovernanceTotalMnSpent ?? 0L);
+        var totalSupply = Math.Max(0L, Overview?.MnTotalKnown ?? 0L);
+        if (mnSpent <= 0 || totalSupply <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp((mnSpent * 100.0) / totalSupply, 0, 100);
+    }
+
+    private string GetGovernanceSessionLabel()
+    {
+        if (Overview?.GovernanceVotingOpen == true && !string.IsNullOrWhiteSpace(Overview.GovernanceActiveTitle))
+        {
+            return $"Live: {Overview.GovernanceActiveTitle}";
+        }
+
+        return Overview?.GovernanceVotingOpen == true
+            ? "Council meeting is active"
+            : "Come back when The council is meeting.";
+    }
+
     private string GetLiquidityHealthLabel()
     {
         var listedPercent = Math.Max(0, Overview?.MapsListedPercent ?? 0);
@@ -519,3 +571,4 @@ else
         };
     }
 }
+

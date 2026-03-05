@@ -111,6 +111,7 @@ def default_user_fields(username: str | None = None, email: str | None = None) -
         "last_username_change_at": None,
         "last_staking_reward_at": None,
         "staked_map_ids": [],
+        "staked_map_lock_until": {},
         "owned_cosmetics": [],
         "item_counts": {},
     }
@@ -177,6 +178,26 @@ def _merge_map_docs(primary: Iterable[dict[str, Any]], secondary: Iterable[dict[
         merged.append(document)
 
     return merged
+
+
+def _count_owned_staked_maps(user: dict[str, Any], owned_map_docs: Iterable[dict[str, Any]]) -> int:
+    staked_ids = {
+        str(map_id).strip()
+        for map_id in list(user.get("staked_map_ids", []) or [])
+        if str(map_id).strip()
+    }
+    if not staked_ids:
+        return 0
+
+    owned_ids = {
+        str(map_doc.get("_id") or "").strip()
+        for map_doc in owned_map_docs
+        if str(map_doc.get("_id") or "").strip()
+    }
+    if not owned_ids:
+        return 0
+
+    return len(staked_ids.intersection(owned_ids))
 
 
 def resolve_user_maps(user: dict[str, Any], maps_collection) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -261,6 +282,7 @@ def serialize_pending_multiplayer_invites(username: str | None) -> list[dict[str
 def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, Any]:
     normalized_user = apply_user_defaults(user)
     maps_owned_docs, maps_discovered_docs = resolve_user_maps(normalized_user, maps_collection)
+    staked_maps_count = _count_owned_staked_maps(normalized_user, maps_owned_docs)
 
     last_login_at = normalized_user.get("last_login_at")
     if isinstance(last_login_at, datetime):
@@ -304,7 +326,7 @@ def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, A
         "maps_lost": normalize_int(normalized_user.get("maps_lost")),
         "owned_cosmetics": list(normalized_user.get("owned_cosmetics", [])),
         "item_counts": normalized_user.get("item_counts", {}),
-        "staked_maps_count": len({str(map_id).strip() for map_id in list(normalized_user.get("staked_map_ids", []) or []) if str(map_id).strip()}),
+        "staked_maps_count": staked_maps_count,
         "last_staking_reward_at": normalized_user.get("last_staking_reward_at"),
         "pending_multiplayer_invites": serialize_pending_multiplayer_invites(normalized_user.get("username")),
         "last_login_at": last_login_value,
@@ -328,6 +350,7 @@ def serialize_public_profile(
 ) -> dict[str, Any]:
     normalized_user = apply_user_defaults(user)
     maps_owned_docs, maps_discovered_docs = resolve_user_maps(normalized_user, maps_collection)
+    staked_maps_count = _count_owned_staked_maps(normalized_user, maps_owned_docs)
     is_self = (viewer_username or "").strip().lower() == str(normalized_user.get("username", "")).lower()
     friends = list(normalized_user.get("friends", [])) if is_self else []
     friend_requests = list(normalized_user.get("friend_requests", [])) if is_self else []
@@ -365,7 +388,7 @@ def serialize_public_profile(
         "maps_owned": serialize_user_map_documents(maps_owned_docs),
         "maps_discovered": serialize_user_map_documents(maps_discovered_docs),
         "owned_cosmetics": list(normalized_user.get("owned_cosmetics", [])) if is_self else [],
-        "staked_maps_count": len({str(map_id).strip() for map_id in list(normalized_user.get("staked_map_ids", []) or []) if str(map_id).strip()}) if is_self else 0,
+        "staked_maps_count": staked_maps_count,
         "last_staking_reward_at": normalized_user.get("last_staking_reward_at") if is_self else None,
         "owned_maps_count": len(serialize_user_map_documents(maps_owned_docs)),
         "discovered_maps_count": len(serialize_user_map_documents(maps_discovered_docs)),

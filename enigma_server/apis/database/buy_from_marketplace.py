@@ -47,13 +47,20 @@ def buy_from(request: Request, map_name: str, buyer: str):
                     raise HTTPException(status_code=404, detail="Seller not found")
                 if not map_doc:
                     raise HTTPException(status_code=404, detail="Map not found")
+                map_id = map_doc["_id"]
+                staked_map_ids = {
+                    str(value or "").strip()
+                    for value in list(seller.get("staked_map_ids", []) or [])
+                    if str(value or "").strip()
+                }
+                if str(map_id) in staked_map_ids:
+                    raise HTTPException(status_code=409, detail="This map is staked and cannot be sold right now")
 
                 cost = int(listing.get("price", 0) or 0)
                 if cost < 0:
                     raise HTTPException(status_code=400, detail="Listing price is invalid")
 
                 split = compute_marketplace_sale_split(cost)
-                map_id = map_doc["_id"]
                 last_bought = datetime.now(timezone.utc)
                 buyer_discovered_ids = {str(existing_id) for existing_id in buyer_user.get("maps_discovered", [])}
                 buyer_discovered_map = str(map_id) in buyer_discovered_ids
