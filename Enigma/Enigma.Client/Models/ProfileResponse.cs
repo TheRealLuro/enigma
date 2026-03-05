@@ -52,6 +52,9 @@ public class ProfileUserData
     [JsonPropertyName("discovered_maps_count")]
     public int DiscoveredMapsCount { get; set; }
 
+    [JsonPropertyName("is_online")]
+    public bool IsOnline { get; set; }
+
     [JsonPropertyName("last_username_change_at")]
     public string? LastUsernameChangeAt { get; set; }
 

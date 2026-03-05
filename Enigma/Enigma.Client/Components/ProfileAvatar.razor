@@ -16,6 +16,13 @@
     {
         <span class="profile-avatar-fallback">@FallbackText</span>
     }
+
+    @if (IsOnline.HasValue)
+    {
+        <span class="profile-avatar-presence @(IsOnline.Value ? "online" : "offline")"
+              title="@(IsOnline.Value ? "Online" : "Offline")"
+              aria-label="@(IsOnline.Value ? "Online" : "Offline")"></span>
+    }
 </div>
 
 @code {
@@ -23,6 +30,7 @@
     [Parameter] public string AltText { get; set; } = "Profile picture";
     [Parameter] public string FallbackText { get; set; } = "??";
     [Parameter] public string Class { get; set; } = string.Empty;
+    [Parameter] public bool? IsOnline { get; set; }
 
     private bool _imageFailed;
     private string? _lastImageUrl;

@@ -24,6 +24,7 @@ from .user_utils import (
     normalize_email,
     resolve_user_maps,
     serialize_session_user,
+    touch_user_presence,
 )
 
 router = APIRouter(prefix="/database/users")
@@ -336,6 +337,7 @@ def _serialize_inventory_items(user: dict[str, Any]) -> list[dict[str, Any]]:
 @router.get("/account")
 @limiter.limit("30/minute")
 def get_account(request: Request, username: str):
+    touch_user_presence(users_collection, username)
     user = _sync_user(username)
     return {"status": "success", "user": serialize_session_user(user, maps_collection)}
 

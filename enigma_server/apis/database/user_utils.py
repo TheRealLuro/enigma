@@ -9,6 +9,8 @@ from .redis_store import load_user_invites
 SYSTEM_BANK_USERNAME = "enigma_bank"
 TUTORIAL_VERSION = 1
 USERNAME_CHANGE_COOLDOWN_DAYS = 14
+ONLINE_STATUS_WINDOW_SECONDS = 120
+PRESENCE_TOUCH_INTERVAL_SECONDS = 20
 DEFAULT_PROFILE_IMAGE_CROP = {
     "x": 11.0,
     "y": 17.0,
@@ -32,6 +34,61 @@ def normalize_email(value: str | None) -> str:
     return (value or "").strip().lower()
 
 
+def _parse_datetime_utc(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        trimmed = value.strip()
+        if not trimmed:
+            return None
+        try:
+            parsed = datetime.fromisoformat(trimmed.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+
+    return parsed.astimezone(timezone.utc)
+
+
+def is_user_online(user: dict[str, Any], now: datetime | None = None) -> bool:
+    last_seen_at = _parse_datetime_utc(user.get("last_seen_at"))
+    if last_seen_at is None:
+        return False
+
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+
+    return (current - last_seen_at) <= timedelta(seconds=ONLINE_STATUS_WINDOW_SECONDS)
+
+
+def touch_user_presence(users_collection, username: str, min_interval_seconds: int = PRESENCE_TOUCH_INTERVAL_SECONDS) -> None:
+    normalized_username = str(username or "").strip()
+    if not normalized_username:
+        return
+
+    now = datetime.now(timezone.utc)
+    min_interval = max(0, int(min_interval_seconds or 0))
+    stale_before = now - timedelta(seconds=min_interval)
+
+    users_collection.update_one(
+        {
+            "username": normalized_username,
+            "$or": [
+                {"last_seen_at": {"$exists": False}},
+                {"last_seen_at": None},
+                {"last_seen_at": {"$lt": stale_before}},
+                {"last_seen_at": {"$type": "string"}},
+            ],
+        },
+        {"$set": {"last_seen_at": now}},
+    )
+
+
 def default_tutorial_state() -> dict[str, Any]:
     return {
         "version": TUTORIAL_VERSION,
@@ -50,6 +107,7 @@ def default_user_fields(username: str | None = None, email: str | None = None) -
         "allow_public_profile": not is_system_account,
         "email_normalized": normalize_email(email),
         "last_login_at": datetime.now(timezone.utc),
+        "last_seen_at": None,
         "last_username_change_at": None,
         "owned_cosmetics": [],
         "item_counts": {},
@@ -246,6 +304,7 @@ def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, A
         "item_counts": normalized_user.get("item_counts", {}),
         "pending_multiplayer_invites": serialize_pending_multiplayer_invites(normalized_user.get("username")),
         "last_login_at": last_login_value,
+        "is_online": is_user_online(normalized_user),
         "last_username_change_at": last_username_change_value,
         "username_change_cooldown_days": USERNAME_CHANGE_COOLDOWN_DAYS,
         "next_username_change_at": next_username_change_value,
@@ -304,6 +363,7 @@ def serialize_public_profile(
         "owned_cosmetics": list(normalized_user.get("owned_cosmetics", [])) if is_self else [],
         "owned_maps_count": len(serialize_user_map_documents(maps_owned_docs)),
         "discovered_maps_count": len(serialize_user_map_documents(maps_discovered_docs)),
+        "is_online": is_user_online(normalized_user),
         "last_username_change_at": last_username_change_value if is_self else None,
         "username_change_cooldown_days": USERNAME_CHANGE_COOLDOWN_DAYS if is_self else 0,
         "next_username_change_at": next_username_change_value if is_self else None,

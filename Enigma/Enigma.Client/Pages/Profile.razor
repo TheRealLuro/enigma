@@ -30,7 +30,7 @@ else
     <div class="content profile-shell profile-release-shell">
         <section class="profile-banner profile-release-banner" data-tour-id="profile-banner">
             <div class="profile-banner-main">
-                <ProfileAvatar Image="@ProfileData.ProfileImage" AltText="@($"{ProfileData.Username} profile picture")" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-hero" />
+                <ProfileAvatar Image="@ProfileData.ProfileImage" AltText="@($"{ProfileData.Username} profile picture")" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-hero" IsOnline="@ProfileData.IsOnline" />
                 <div class="profile-banner-copy">
                     <h1>@ProfileData.Username</h1>
                     <div class="profile-banner-tags">
@@ -92,7 +92,7 @@ else
         {
             <div class="profile-layout profile-release-grid">
                 <section class="panel profile-identity-card profile-release-panel">
-                    <ProfileAvatar Image="@ProfileData.ProfileImage" AltText="@($"{ProfileData.Username} profile picture")" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-large-frame" />
+                    <ProfileAvatar Image="@ProfileData.ProfileImage" AltText="@($"{ProfileData.Username} profile picture")" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-large-frame" IsOnline="@ProfileData.IsOnline" />
                     <div>
                         <span class="profile-eyebrow">Identity</span>
                         <h2>@ProfileData.Username</h2>
@@ -359,7 +359,7 @@ else
                     <div class="profile-avatar-settings-grid">
                         <div class="profile-avatar-preview-card">
                             <span class="catalog-card-kicker">Preview</span>
-                            <ProfileAvatar Image="@AvatarPreview" AltText="Profile avatar preview" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-preview" />
+                            <ProfileAvatar Image="@AvatarPreview" AltText="Profile avatar preview" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-preview" IsOnline="@ProfileData.IsOnline" />
                             @if (!string.IsNullOrWhiteSpace(AvatarMapName))
                             {
                                 <strong>@AvatarMapName</strong>

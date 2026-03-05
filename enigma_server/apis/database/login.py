@@ -54,7 +54,7 @@ def login_user(request: Request, username: str | None = None, passwd: str | None
     if isinstance(last_login_at, datetime) and last_login_at.tzinfo is None:
         last_login_at = last_login_at.replace(tzinfo=timezone.utc)
 
-    update: dict = {"$set": {"last_login_at": now}}
+    update: dict = {"$set": {"last_login_at": now, "last_seen_at": now}}
     rewarded = False
 
     if last_login_at is None or last_login_at.astimezone(timezone.utc).date() < now.date():

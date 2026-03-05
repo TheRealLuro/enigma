@@ -54,4 +54,7 @@ public class PlayerLeaderboardEntry
 
     [JsonPropertyName("profile_image")]
     public ProfileImageState? ProfileImage { get; set; }
+
+    [JsonPropertyName("is_online")]
+    public bool IsOnline { get; set; }
 }

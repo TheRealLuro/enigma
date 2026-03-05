@@ -75,7 +75,7 @@
                 {
                     <article class="podium-card player-podium-card rank-@entry.Rank">
                         <span class="podium-rank">#@entry.Rank</span>
-                        <ProfileAvatar Image="@entry.Player.ProfileImage" AltText="@($"{entry.Player.Username} profile picture")" FallbackText="@GetInitials(entry.Player.Username)" Class="player-podium-avatar-frame" />
+                        <ProfileAvatar Image="@entry.Player.ProfileImage" AltText="@($"{entry.Player.Username} profile picture")" FallbackText="@GetInitials(entry.Player.Username)" Class="player-podium-avatar-frame" IsOnline="@entry.Player.IsOnline" />
                         <button class="map-link-button podium-map-title" type="button" @onclick="() => GoToProfile(entry.Player.Username)">
                             @entry.Player.Username
                         </button>
@@ -154,7 +154,7 @@
                                     <td><span class="leaderboard-rank-pill">#@entry.Rank</span></td>
                                     <td>
                                         <div class="leaderboard-player-cell">
-                                            <ProfileAvatar Image="@entry.Player.ProfileImage" AltText="@($"{entry.Player.Username} profile picture")" FallbackText="@GetInitials(entry.Player.Username)" Class="player-table-avatar-frame" />
+                                            <ProfileAvatar Image="@entry.Player.ProfileImage" AltText="@($"{entry.Player.Username} profile picture")" FallbackText="@GetInitials(entry.Player.Username)" Class="player-table-avatar-frame" IsOnline="@entry.Player.IsOnline" />
                                             <div class="leaderboard-map-copy">
                                                 <button class="map-link-button leaderboard-map-title" type="button" @onclick="() => GoToProfile(entry.Player.Username)">
                                                     @entry.Player.Username

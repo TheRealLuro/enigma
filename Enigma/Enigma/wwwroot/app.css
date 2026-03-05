@@ -4878,6 +4878,28 @@ h1:focus {
     border-radius: 28px;
 }
 
+.profile-avatar-presence {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 4;
+}
+
+.profile-avatar-presence.online {
+    background: #33d17a;
+    border: 2px solid rgba(7, 15, 25, 0.92);
+    box-shadow: 0 0 0 2px rgba(51, 209, 122, 0.2);
+}
+
+.profile-avatar-presence.offline {
+    background: rgba(8, 14, 24, 0.85);
+    border: 2px solid rgba(200, 208, 224, 0.68);
+}
+
 .profile-avatar-crop-shell {
     position: relative;
     width: 100%;

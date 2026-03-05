@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from .db import users_collection
 from .map_utils import normalize_int
-from .user_utils import apply_user_defaults
+from .user_utils import apply_user_defaults, is_user_online
 
 router = APIRouter(prefix="/database/leaderboard")
 
@@ -46,6 +46,7 @@ def get_players_leaderboard(
         "is_system_account": 1,
         "allow_public_profile": 1,
         "profile_image": 1,
+        "last_seen_at": 1,
     }):
         user = apply_user_defaults(user)
         if user.get("is_system_account") or not user.get("allow_public_profile", True):
@@ -71,6 +72,7 @@ def get_players_leaderboard(
                 "maps_played": maps_played,
                 "win_rate": win_rate,
                 "profile_image": user.get("profile_image"),
+                "is_online": is_user_online(user),
             }
         )
 

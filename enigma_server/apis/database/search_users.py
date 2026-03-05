@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query, Request
 from main import limiter
 
 from .db import users_collection
-from .user_utils import SYSTEM_BANK_USERNAME
+from .user_utils import SYSTEM_BANK_USERNAME, is_user_online
 
 router = APIRouter(prefix="/database/users")
 
@@ -38,6 +38,7 @@ def search_users(
                 "maps_owned": 1,
                 "maps_discovered": 1,
                 "profile_image": 1,
+                "last_seen_at": 1,
             },
         ).limit(limit * 3)
     )
@@ -64,6 +65,7 @@ def search_users(
                 "maps_completed": int(user.get("maps_completed", 0) or 0),
                 "maps_lost": int(user.get("maps_lost", 0) or 0),
                 "profile_image": user.get("profile_image"),
+                "is_online": is_user_online(user),
             }
             for user in docs[:limit]
             if user.get("username") and user.get("username") != SYSTEM_BANK_USERNAME

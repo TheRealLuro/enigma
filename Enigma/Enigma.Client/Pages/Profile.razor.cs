@@ -628,7 +628,8 @@ public partial class Profile : IAsyncDisposable
         var requestsChanged = !SetEqualsIgnoreCase(ProfileData.FriendRequests, latestSession.FriendRequests);
         var nuggetsChanged = ProfileData.MazeNuggets != latestSession.MazeNuggets;
         var profileImageChanged = !Equals(ProfileData.ProfileImage?.ImageUrl, latestSession.ProfileImage?.ImageUrl);
-        var hasChanges = friendsChanged || requestsChanged || nuggetsChanged || profileImageChanged;
+        var onlineChanged = ProfileData.IsOnline != latestSession.IsOnline;
+        var hasChanges = friendsChanged || requestsChanged || nuggetsChanged || profileImageChanged || onlineChanged;
         Session = latestSession;
 
         if (!hasChanges)
@@ -642,6 +643,7 @@ public partial class Profile : IAsyncDisposable
         ProfileData.ProfileImage = latestSession.ProfileImage;
         ProfileData.OwnedMapsCount = latestSession.OwnedMapsCount;
         ProfileData.DiscoveredMapsCount = latestSession.DiscoveredMapsCount;
+        ProfileData.IsOnline = latestSession.IsOnline;
 
         await JS.InvokeVoidAsync("enigmaGame.refreshUserSession", latestSession);
         await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new Enigma.Client.Models.Gameplay.PlayerIdentity { Username = latestSession.Username }, false);
