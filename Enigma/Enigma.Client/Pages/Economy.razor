@@ -1,4 +1,5 @@
 @page "/economy"
+@using System.Globalization
 @using Enigma.Client.Models
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @inject NavigationManager NavigationManager
@@ -34,9 +35,10 @@ else
                 <p>Monitor MN circulation, map circulation, player activity, and governance spend in one place.</p>
             </div>
             <div class="economy-banner-meta">
-                <span class="profile-chip">@((Overview?.MnTotalKnown ?? 0).ToString("N0")) MN known total</span>
-                <span class="profile-chip">@((Overview?.MapsTotal ?? 0).ToString("N0")) maps tracked</span>
-                <span class="profile-chip">@((Overview?.UsersOnlineNow ?? 0).ToString("N0")) online now</span>
+                @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))
+                {
+                    <span class="profile-chip">Snapshot @FormatTimestamp(Overview.GeneratedAt)</span>
+                }
                 <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="ReloadAsync">
                     @(IsLoading ? "Refreshing..." : "Refresh")
                 </button>
@@ -57,21 +59,99 @@ else
 
         @if (ActiveTab == OverviewTab)
         {
+            <section class="economy-kpi-grid">
+                <article class="economy-kpi-card">
+                    <span class="economy-kpi-label">Total MN Supply</span>
+                    <strong class="economy-kpi-value" @key="Overview?.GeneratedAt">@((Overview?.MnTotalKnown ?? 0).ToString("N0")) MN</strong>
+                    <span class="economy-kpi-sub">Known wallets plus bank reserve</span>
+                </article>
+                <article class="economy-kpi-card">
+                    <span class="economy-kpi-label">Maps Tracked</span>
+                    <strong class="economy-kpi-value" @key="Overview?.GeneratedAt">@((Overview?.MapsTotal ?? 0).ToString("N0"))</strong>
+                    <span class="economy-kpi-sub">@((Overview?.MapsListed ?? 0).ToString("N0")) listed | @((Overview?.MapsStaked ?? 0).ToString("N0")) staked</span>
+                </article>
+                <article class="economy-kpi-card">
+                    <span class="economy-kpi-label">Players Online</span>
+                    <strong class="economy-kpi-value" @key="Overview?.GeneratedAt">@((Overview?.UsersOnlineNow ?? 0).ToString("N0"))</strong>
+                    <span class="economy-kpi-sub">@((Overview?.UsersActive24h ?? 0).ToString("N0")) active in 24h</span>
+                </article>
+            </section>
+
             <section class="economy-grid">
                 <article class="panel profile-release-panel economy-card">
                     <span class="profile-eyebrow">Maze Nuggets</span>
                     <h2>MN Circulation</h2>
-                    <div class="economy-stat-line"><span>Player wallets</span><strong>@((Overview?.MnPlayerWalletsTotal ?? 0).ToString("N0")) MN</strong></div>
-                    <div class="economy-stat-line"><span>Bank reserve</span><strong>@((Overview?.MnBankReserveTotal ?? 0).ToString("N0")) MN</strong></div>
-                    <div class="economy-stat-line"><span>Total known</span><strong>@((Overview?.MnTotalKnown ?? 0).ToString("N0")) MN</strong></div>
+                    <div class="economy-donut-layout">
+                        <div class="economy-donut economy-donut-mn" style="@GetMnDonutStyle()">
+                            <div class="economy-donut-core">
+                                <span>Total</span>
+                                <strong>@((Overview?.MnTotalKnown ?? 0).ToString("N0"))</strong>
+                            </div>
+                        </div>
+                        <div class="economy-donut-legend">
+                            <div class="economy-legend-row">
+                                <span class="economy-legend-dot wallets"></span>
+                                <span>Player wallets</span>
+                                <strong>@((Overview?.MnPlayerWalletsTotal ?? 0).ToString("N0")) MN (@GetMnWalletShare().ToString("0.##")%)</strong>
+                            </div>
+                            <div class="economy-legend-row">
+                                <span class="economy-legend-dot bank"></span>
+                                <span>Enigma bank</span>
+                                <strong>@((Overview?.MnBankReserveTotal ?? 0).ToString("N0")) MN (@GetMnBankShare().ToString("0.##")%)</strong>
+                            </div>
+                        </div>
+                    </div>
                 </article>
 
                 <article class="panel profile-release-panel economy-card">
                     <span class="profile-eyebrow">Map Supply</span>
                     <h2>Map Circulation</h2>
-                    <div class="economy-stat-line"><span>Total maps</span><strong>@((Overview?.MapsTotal ?? 0).ToString("N0"))</strong></div>
-                    <div class="economy-stat-line"><span>Listed maps</span><strong>@((Overview?.MapsListed ?? 0).ToString("N0")) (@((Overview?.MapsListedPercent ?? 0).ToString("0.##"))%)</strong></div>
-                    <div class="economy-stat-line"><span>Staked maps</span><strong>@((Overview?.MapsStaked ?? 0).ToString("N0")) (@((Overview?.MapsStakedPercent ?? 0).ToString("0.##"))%)</strong></div>
+                    <div class="economy-donut-layout">
+                        <div class="economy-donut economy-donut-maps" style="@GetMapDonutStyle()">
+                            <div class="economy-donut-core">
+                                <span>Maps</span>
+                                <strong>@((Overview?.MapsTotal ?? 0).ToString("N0"))</strong>
+                            </div>
+                        </div>
+                        <div class="economy-donut-legend">
+                            <div class="economy-legend-row">
+                                <span class="economy-legend-dot listed"></span>
+                                <span>Listed maps</span>
+                                <strong>@GetMapListedCount().ToString("N0") (@GetMapListedShare().ToString("0.##")%)</strong>
+                            </div>
+                            <div class="economy-legend-row">
+                                <span class="economy-legend-dot staked"></span>
+                                <span>Staked maps</span>
+                                <strong>@GetMapStakedCount().ToString("N0") (@GetMapStakedShare().ToString("0.##")%)</strong>
+                            </div>
+                            <div class="economy-legend-row">
+                                <span class="economy-legend-dot unlisted"></span>
+                                <span>Unlisted maps</span>
+                                <strong>@GetMapUnlistedCount().ToString("N0") (@GetMapUnlistedShare().ToString("0.##")%)</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="economy-progress-stack">
+                        <div class="economy-progress-row">
+                            <div class="economy-progress-label">
+                                <span>Listed maps</span>
+                                <strong>@((Overview?.MapsListedPercent ?? 0).ToString("0.##"))%</strong>
+                            </div>
+                            <div class="economy-progress-bar">
+                                <span style="@GetProgressStyle(Overview?.MapsListedPercent ?? 0)"></span>
+                            </div>
+                        </div>
+                        <div class="economy-progress-row">
+                            <div class="economy-progress-label">
+                                <span>Staked maps</span>
+                                <strong>@((Overview?.MapsStakedPercent ?? 0).ToString("0.##"))%</strong>
+                            </div>
+                            <div class="economy-progress-bar">
+                                <span style="@GetProgressStyle(Overview?.MapsStakedPercent ?? 0)"></span>
+                            </div>
+                        </div>
+                    </div>
                 </article>
 
                 <article class="panel profile-release-panel economy-card">
@@ -81,6 +161,27 @@ else
                     <div class="economy-stat-line"><span>Online now</span><strong>@((Overview?.UsersOnlineNow ?? 0).ToString("N0"))</strong></div>
                     <div class="economy-stat-line"><span>Active (24h)</span><strong>@((Overview?.UsersActive24h ?? 0).ToString("N0"))</strong></div>
                     <div class="economy-stat-line"><span>Users staking</span><strong>@((Overview?.StakersTotal ?? 0).ToString("N0"))</strong></div>
+
+                    <div class="economy-progress-stack">
+                        <div class="economy-progress-row">
+                            <div class="economy-progress-label">
+                                <span>Online ratio</span>
+                                <strong>@GetOnlineShare().ToString("0.##")%</strong>
+                            </div>
+                            <div class="economy-progress-bar">
+                                <span style="@GetProgressStyle(GetOnlineShare())"></span>
+                            </div>
+                        </div>
+                        <div class="economy-progress-row">
+                            <div class="economy-progress-label">
+                                <span>24h activity ratio</span>
+                                <strong>@GetActiveShare().ToString("0.##")%</strong>
+                            </div>
+                            <div class="economy-progress-bar">
+                                <span style="@GetProgressStyle(GetActiveShare())"></span>
+                            </div>
+                        </div>
+                    </div>
                 </article>
 
                 <article class="panel profile-release-panel economy-card">
@@ -94,6 +195,39 @@ else
                     {
                         <p class="economy-card-footnote">Active vote: @Overview.GovernanceActiveTitle</p>
                     }
+
+                    <div class="economy-flow-loop">
+                        <span>Players</span>
+                        <span class="economy-flow-arrow">→</span>
+                        <span>Marketplace</span>
+                        <span class="economy-flow-arrow">→</span>
+                        <span>Bank</span>
+                        <span class="economy-flow-arrow">→</span>
+                        <span>Rewards</span>
+                    </div>
+                </article>
+
+                <article class="panel profile-release-panel economy-card economy-card-span">
+                    <span class="profile-eyebrow">Economy Health</span>
+                    <h2>System Pulse</h2>
+                    <div class="economy-health-grid">
+                        <div class="economy-health-row">
+                            <span>Liquidity</span>
+                            <strong class="@GetLiquidityHealthClass()">@GetLiquidityHealthLabel()</strong>
+                        </div>
+                        <div class="economy-health-row">
+                            <span>Player activity</span>
+                            <strong class="@GetActivityHealthClass()">@GetActivityHealthLabel()</strong>
+                        </div>
+                        <div class="economy-health-row">
+                            <span>Marketplace depth</span>
+                            <strong class="@GetMarketplaceHealthClass()">@GetMarketplaceHealthLabel()</strong>
+                        </div>
+                        <div class="economy-health-row">
+                            <span>Governance</span>
+                            <strong class="@GetGovernanceHealthClass()">@GetGovernanceHealthLabel()</strong>
+                        </div>
+                    </div>
                 </article>
             </section>
 
@@ -101,20 +235,23 @@ else
                 <div class="panel-heading">
                     <div>
                         <span class="profile-eyebrow">Economy FAQ</span>
-                        <h2>How to read this tab</h2>
+                        <h2>Quick Guide</h2>
                     </div>
                 </div>
-                <ol class="staking-faq-list">
-                    <li>MN circulation shows player-held balance, bank-held reserve, and known total supply snapshot.</li>
-                    <li>Map circulation tracks total maps, currently listed maps, and currently staked maps.</li>
-                    <li>Active users are measured by recent activity in the last 24 hours. Online now is a tighter live window.</li>
-                    <li>Marketplace, staking, and voting remain fully usable as subtabs here.</li>
-                    <li>Voting spend tracks how much MN has been committed to governance sessions.</li>
-                </ol>
-                @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))
-                {
-                    <p class="economy-card-footnote">Snapshot generated @FormatTimestamp(Overview.GeneratedAt).</p>
-                }
+                <details class="economy-faq-collapsible">
+                    <summary>How to read this tab</summary>
+                    <ol class="staking-faq-list">
+                        <li>MN circulation shows player-held balance and bank-held reserve.</li>
+                        <li>Map circulation shows listed, staked, and currently unlisted maps.</li>
+                        <li>Activity uses two windows: online now and active in the last 24 hours.</li>
+                        <li>Economic flow tracks listing value, average listing price, and governance spend.</li>
+                        <li>Use Marketplace, Staking, and Voting subtabs to take direct action from here.</li>
+                    </ol>
+                    @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))
+                    {
+                        <p class="economy-card-footnote">Snapshot generated @FormatTimestamp(Overview.GeneratedAt).</p>
+                    }
+                </details>
             </section>
         }
         else if (ActiveTab == MarketplaceTab)
@@ -240,5 +377,145 @@ else
         return DateTimeOffset.TryParse(isoUtc, out var parsed)
             ? parsed.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
             : isoUtc;
+    }
+
+    private long GetMnTotal() => Math.Max(0L, (Overview?.MnPlayerWalletsTotal ?? 0L) + (Overview?.MnBankReserveTotal ?? 0L));
+
+    private double GetMnWalletShare()
+    {
+        var total = GetMnTotal();
+        return total <= 0 ? 0 : ((Overview?.MnPlayerWalletsTotal ?? 0L) * 100.0 / total);
+    }
+
+    private double GetMnBankShare()
+    {
+        var total = GetMnTotal();
+        return total <= 0 ? 0 : ((Overview?.MnBankReserveTotal ?? 0L) * 100.0 / total);
+    }
+
+    private string GetMnDonutStyle()
+    {
+        var walletShare = Math.Clamp(GetMnWalletShare(), 0, 100);
+        return $"--slice-a:{walletShare.ToString("0.##", CultureInfo.InvariantCulture)};";
+    }
+
+    private (int ListedCount, int StakedCount, int UnlistedCount, double ListedShare, double StakedShare, double UnlistedShare) GetMapDistribution()
+    {
+        var total = Math.Max(0, Overview?.MapsTotal ?? 0);
+        var listed = Math.Max(0, Overview?.MapsListed ?? 0);
+        var staked = Math.Max(0, Overview?.MapsStaked ?? 0);
+        var unlisted = Math.Max(0, total - listed - staked);
+        var distributionTotal = listed + staked + unlisted;
+        if (distributionTotal <= 0)
+        {
+            return (0, 0, 0, 0, 0, 100);
+        }
+
+        var listedShare = listed * 100.0 / distributionTotal;
+        var stakedShare = staked * 100.0 / distributionTotal;
+        var unlistedShare = Math.Max(0, 100 - listedShare - stakedShare);
+        return (listed, staked, unlisted, listedShare, stakedShare, unlistedShare);
+    }
+
+    private int GetMapListedCount() => GetMapDistribution().ListedCount;
+    private int GetMapStakedCount() => GetMapDistribution().StakedCount;
+    private int GetMapUnlistedCount() => GetMapDistribution().UnlistedCount;
+    private double GetMapListedShare() => GetMapDistribution().ListedShare;
+    private double GetMapStakedShare() => GetMapDistribution().StakedShare;
+    private double GetMapUnlistedShare() => GetMapDistribution().UnlistedShare;
+
+    private string GetMapDonutStyle()
+    {
+        var distribution = GetMapDistribution();
+        return
+            $"--slice-a:{Math.Clamp(distribution.ListedShare, 0, 100).ToString("0.##", CultureInfo.InvariantCulture)};" +
+            $"--slice-b:{Math.Clamp(distribution.StakedShare, 0, 100).ToString("0.##", CultureInfo.InvariantCulture)};";
+    }
+
+    private static string GetProgressStyle(double value)
+    {
+        var width = Math.Clamp(value, 0, 100);
+        return $"width:{width.ToString("0.##", CultureInfo.InvariantCulture)}%;";
+    }
+
+    private double GetOnlineShare()
+    {
+        var total = Math.Max(0, Overview?.UsersTotal ?? 0);
+        if (total == 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp((Overview?.UsersOnlineNow ?? 0) * 100.0 / total, 0, 100);
+    }
+
+    private double GetActiveShare()
+    {
+        var total = Math.Max(0, Overview?.UsersTotal ?? 0);
+        if (total == 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp((Overview?.UsersActive24h ?? 0) * 100.0 / total, 0, 100);
+    }
+
+    private string GetLiquidityHealthLabel()
+    {
+        var listedPercent = Math.Max(0, Overview?.MapsListedPercent ?? 0);
+        return listedPercent switch
+        {
+            >= 18 => "Good",
+            >= 8 => "Moderate",
+            _ => "Low",
+        };
+    }
+
+    private string GetLiquidityHealthClass() => GetHealthClass(GetLiquidityHealthLabel());
+
+    private string GetActivityHealthLabel()
+    {
+        var activeShare = GetActiveShare();
+        return activeShare switch
+        {
+            >= 35 => "Strong",
+            >= 15 => "Moderate",
+            _ => "Low",
+        };
+    }
+
+    private string GetActivityHealthClass() => GetHealthClass(GetActivityHealthLabel());
+
+    private string GetMarketplaceHealthLabel()
+    {
+        var listingValue = Math.Max(0L, Overview?.MarketplaceListingValueTotal ?? 0L);
+        var listedMaps = Math.Max(0, Overview?.MapsListed ?? 0);
+        if (listingValue >= 10000 && listedMaps >= 10)
+        {
+            return "Strong";
+        }
+
+        if (listingValue >= 1500 || listedMaps >= 4)
+        {
+            return "Moderate";
+        }
+
+        return "Light";
+    }
+
+    private string GetMarketplaceHealthClass() => GetHealthClass(GetMarketplaceHealthLabel());
+
+    private string GetGovernanceHealthLabel() => Overview?.GovernanceVotingOpen == true ? "Council Meeting Live" : "Awaiting Council";
+
+    private string GetGovernanceHealthClass() => Overview?.GovernanceVotingOpen == true ? "economy-health-status good" : "economy-health-status low";
+
+    private static string GetHealthClass(string value)
+    {
+        return value switch
+        {
+            "Good" or "Strong" => "economy-health-status good",
+            "Moderate" => "economy-health-status steady",
+            _ => "economy-health-status low",
+        };
     }
 }
