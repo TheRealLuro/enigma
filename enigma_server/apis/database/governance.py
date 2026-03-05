@@ -21,13 +21,30 @@ from .user_utils import (
 
 router = APIRouter(prefix="/database/governance")
 
+VOTE_TYPE_ONE_CHOICE = "one_choice"
+VOTE_TYPE_MULTIPLE_CHOICE = "multiple_choice"
+VOTE_TYPE_TEXT_ENTRY = "text_entry"
+VOTE_TYPE_NUMBER_SELECTION = "number_selection"
+SUPPORTED_VOTE_TYPES = {
+    VOTE_TYPE_ONE_CHOICE,
+    VOTE_TYPE_MULTIPLE_CHOICE,
+    VOTE_TYPE_TEXT_ENTRY,
+    VOTE_TYPE_NUMBER_SELECTION,
+}
+SUPPORTED_DURATION_UNITS = {"hours", "days", "weeks"}
+
 
 class GovernanceStartPayload(BaseModel):
     username: str
     title: str = Field(min_length=3, max_length=120)
     description: str = Field(default="", max_length=500)
-    options: list[str] = Field(min_length=2, max_length=6)
-    duration_hours: int = Field(default=24, ge=1, le=168)
+    vote_type: str = Field(default=VOTE_TYPE_ONE_CHOICE)
+    options: list[str] = Field(default_factory=list, min_length=0, max_length=12)
+    duration_value: int = Field(default=24, ge=1, le=9999)
+    duration_unit: str = Field(default="hours")
+    vote_cost_mn: int = Field(default=10, ge=1, le=1_000_000)
+    number_min: int | None = None
+    number_max: int | None = None
 
 
 class GovernanceClosePayload(BaseModel):
@@ -36,8 +53,11 @@ class GovernanceClosePayload(BaseModel):
 
 class GovernanceVotePayload(BaseModel):
     username: str
-    option_id: str
-    mn_spent: int = Field(ge=1, le=1_000_000)
+    option_id: str | None = None
+    option_ids: list[str] = Field(default_factory=list, max_length=16)
+    text_entry: str | None = None
+    number_entry: int | None = None
+    vote_quantity: int = Field(default=1, ge=1, le=1000)
 
 
 def _utc_now() -> datetime:
@@ -65,6 +85,34 @@ def _parse_utc_datetime(value: Any) -> datetime | None:
 
 def _is_bank_user(username: str) -> bool:
     return username.strip().lower() == SYSTEM_BANK_USERNAME
+
+
+def _normalize_vote_type(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized not in SUPPORTED_VOTE_TYPES:
+        raise HTTPException(status_code=400, detail="Unsupported vote type")
+    return normalized
+
+
+def _normalize_duration_unit(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"hour", "hours"}:
+        return "hours"
+    if normalized in {"day", "days"}:
+        return "days"
+    if normalized in {"week", "weeks"}:
+        return "weeks"
+    raise HTTPException(status_code=400, detail="Unsupported duration unit")
+
+
+def _duration_delta(value: int, unit: str) -> timedelta:
+    if unit == "hours":
+        return timedelta(hours=value)
+    if unit == "days":
+        return timedelta(days=value)
+    if unit == "weeks":
+        return timedelta(weeks=value)
+    raise HTTPException(status_code=400, detail="Unsupported duration unit")
 
 
 def _sync_user(username: str) -> dict[str, Any]:
@@ -134,33 +182,55 @@ def _serialize_session(
     if not session_doc:
         return None
 
-    tallies = session_doc.get("tallies", {}) if isinstance(session_doc.get("tallies"), dict) else {}
-    options_payload: list[dict[str, Any]] = []
+    options_from_session = {}
     for option in list(session_doc.get("options", []) or []):
         if not isinstance(option, dict):
             continue
         option_id = str(option.get("id") or "").strip()
-        label = str(option.get("label") or "").strip()
-        if not option_id or not label:
-            continue
-        tally = tallies.get(option_id, {}) if isinstance(tallies.get(option_id), dict) else {}
-        options_payload.append(
+        option_label = str(option.get("label") or "").strip()
+        if option_id and option_label:
+            options_from_session[option_id] = option_label
+
+    tallies = session_doc.get("tallies", {}) if isinstance(session_doc.get("tallies"), dict) else {}
+    payload_entries: list[dict[str, Any]] = []
+
+    def append_entry(entry_id: str, fallback_label: str) -> None:
+        tally = tallies.get(entry_id, {}) if isinstance(tallies.get(entry_id), dict) else {}
+        payload_entries.append(
             {
-                "id": option_id,
-                "label": label,
+                "id": entry_id,
+                "label": str(tally.get("label") or fallback_label),
                 "mn_spent": int(tally.get("mn_spent", 0) or 0),
                 "vote_power": float(tally.get("vote_power", 0.0) or 0.0),
                 "vote_count": int(tally.get("vote_count", 0) or 0),
+                "vote_quantity": int(tally.get("vote_quantity", 0) or 0),
             }
         )
 
-    options_payload.sort(key=lambda option: float(option.get("vote_power", 0.0)), reverse=True)
+    for option_id, option_label in options_from_session.items():
+        append_entry(option_id, option_label)
+
+    for tally_key, tally_value in tallies.items():
+        if tally_key in options_from_session or not isinstance(tally_value, dict):
+            continue
+        append_entry(str(tally_key), str(tally_value.get("label") or tally_key))
+
+    payload_entries.sort(
+        key=lambda entry: (
+            float(entry.get("vote_power", 0.0) or 0.0),
+            int(entry.get("mn_spent", 0) or 0),
+            int(entry.get("vote_quantity", 0) or 0),
+            str(entry.get("label") or "").lower(),
+        ),
+        reverse=True,
+    )
 
     user_vote_summary = {
         "staked_maps_count": 0,
         "stake_weight_multiplier": 1.0,
         "mn_spent": 0,
         "vote_power": 0.0,
+        "vote_quantity": 0,
     }
     if user:
         normalized_staked_ids, _ = normalize_staked_map_ids(user, maps_collection)
@@ -182,6 +252,7 @@ def _serialize_session(
                             "_id": None,
                             "mn_spent": {"$sum": "$mn_spent"},
                             "vote_power": {"$sum": "$vote_power"},
+                            "vote_quantity": {"$sum": "$vote_quantity"},
                         }
                     },
                 ]
@@ -190,6 +261,7 @@ def _serialize_session(
         if aggregate:
             user_vote_summary["mn_spent"] = int(aggregate[0].get("mn_spent", 0) or 0)
             user_vote_summary["vote_power"] = float(aggregate[0].get("vote_power", 0.0) or 0.0)
+            user_vote_summary["vote_quantity"] = int(aggregate[0].get("vote_quantity", 0) or 0)
 
     started_at = _parse_utc_datetime(session_doc.get("started_at"))
     ends_at = _parse_utc_datetime(session_doc.get("ends_at"))
@@ -204,12 +276,31 @@ def _serialize_session(
         "started_at": started_at.isoformat() if started_at else None,
         "ends_at": ends_at.isoformat() if ends_at else None,
         "closed_at": closed_at.isoformat() if closed_at else None,
+        "vote_type": str(session_doc.get("vote_type") or VOTE_TYPE_ONE_CHOICE),
+        "vote_cost_mn": int(session_doc.get("vote_cost_mn", 1) or 1),
+        "duration_value": int(session_doc.get("duration_value", 24) or 24),
+        "duration_unit": str(session_doc.get("duration_unit") or "hours"),
+        "number_min": session_doc.get("number_min"),
+        "number_max": session_doc.get("number_max"),
         "total_mn_spent": int(session_doc.get("total_mn_spent", 0) or 0),
         "total_vote_power": float(session_doc.get("total_vote_power", 0.0) or 0.0),
+        "total_votes_cast": int(session_doc.get("total_votes_cast", 0) or 0),
         "unique_voter_count": len(list(session_doc.get("voters", []) or [])),
-        "options": options_payload,
+        "options": payload_entries,
         "user_vote_summary": user_vote_summary,
     }
+
+
+def _normalize_unique_ids(raw_ids: list[str]) -> list[str]:
+    dedupe: set[str] = set()
+    normalized: list[str] = []
+    for raw_id in raw_ids:
+        option_id = str(raw_id or "").strip()
+        if not option_id or option_id in dedupe:
+            continue
+        dedupe.add(option_id)
+        normalized.append(option_id)
+    return normalized
 
 
 @router.get("/session")
@@ -243,15 +334,38 @@ def start_governance_session(request: Request, payload: GovernanceStartPayload):
     if _get_active_session():
         raise HTTPException(status_code=409, detail="An active governance session already exists")
 
-    options = _normalize_options(payload.options)
+    vote_type = _normalize_vote_type(payload.vote_type)
+    duration_unit = _normalize_duration_unit(payload.duration_unit)
+    duration_value = int(payload.duration_value or 24)
+    vote_cost_mn = int(payload.vote_cost_mn or 1)
+    if vote_cost_mn <= 0:
+        raise HTTPException(status_code=400, detail="Vote cost must be greater than zero")
+
+    options: list[str] = []
+    if vote_type in {VOTE_TYPE_ONE_CHOICE, VOTE_TYPE_MULTIPLE_CHOICE}:
+        options = _normalize_options(payload.options)
+
+    number_min = payload.number_min
+    number_max = payload.number_max
+    if vote_type == VOTE_TYPE_NUMBER_SELECTION:
+        if number_min is None or number_max is None:
+            raise HTTPException(status_code=400, detail="Number selection votes require min and max values")
+        if int(number_min) > int(number_max):
+            raise HTTPException(status_code=400, detail="Number selection min cannot be greater than max")
+    else:
+        number_min = None
+        number_max = None
+
     now = _utc_now()
     session_id = f"gov-{uuid4().hex[:10]}"
     normalized_options = [{"id": f"opt-{index + 1}", "label": option} for index, option in enumerate(options)]
     tallies = {
         option["id"]: {
+            "label": option["label"],
             "mn_spent": 0,
             "vote_power": 0.0,
             "vote_count": 0,
+            "vote_quantity": 0,
         }
         for option in normalized_options
     }
@@ -264,13 +378,20 @@ def start_governance_session(request: Request, payload: GovernanceStartPayload):
             "status": "active",
             "started_by": SYSTEM_BANK_USERNAME,
             "started_at": now,
-            "ends_at": now + timedelta(hours=int(payload.duration_hours or 24)),
+            "ends_at": now + _duration_delta(duration_value, duration_unit),
             "closed_at": None,
             "updated_at": now,
+            "vote_type": vote_type,
+            "vote_cost_mn": vote_cost_mn,
+            "duration_value": duration_value,
+            "duration_unit": duration_unit,
+            "number_min": number_min,
+            "number_max": number_max,
             "options": normalized_options,
             "tallies": tallies,
             "total_mn_spent": 0,
             "total_vote_power": 0.0,
+            "total_votes_cast": 0,
             "voters": [],
         }
     )
@@ -316,7 +437,7 @@ def close_governance_session(request: Request, payload: GovernanceClosePayload):
 
 
 @router.post("/vote")
-@limiter.limit("60/minute")
+@limiter.limit("90/minute")
 def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
     username = str(payload.username or "").strip()
     if _is_bank_user(username):
@@ -327,15 +448,59 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
     if not active_session:
         raise HTTPException(status_code=409, detail="Voting is not open right now")
 
-    option_id = str(payload.option_id or "").strip()
-    options = [option for option in list(active_session.get("options", []) or []) if isinstance(option, dict)]
-    option_lookup = {str(option.get("id") or "").strip(): option for option in options}
-    if option_id not in option_lookup:
-        raise HTTPException(status_code=400, detail="Invalid voting option")
+    vote_type = _normalize_vote_type(active_session.get("vote_type"))
+    option_lookup = {
+        str(option.get("id") or "").strip(): str(option.get("label") or "").strip()
+        for option in list(active_session.get("options", []) or [])
+        if isinstance(option, dict)
+    }
 
-    mn_spent = int(payload.mn_spent or 0)
-    if mn_spent <= 0:
-        raise HTTPException(status_code=400, detail="Vote amount must be greater than zero")
+    raw_ids = list(payload.option_ids or [])
+    if payload.option_id:
+        raw_ids.append(payload.option_id)
+    selected_ids = _normalize_unique_ids(raw_ids)
+
+    selections: list[tuple[str, str]] = []
+    if vote_type == VOTE_TYPE_ONE_CHOICE:
+        if not selected_ids:
+            raise HTTPException(status_code=400, detail="Choose one option")
+        selected_id = selected_ids[0]
+        if selected_id not in option_lookup:
+            raise HTTPException(status_code=400, detail="Invalid voting option")
+        selections = [(selected_id, option_lookup[selected_id])]
+    elif vote_type == VOTE_TYPE_MULTIPLE_CHOICE:
+        if not selected_ids:
+            raise HTTPException(status_code=400, detail="Choose at least one option")
+        for selected_id in selected_ids:
+            if selected_id not in option_lookup:
+                raise HTTPException(status_code=400, detail="Invalid voting option")
+            selections.append((selected_id, option_lookup[selected_id]))
+    elif vote_type == VOTE_TYPE_TEXT_ENTRY:
+        text_value = str(payload.text_entry or "").strip()
+        if not text_value:
+            raise HTTPException(status_code=400, detail="Text entry is required for this voting type")
+        text_value = text_value[:120]
+        selections = [(f"text:{text_value.casefold()}", text_value)]
+    else:
+        if payload.number_entry is None:
+            raise HTTPException(status_code=400, detail="Number entry is required for this voting type")
+        number_value = int(payload.number_entry)
+        min_value = active_session.get("number_min")
+        max_value = active_session.get("number_max")
+        if min_value is not None and number_value < int(min_value):
+            raise HTTPException(status_code=400, detail="Submitted number is below the allowed minimum")
+        if max_value is not None and number_value > int(max_value):
+            raise HTTPException(status_code=400, detail="Submitted number is above the allowed maximum")
+        selections = [(f"number:{number_value}", str(number_value))]
+
+    vote_quantity = int(payload.vote_quantity or 1)
+    if vote_quantity <= 0:
+        raise HTTPException(status_code=400, detail="Vote quantity must be greater than zero")
+
+    unit_vote_cost = max(1, int(active_session.get("vote_cost_mn", 1) or 1))
+    selection_count = len(selections)
+    total_vote_units = vote_quantity * selection_count
+    mn_spent = unit_vote_cost * total_vote_units
 
     normalized_staked_ids, _ = normalize_staked_map_ids(user, maps_collection)
     if normalized_staked_ids != list(user.get("staked_map_ids", []) or []):
@@ -345,6 +510,8 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
 
     multiplier = vote_weight_multiplier(len(normalized_staked_ids))
     vote_power = round(mn_spent * multiplier, 4)
+    per_selection_spent = unit_vote_cost * vote_quantity
+    per_selection_power = round(per_selection_spent * multiplier, 4)
     now = _utc_now()
 
     governance_sessions.create_index("session_id", unique=True)
@@ -363,17 +530,26 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
 
                 credit_bank_dividend(users_collection, mn_spent, session=mongo_session)
 
+                inc_payload: dict[str, int | float] = {
+                    "total_mn_spent": mn_spent,
+                    "total_vote_power": vote_power,
+                    "total_votes_cast": total_vote_units,
+                }
+                set_payload: dict[str, Any] = {
+                    "updated_at": now,
+                }
+                for entry_key, entry_label in selections:
+                    inc_payload[f"tallies.{entry_key}.mn_spent"] = per_selection_spent
+                    inc_payload[f"tallies.{entry_key}.vote_power"] = per_selection_power
+                    inc_payload[f"tallies.{entry_key}.vote_count"] = 1
+                    inc_payload[f"tallies.{entry_key}.vote_quantity"] = vote_quantity
+                    set_payload[f"tallies.{entry_key}.label"] = entry_label
+
                 governance_update = governance_sessions.update_one(
                     {"_id": active_session["_id"], "status": "active"},
                     {
-                        "$inc": {
-                            "total_mn_spent": mn_spent,
-                            "total_vote_power": vote_power,
-                            f"tallies.{option_id}.mn_spent": mn_spent,
-                            f"tallies.{option_id}.vote_power": vote_power,
-                            f"tallies.{option_id}.vote_count": 1,
-                        },
-                        "$set": {"updated_at": now},
+                        "$inc": inc_payload,
+                        "$set": set_payload,
                         "$addToSet": {"voters": username},
                     },
                     session=mongo_session,
@@ -385,7 +561,14 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
                     {
                         "session_id": str(active_session.get("session_id") or ""),
                         "username": username,
-                        "option_id": option_id,
+                        "vote_type": vote_type,
+                        "selection_keys": [entry_key for entry_key, _ in selections],
+                        "selection_labels": [entry_label for _, entry_label in selections],
+                        "text_entry": str(payload.text_entry or "").strip()[:120] if vote_type == VOTE_TYPE_TEXT_ENTRY else None,
+                        "number_entry": int(payload.number_entry) if vote_type == VOTE_TYPE_NUMBER_SELECTION and payload.number_entry is not None else None,
+                        "vote_quantity": vote_quantity,
+                        "selection_count": selection_count,
+                        "vote_cost_mn": unit_vote_cost,
                         "mn_spent": mn_spent,
                         "stake_weight_multiplier": multiplier,
                         "vote_power": vote_power,
@@ -406,6 +589,9 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
         "mn_spent": mn_spent,
         "vote_power": vote_power,
         "stake_weight_multiplier": multiplier,
+        "vote_quantity": vote_quantity,
+        "vote_cost_mn": unit_vote_cost,
+        "selection_count": selection_count,
         "voting_open": refreshed_active is not None,
         "active_session": _serialize_session(refreshed_active, user=refreshed_user),
         "user": serialize_session_user(refreshed_user, maps_collection),

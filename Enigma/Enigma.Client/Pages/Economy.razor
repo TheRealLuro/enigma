@@ -4,8 +4,8 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 
-<SeoHead Title="Enigma Economy | Circulation, Marketplace, and Staking"
-         Description="Track MN and map circulation, user activity, and access marketplace and staking tools from one economy hub."
+<SeoHead Title="Enigma Economy | Circulation, Marketplace, Staking, and Voting"
+         Description="Track MN and map circulation, user activity, and use marketplace, staking, and voting from one economy hub."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -52,6 +52,7 @@ else
             <button class="@GetTabClass(OverviewTab)" type="button" @onclick='@(() => SetActiveTab(OverviewTab))'>Overview</button>
             <button class="@GetTabClass(MarketplaceTab)" type="button" @onclick='@(() => SetActiveTab(MarketplaceTab))'>Marketplace</button>
             <button class="@GetTabClass(StakingTab)" type="button" @onclick='@(() => SetActiveTab(StakingTab))'>Staking</button>
+            <button class="@GetTabClass(VotingTab)" type="button" @onclick='@(() => SetActiveTab(VotingTab))'>Voting</button>
         </div>
 
         @if (ActiveTab == OverviewTab)
@@ -107,7 +108,7 @@ else
                     <li>MN circulation shows player-held balance, bank-held reserve, and known total supply snapshot.</li>
                     <li>Map circulation tracks total maps, currently listed maps, and currently staked maps.</li>
                     <li>Active users are measured by recent activity in the last 24 hours. Online now is a tighter live window.</li>
-                    <li>Marketplace and staking remain fully usable as subtabs here.</li>
+                    <li>Marketplace, staking, and voting remain fully usable as subtabs here.</li>
                     <li>Voting spend tracks how much MN has been committed to governance sessions.</li>
                 </ol>
                 @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))
@@ -120,9 +121,13 @@ else
         {
             <Marketplace Embedded="true" />
         }
-        else
+        else if (ActiveTab == StakingTab)
         {
             <Staking Embedded="true" />
+        }
+        else
+        {
+            <Voting Embedded="true" />
         }
     </div>
 }
@@ -133,6 +138,7 @@ else
     private const string OverviewTab = "overview";
     private const string MarketplaceTab = "marketplace";
     private const string StakingTab = "staking";
+    private const string VotingTab = "voting";
 
     private bool IsLoading { get; set; } = true;
     private string? ErrorMessage { get; set; }
@@ -203,6 +209,7 @@ else
         {
             MarketplaceTab => MarketplaceTab,
             StakingTab => StakingTab,
+            VotingTab => VotingTab,
             _ => OverviewTab,
         };
     }

@@ -3,20 +3,29 @@
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@implements IAsyncDisposable
 
-<SeoHead Title="Enigma Voting | Community Governance"
-         Description="Vote in active Enigma governance sessions using Maze Nuggets. Voting power scales with MN spent and staked-map weight."
-         Robots="noindex,follow"
-         OpenGraphType="website"
-         SchemaType="WebPage" />
+@if (!Embedded)
+{
+    <SeoHead Title="Enigma Voting | Community Governance"
+             Description="Vote in active Enigma governance sessions using Maze Nuggets with staking-based weighting."
+             Robots="noindex,follow"
+             OpenGraphType="website"
+             SchemaType="WebPage" />
+}
 
 @if (IsLoading)
 {
-    <div class="content"><div class="card enigma-game-message"><div class="loader"></div><p>Loading governance session...</p></div></div>
+    <div class="@(Embedded ? "economy-embedded-state" : "content")">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Loading governance session...</p>
+        </div>
+    </div>
 }
-else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+else if (!string.IsNullOrWhiteSpace(ErrorMessage) && ActiveSession is null && !CanStartSession)
 {
-    <div class="content">
+    <div class="@(Embedded ? "economy-embedded-state" : "content")">
         <div class="card enigma-game-message">
             <h1>Voting unavailable</h1>
             <p>@ErrorMessage</p>
@@ -26,12 +35,12 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 }
 else
 {
-    <div class="content voting-shell">
+    <div class="@(Embedded ? "voting-shell economy-embedded-shell" : "content voting-shell")">
         <section class="voting-banner">
             <div>
                 <span class="profile-eyebrow">Governance</span>
-                <h1>Community Voting</h1>
-                <p>Use MN to vote. More MN means more power. Staked maps add a balanced multiplier.</p>
+                <h1>Council Voting</h1>
+                <p>Vote power uses MN spent multiplied by your current staking weight.</p>
             </div>
             <div class="voting-banner-meta">
                 <span class="profile-chip">Balance @(Session?.MazeNuggets.ToString("N0") ?? "0") MN</span>
@@ -44,53 +53,104 @@ else
         {
             <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
         }
-
-        @if (CanStartSession)
+        else if (!string.IsNullOrWhiteSpace(ErrorMessage))
         {
-            <section class="panel profile-release-panel voting-admin-panel">
-                <div class="panel-heading">
-                    <div>
-                        <span class="profile-eyebrow">Bank Controls</span>
-                        <h2>Start Voting Session</h2>
-                    </div>
-                </div>
-                <div class="voting-form-grid">
-                    <div>
-                        <label class="form-label">Title</label>
-                        <input class="form-control" @bind="StartTitle" maxlength="120" />
-                    </div>
-                    <div>
-                        <label class="form-label">Duration (hours)</label>
-                        <input class="form-control" type="number" min="1" max="168" @bind="StartDurationHours" />
-                    </div>
-                    <div class="voting-form-span">
-                        <label class="form-label">Description</label>
-                        <textarea class="form-control" rows="3" maxlength="500" @bind="StartDescription"></textarea>
-                    </div>
-                    <div>
-                        <label class="form-label">Option A</label>
-                        <input class="form-control" @bind="OptionA" maxlength="80" />
-                    </div>
-                    <div>
-                        <label class="form-label">Option B</label>
-                        <input class="form-control" @bind="OptionB" maxlength="80" />
-                    </div>
-                    <div>
-                        <label class="form-label">Option C (optional)</label>
-                        <input class="form-control" @bind="OptionC" maxlength="80" />
-                    </div>
-                    <div>
-                        <label class="form-label">Option D (optional)</label>
-                        <input class="form-control" @bind="OptionD" maxlength="80" />
-                    </div>
-                </div>
-                <div class="voting-admin-actions">
-                    <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="StartSessionAsync">@(IsBusy ? "Starting..." : "Start Session")</button>
-                </div>
-            </section>
+            <div class="alert alert-warning">@ErrorMessage</div>
         }
 
-        @if (ActiveSession is not null)
+        @if (ActiveSession is null)
+        {
+            @if (CanStartSession)
+            {
+                <section class="panel profile-release-panel voting-admin-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="profile-eyebrow">Bank Controls</span>
+                            <h2>Start Voting Session</h2>
+                        </div>
+                    </div>
+
+                    <div class="voting-form-grid">
+                        <div>
+                            <label class="form-label">Title</label>
+                            <input class="form-control" @bind="StartTitle" maxlength="120" />
+                        </div>
+                        <div>
+                            <label class="form-label">Vote Type</label>
+                            <select class="form-control" @bind="StartVoteType">
+                                <option value="one_choice">One Choice Selection</option>
+                                <option value="multiple_choice">Multiple Choice</option>
+                                <option value="text_entry">Text Entry</option>
+                                <option value="number_selection">Number Selection</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label">Vote Cost (MN each)</label>
+                            <input class="form-control" type="number" min="1" max="1000000" @bind="StartVoteCostMn" />
+                        </div>
+                        <div>
+                            <label class="form-label">Duration</label>
+                            <div class="voting-duration-row">
+                                <input class="form-control" type="number" min="1" max="9999" @bind="StartDurationValue" />
+                                <select class="form-control" @bind="StartDurationUnit">
+                                    <option value="hours">Hours</option>
+                                    <option value="days">Days</option>
+                                    <option value="weeks">Weeks</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="voting-form-span">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" rows="3" maxlength="500" @bind="StartDescription"></textarea>
+                        </div>
+
+                        @if (IsChoiceVoteType(StartVoteType))
+                        {
+                            <div>
+                                <label class="form-label">Option A</label>
+                                <input class="form-control" @bind="OptionA" maxlength="80" />
+                            </div>
+                            <div>
+                                <label class="form-label">Option B</label>
+                                <input class="form-control" @bind="OptionB" maxlength="80" />
+                            </div>
+                            <div>
+                                <label class="form-label">Option C (optional)</label>
+                                <input class="form-control" @bind="OptionC" maxlength="80" />
+                            </div>
+                            <div>
+                                <label class="form-label">Option D (optional)</label>
+                                <input class="form-control" @bind="OptionD" maxlength="80" />
+                            </div>
+                        }
+                        else if (StartVoteType == "number_selection")
+                        {
+                            <div>
+                                <label class="form-label">Minimum Number</label>
+                                <input class="form-control" type="number" @bind="StartNumberMin" />
+                            </div>
+                            <div>
+                                <label class="form-label">Maximum Number</label>
+                                <input class="form-control" type="number" @bind="StartNumberMax" />
+                            </div>
+                        }
+                    </div>
+
+                    <div class="voting-admin-actions">
+                        <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="StartSessionAsync">
+                            @(IsBusy ? "Starting..." : "Start Session")
+                        </button>
+                    </div>
+                </section>
+            }
+            else
+            {
+                <section class="panel profile-release-panel voting-empty-panel">
+                    <h2>Come back when The council is meeting.</h2>
+                </section>
+            }
+        }
+        else
         {
             <section class="panel profile-release-panel voting-session-panel">
                 <div class="panel-heading">
@@ -100,83 +160,136 @@ else
                     </div>
                     <span class="section-count">@ActiveSession.SessionId</span>
                 </div>
+
                 @if (!string.IsNullOrWhiteSpace(ActiveSession.Description))
                 {
                     <p class="voting-session-copy">@ActiveSession.Description</p>
                 }
+
                 <div class="voting-session-meta">
+                    <span>Type: @GetVoteTypeLabel(ActiveSession.VoteType)</span>
+                    <span>Vote cost: @ActiveSession.VoteCostMn.ToString("N0") MN</span>
                     <span>Ends: @FormatTimestamp(ActiveSession.EndsAt)</span>
                     <span>Total MN: @ActiveSession.TotalMnSpent.ToString("N0")</span>
                     <span>Total power: @ActiveSession.TotalVotePower.ToString("N2")</span>
+                    <span>Total votes: @ActiveSession.TotalVotesCast.ToString("N0")</span>
                     <span>Voters: @ActiveSession.UniqueVoterCount</span>
                 </div>
+
                 <div class="voting-vote-row">
-                    <label class="form-label">MN to spend per vote</label>
-                    <input class="form-control voting-mn-input" type="number" min="1" max="1000000" @bind="VoteMnAmount" />
-                    <span class="voting-power-preview">Power per vote: @(Math.Max(1, VoteMnAmount) * CurrentStakeMultiplier).ToString("N2")</span>
+                    <label class="form-label">Vote quantity</label>
+                    <input class="form-control voting-mn-input" type="number" min="1" max="1000" @bind="VoteQuantity" />
+                    <span class="voting-power-preview">
+                        Cost @CurrentVoteCostPreview.ToString("N0") MN | Power @CurrentVotePowerPreview.ToString("N2")
+                    </span>
                 </div>
-                <div class="voting-options-grid">
-                    @foreach (var option in ActiveSession.Options.OrderByDescending(static option => option.VotePower))
-                    {
-                        <article class="voting-option-card">
-                            <div class="voting-option-top">
-                                <strong>@option.Label</strong>
-                                <span>@option.VotePower.ToString("N2") power</span>
-                            </div>
-                            <div class="voting-option-meta">
-                                <span>@option.MnSpent.ToString("N0") MN</span>
-                                <span>@option.VoteCount votes</span>
-                            </div>
-                            <button class="btn btn-primary" type="button" disabled="@IsBusy" @onclick="() => VoteAsync(option.Id)">
-                                @(IsBusy ? "Submitting..." : $"Vote for {option.Label}")
-                            </button>
-                        </article>
-                    }
-                </div>
-                @if (CanCloseSession)
+
+                @if (ActiveSession.VoteType == "one_choice")
                 {
-                    <div class="voting-admin-actions">
-                        <button class="btn btn-danger" type="button" disabled="@IsBusy" @onclick="CloseSessionAsync">@(IsBusy ? "Closing..." : "Close Session")</button>
+                    <div class="voting-options-grid">
+                        @foreach (var option in ActiveSession.Options)
+                        {
+                            <article class="voting-option-card">
+                                <div class="voting-option-top">
+                                    <strong>@option.Label</strong>
+                                    <span>@option.VotePower.ToString("N2") power</span>
+                                </div>
+                                <div class="voting-option-meta">
+                                    <span>@option.MnSpent.ToString("N0") MN</span>
+                                    <span>@option.VoteQuantity.ToString("N0") votes</span>
+                                </div>
+                                <button class="btn @(IsSelectedSingle(option.Id) ? "btn-primary" : "btn-secondary")"
+                                        type="button"
+                                        disabled="@IsBusy"
+                                        @onclick="() => SelectSingleOption(option.Id)">
+                                    @(IsSelectedSingle(option.Id) ? "Selected" : "Select")
+                                </button>
+                            </article>
+                        }
                     </div>
                 }
-            </section>
-        }
-        else
-        {
-            <section class="panel profile-release-panel voting-empty-panel">
-                <div class="panel-heading">
-                    <div>
-                        <span class="profile-eyebrow">Session Status</span>
-                        <h2>Voting is currently closed</h2>
+                else if (ActiveSession.VoteType == "multiple_choice")
+                {
+                    <div class="voting-options-grid">
+                        @foreach (var option in ActiveSession.Options)
+                        {
+                            <article class="voting-option-card">
+                                <div class="voting-option-top">
+                                    <strong>@option.Label</strong>
+                                    <span>@option.VotePower.ToString("N2") power</span>
+                                </div>
+                                <div class="voting-option-meta">
+                                    <span>@option.MnSpent.ToString("N0") MN</span>
+                                    <span>@option.VoteQuantity.ToString("N0") votes</span>
+                                </div>
+                                <label class="voting-checkbox">
+                                    <input type="checkbox"
+                                           checked="@IsSelectedMultiple(option.Id)"
+                                           @onchange="@((ChangeEventArgs args) => ToggleMultipleOption(option.Id, args))" />
+                                    <span>Include this option</span>
+                                </label>
+                            </article>
+                        }
                     </div>
-                </div>
-                <p class="empty-state-inline">A session appears here when `enigma_bank` starts one.</p>
-            </section>
-        }
+                }
+                else if (ActiveSession.VoteType == "text_entry")
+                {
+                    <div class="voting-entry-block">
+                        <label class="form-label">Your entry</label>
+                        <input class="form-control" maxlength="120" @bind="VoteTextEntry" />
+                    </div>
+                    <div class="voting-options-grid compact">
+                        @foreach (var option in ActiveSession.Options)
+                        {
+                            <article class="voting-option-card compact">
+                                <div class="voting-option-top">
+                                    <strong>@option.Label</strong>
+                                    <span>@option.VotePower.ToString("N2") power</span>
+                                </div>
+                                <div class="voting-option-meta">
+                                    <span>@option.MnSpent.ToString("N0") MN</span>
+                                    <span>@option.VoteQuantity.ToString("N0") votes</span>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="voting-entry-block">
+                        <label class="form-label">Your number</label>
+                        <input class="form-control"
+                               type="number"
+                               min="@ActiveSession.NumberMin"
+                               max="@ActiveSession.NumberMax"
+                               @bind="VoteNumberEntry" />
+                    </div>
+                    <div class="voting-options-grid compact">
+                        @foreach (var option in ActiveSession.Options)
+                        {
+                            <article class="voting-option-card compact">
+                                <div class="voting-option-top">
+                                    <strong>@option.Label</strong>
+                                    <span>@option.VotePower.ToString("N2") power</span>
+                                </div>
+                                <div class="voting-option-meta">
+                                    <span>@option.MnSpent.ToString("N0") MN</span>
+                                    <span>@option.VoteQuantity.ToString("N0") votes</span>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                }
 
-        @if (LatestClosedSession is not null)
-        {
-            <section class="panel profile-release-panel voting-results-panel">
-                <div class="panel-heading">
-                    <div>
-                        <span class="profile-eyebrow">Latest Results</span>
-                        <h2>@LatestClosedSession.Title</h2>
-                    </div>
-                    <span class="section-count">Closed</span>
-                </div>
-                <div class="voting-options-grid compact">
-                    @foreach (var option in LatestClosedSession.Options.OrderByDescending(static option => option.VotePower))
+                <div class="voting-admin-actions">
+                    <button class="btn btn-primary" type="button" disabled="@(!CanSubmitVote || IsBusy)" @onclick="SubmitCurrentVoteAsync">
+                        @(IsBusy ? "Submitting..." : "Submit Votes")
+                    </button>
+                    @if (CanCloseSession)
                     {
-                        <article class="voting-option-card compact">
-                            <div class="voting-option-top">
-                                <strong>@option.Label</strong>
-                                <span>@option.VotePower.ToString("N2") power</span>
-                            </div>
-                            <div class="voting-option-meta">
-                                <span>@option.MnSpent.ToString("N0") MN</span>
-                                <span>@option.VoteCount votes</span>
-                            </div>
-                        </article>
+                        <button class="btn btn-danger" type="button" disabled="@IsBusy" @onclick="CloseSessionAsync">
+                            @(IsBusy ? "Closing..." : "Close Session")
+                        </button>
                     }
                 </div>
             </section>
@@ -185,6 +298,8 @@ else
 }
 
 @code {
+    [Parameter] public bool Embedded { get; set; }
+
     private bool IsLoading { get; set; } = true;
     private bool IsBusy { get; set; }
     private bool HasError { get; set; }
@@ -192,35 +307,110 @@ else
     private string? StatusMessage { get; set; }
     private LoginUserSummary? Session { get; set; }
     private GovernanceSessionData? ActiveSession { get; set; }
-    private GovernanceSessionData? LatestClosedSession { get; set; }
     private bool IsBankUser { get; set; }
 
     private string StartTitle { get; set; } = "Weekly Community Decision";
     private string StartDescription { get; set; } = "Vote with MN to decide this cycle's priority.";
-    private int StartDurationHours { get; set; } = 24;
+    private string StartVoteType { get; set; } = "one_choice";
+    private int StartVoteCostMn { get; set; } = 10;
+    private int StartDurationValue { get; set; } = 24;
+    private string StartDurationUnit { get; set; } = "hours";
+    private int StartNumberMin { get; set; } = 1;
+    private int StartNumberMax { get; set; } = 10;
     private string OptionA { get; set; } = "Boost map rewards";
     private string OptionB { get; set; } = "Boost item drops";
     private string OptionC { get; set; } = string.Empty;
     private string OptionD { get; set; } = string.Empty;
-    private int VoteMnAmount { get; set; } = 25;
+
+    private int VoteQuantity { get; set; } = 1;
+    private string? SelectedOptionId { get; set; }
+    private HashSet<string> SelectedOptionIds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    private string VoteTextEntry { get; set; } = string.Empty;
+    private int? VoteNumberEntry { get; set; }
+
+    private CancellationTokenSource? _pollCancellation;
+    private Task? _pollTask;
+    private bool _loadingSession;
 
     private bool CanStartSession => IsBankUser && ActiveSession is null;
     private bool CanCloseSession => IsBankUser && ActiveSession is not null;
 
-    private int CurrentStakedCount =>
-        ActiveSession?.UserVoteSummary?.StakedMapsCount
-        ?? LatestClosedSession?.UserVoteSummary?.StakedMapsCount
-        ?? Session?.StakedMapsCount
-        ?? 0;
+    private int CurrentStakedCount => ActiveSession?.UserVoteSummary?.StakedMapsCount ?? Session?.StakedMapsCount ?? 0;
+    private double CurrentStakeMultiplier => ActiveSession?.UserVoteSummary?.StakeWeightMultiplier ?? 1.0;
 
-    private double CurrentStakeMultiplier =>
-        ActiveSession?.UserVoteSummary?.StakeWeightMultiplier
-        ?? LatestClosedSession?.UserVoteSummary?.StakeWeightMultiplier
-        ?? 1.0;
+    private int CurrentSelectionCount =>
+        ActiveSession?.VoteType switch
+        {
+            "one_choice" => string.IsNullOrWhiteSpace(SelectedOptionId) ? 0 : 1,
+            "multiple_choice" => SelectedOptionIds.Count,
+            "text_entry" => string.IsNullOrWhiteSpace(VoteTextEntry) ? 0 : 1,
+            "number_selection" => VoteNumberEntry is null ? 0 : 1,
+            _ => 0,
+        };
+
+    private int CurrentVoteCostPreview =>
+        ActiveSession is null
+            ? 0
+            : Math.Max(0, VoteQuantity) * Math.Max(0, CurrentSelectionCount) * Math.Max(0, ActiveSession.VoteCostMn);
+
+    private double CurrentVotePowerPreview => CurrentVoteCostPreview * CurrentStakeMultiplier;
+
+    private bool CanSubmitVote
+    {
+        get
+        {
+            if (ActiveSession is null || VoteQuantity <= 0)
+            {
+                return false;
+            }
+
+            return ActiveSession.VoteType switch
+            {
+                "one_choice" => !string.IsNullOrWhiteSpace(SelectedOptionId),
+                "multiple_choice" => SelectedOptionIds.Count > 0,
+                "text_entry" => !string.IsNullOrWhiteSpace(VoteTextEntry),
+                "number_selection" => VoteNumberEntry is not null && IsNumberEntryInRange(VoteNumberEntry.Value),
+                _ => false,
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        StartPolling();
+    }
+
+    private void StartPolling()
+    {
+        if (_pollTask is not null)
+        {
+            return;
+        }
+
+        _pollCancellation = new CancellationTokenSource();
+        _pollTask = PollLoopAsync(_pollCancellation.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                if (IsBusy)
+                {
+                    continue;
+                }
+
+                await LoadAsync(silent: true);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
     }
 
     private async Task ReloadAsync()
@@ -228,13 +418,22 @@ else
         await LoadAsync();
     }
 
-    private async Task LoadAsync()
+    private async Task LoadAsync(bool silent = false)
     {
-        IsLoading = true;
-        HasError = false;
-        ErrorMessage = null;
-        StatusMessage = null;
-        await InvokeAsync(StateHasChanged);
+        if (_loadingSession)
+        {
+            return;
+        }
+
+        _loadingSession = true;
+        if (!silent)
+        {
+            IsLoading = true;
+            HasError = false;
+            ErrorMessage = null;
+            StatusMessage = null;
+            await InvokeAsync(StateHasChanged);
+        }
 
         try
         {
@@ -246,34 +445,97 @@ else
 
             IsBankUser = payload.IsBankUser;
             ActiveSession = payload.ActiveSession;
-            LatestClosedSession = payload.LatestClosedSession ?? payload.ClosedSession;
             Session = payload.User ?? await Api.GetSessionAsync();
             await SyncClientSessionAsync(payload.User);
+            ApplySessionDefaults();
+
+            if (!silent)
+            {
+                HasError = false;
+                ErrorMessage = null;
+            }
         }
         catch (Exception ex)
         {
-            HasError = true;
-            ErrorMessage = ex.Message;
+            if (!silent)
+            {
+                HasError = true;
+                ErrorMessage = ex.Message;
+            }
         }
         finally
         {
-            IsLoading = false;
-            await InvokeAsync(StateHasChanged);
+            if (!silent)
+            {
+                IsLoading = false;
+                await InvokeAsync(StateHasChanged);
+            }
+
+            _loadingSession = false;
+        }
+    }
+
+    private void ApplySessionDefaults()
+    {
+        if (ActiveSession is null)
+        {
+            SelectedOptionId = null;
+            SelectedOptionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            VoteTextEntry = string.Empty;
+            VoteNumberEntry = null;
+            return;
+        }
+
+        VoteQuantity = Math.Max(1, VoteQuantity);
+        if (ActiveSession.VoteType == "one_choice")
+        {
+            if (string.IsNullOrWhiteSpace(SelectedOptionId) || !ActiveSession.Options.Any(option => option.Id == SelectedOptionId))
+            {
+                SelectedOptionId = ActiveSession.Options.FirstOrDefault()?.Id;
+            }
+        }
+        else if (ActiveSession.VoteType == "multiple_choice")
+        {
+            SelectedOptionIds = SelectedOptionIds
+                .Where(selected => ActiveSession.Options.Any(option => option.Id == selected))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        else if (ActiveSession.VoteType == "number_selection")
+        {
+            if (VoteNumberEntry is null && ActiveSession.NumberMin is not null)
+            {
+                VoteNumberEntry = ActiveSession.NumberMin;
+            }
         }
     }
 
     private async Task StartSessionAsync()
     {
+        var voteType = (StartVoteType ?? string.Empty).Trim().ToLowerInvariant();
         var options = new[] { OptionA, OptionB, OptionC, OptionD }
             .Select(static option => (option ?? string.Empty).Trim())
             .Where(static option => !string.IsNullOrWhiteSpace(option))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (string.IsNullOrWhiteSpace(StartTitle) || options.Count < 2)
+        if (string.IsNullOrWhiteSpace(StartTitle))
         {
             HasError = true;
-            StatusMessage = "Provide a title and at least two unique options.";
+            StatusMessage = "Title is required.";
+            return;
+        }
+
+        if (IsChoiceVoteType(voteType) && options.Count < 2)
+        {
+            HasError = true;
+            StatusMessage = "Choice voting requires at least two options.";
+            return;
+        }
+
+        if (voteType == "number_selection" && StartNumberMin > StartNumberMax)
+        {
+            HasError = true;
+            StatusMessage = "Number vote min cannot be greater than max.";
             return;
         }
 
@@ -282,8 +544,13 @@ else
             {
                 title = StartTitle.Trim(),
                 description = StartDescription.Trim(),
+                voteType,
                 options,
-                durationHours = StartDurationHours,
+                durationValue = StartDurationValue,
+                durationUnit = StartDurationUnit,
+                voteCostMn = StartVoteCostMn,
+                numberMin = voteType == "number_selection" ? (int?)StartNumberMin : null,
+                numberMax = voteType == "number_selection" ? (int?)StartNumberMax : null,
             }),
             "Voting session started.");
     }
@@ -295,16 +562,39 @@ else
             "Voting session closed.");
     }
 
-    private async Task VoteAsync(string optionId)
+    private async Task SubmitCurrentVoteAsync()
     {
-        if (VoteMnAmount <= 0)
+        if (ActiveSession is null || !CanSubmitVote)
         {
-            HasError = true;
-            StatusMessage = "Vote amount must be at least 1 MN.";
             return;
         }
 
-        await ExecuteVoteAsync(optionId, VoteMnAmount);
+        object payload = ActiveSession.VoteType switch
+        {
+            "one_choice" => new
+            {
+                optionId = SelectedOptionId,
+                voteQuantity = VoteQuantity,
+            },
+            "multiple_choice" => new
+            {
+                optionIds = SelectedOptionIds.ToList(),
+                voteQuantity = VoteQuantity,
+            },
+            "text_entry" => new
+            {
+                textEntry = VoteTextEntry.Trim(),
+                voteQuantity = VoteQuantity,
+            },
+            "number_selection" => new
+            {
+                numberEntry = VoteNumberEntry,
+                voteQuantity = VoteQuantity,
+            },
+            _ => new { voteQuantity = VoteQuantity },
+        };
+
+        await ExecuteVoteAsync(payload);
     }
 
     private async Task ExecuteActionAsync(Func<Task<HttpResponseMessage>> requestFactory, string successMessage)
@@ -330,9 +620,9 @@ else
 
             IsBankUser = payload.IsBankUser;
             ActiveSession = payload.ActiveSession;
-            LatestClosedSession = payload.LatestClosedSession ?? payload.ClosedSession ?? LatestClosedSession;
             Session = payload.User ?? Session;
             await SyncClientSessionAsync(payload.User);
+            ApplySessionDefaults();
             StatusMessage = successMessage;
         }
         catch (Exception ex)
@@ -347,7 +637,7 @@ else
         }
     }
 
-    private async Task ExecuteVoteAsync(string optionId, int mnSpent)
+    private async Task ExecuteVoteAsync(object payloadBody)
     {
         if (IsBusy)
         {
@@ -361,11 +651,7 @@ else
 
         try
         {
-            using var response = await Api.PostJsonAsync("api/auth/voting/cast", new
-            {
-                optionId,
-                mnSpent,
-            });
+            using var response = await Api.PostJsonAsync("api/auth/voting/cast", payloadBody);
             var payload = await Api.ReadJsonAsync<GovernanceVoteResponse>(response);
             if (!response.IsSuccessStatusCode || payload is null)
             {
@@ -375,7 +661,8 @@ else
             ActiveSession = payload.ActiveSession ?? ActiveSession;
             Session = payload.User ?? Session;
             await SyncClientSessionAsync(payload.User);
-            StatusMessage = $"Vote cast: {payload.MnSpent:N0} MN -> {payload.VotePower:N2} power.";
+            ApplySessionDefaults();
+            StatusMessage = $"Vote cast: {payload.MnSpent:N0} MN ({payload.VoteQuantity:N0} vote(s)) -> {payload.VotePower:N2} power.";
         }
         catch (Exception ex)
         {
@@ -387,6 +674,76 @@ else
             IsBusy = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private void SelectSingleOption(string optionId)
+    {
+        SelectedOptionId = optionId;
+    }
+
+    private bool IsSelectedSingle(string optionId)
+    {
+        return string.Equals(SelectedOptionId, optionId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsSelectedMultiple(string optionId)
+    {
+        return SelectedOptionIds.Contains(optionId);
+    }
+
+    private void ToggleMultipleOption(string optionId, ChangeEventArgs args)
+    {
+        var shouldSelect = args.Value is bool value
+            ? value
+            : string.Equals(Convert.ToString(args.Value), "true", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Convert.ToString(args.Value), "on", StringComparison.OrdinalIgnoreCase);
+
+        if (shouldSelect)
+        {
+            SelectedOptionIds.Add(optionId);
+            return;
+        }
+
+        SelectedOptionIds.Remove(optionId);
+    }
+
+    private bool IsNumberEntryInRange(int value)
+    {
+        if (ActiveSession is null)
+        {
+            return false;
+        }
+
+        if (ActiveSession.NumberMin is not null && value < ActiveSession.NumberMin)
+        {
+            return false;
+        }
+
+        if (ActiveSession.NumberMax is not null && value > ActiveSession.NumberMax)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsChoiceVoteType(string voteType)
+    {
+        return string.Equals(voteType, "one_choice", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(voteType, "multiple_choice", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetVoteTypeLabel(string voteType)
+    {
+        var normalized = (voteType ?? string.Empty).Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "one_choice" => "One choice selection",
+            "multiple_choice" => "Multiple choice",
+            "text_entry" => "Text entry",
+            "number_selection" => "Number selection",
+            _ => string.IsNullOrWhiteSpace(voteType) ? "Unknown" : voteType,
+        };
     }
 
     private async Task SyncClientSessionAsync(LoginUserSummary? session)
@@ -410,5 +767,37 @@ else
         return DateTimeOffset.TryParse(isoUtc, out var parsed)
             ? parsed.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
             : isoUtc;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_pollCancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _pollCancellation.CancelAsync();
+        }
+        catch
+        {
+            // ignored
+        }
+
+        if (_pollTask is not null)
+        {
+            try
+            {
+                await _pollTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // ignored
+            }
+        }
+
+        _pollCancellation.Dispose();
+        _pollCancellation = null;
     }
 }

@@ -643,8 +643,13 @@ public class APIController : ControllerBase
             username,
             title = request.Title,
             description = request.Description,
+            vote_type = request.VoteType,
             options = request.Options,
-            duration_hours = request.DurationHours,
+            duration_value = request.DurationValue,
+            duration_unit = request.DurationUnit,
+            vote_cost_mn = request.VoteCostMn,
+            number_min = request.NumberMin,
+            number_max = request.NumberMax,
         });
         return await RelayAsync(response);
     }
@@ -672,7 +677,10 @@ public class APIController : ControllerBase
         {
             username,
             option_id = request.OptionId,
-            mn_spent = request.MnSpent,
+            option_ids = request.OptionIds,
+            text_entry = request.TextEntry,
+            number_entry = request.NumberEntry,
+            vote_quantity = request.VoteQuantity,
         });
         return await RelayAsync(response);
     }
@@ -1048,14 +1056,22 @@ public sealed class StartVotingSessionRequest
 {
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string VoteType { get; set; } = "one_choice";
     public List<string> Options { get; set; } = [];
-    public int DurationHours { get; set; } = 24;
+    public int DurationValue { get; set; } = 24;
+    public string DurationUnit { get; set; } = "hours";
+    public int VoteCostMn { get; set; } = 10;
+    public int? NumberMin { get; set; }
+    public int? NumberMax { get; set; }
 }
 
 public sealed class CastVoteRequest
 {
-    public string OptionId { get; set; } = string.Empty;
-    public int MnSpent { get; set; }
+    public string? OptionId { get; set; }
+    public List<string> OptionIds { get; set; } = [];
+    public string? TextEntry { get; set; }
+    public int? NumberEntry { get; set; }
+    public int VoteQuantity { get; set; } = 1;
 }
 
 public sealed class CreateMultiplayerSessionRequest

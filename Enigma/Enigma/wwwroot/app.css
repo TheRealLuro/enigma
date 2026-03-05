@@ -7012,6 +7012,12 @@ h1:focus {
     gap: 12px;
 }
 
+.voting-duration-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 160px;
+    gap: 10px;
+}
+
 .voting-form-span {
     grid-column: 1 / -1;
 }
@@ -7090,6 +7096,19 @@ h1:focus {
     justify-content: space-between;
     color: rgba(210, 219, 232, 0.76);
     font-size: 0.9rem;
+}
+
+.voting-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(220, 230, 244, 0.88);
+    font-weight: 600;
+}
+
+.voting-entry-block {
+    display: grid;
+    gap: 8px;
 }
 
 .economy-shell {
@@ -7180,6 +7199,10 @@ h1:focus {
     }
 
     .voting-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .voting-duration-row {
         grid-template-columns: 1fr;
     }
 

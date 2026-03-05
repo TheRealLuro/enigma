@@ -121,6 +121,15 @@ public sealed class GovernanceVoteResponse
     [JsonPropertyName("stake_weight_multiplier")]
     public double StakeWeightMultiplier { get; set; }
 
+    [JsonPropertyName("vote_quantity")]
+    public int VoteQuantity { get; set; }
+
+    [JsonPropertyName("vote_cost_mn")]
+    public int VoteCostMn { get; set; }
+
+    [JsonPropertyName("selection_count")]
+    public int SelectionCount { get; set; }
+
     [JsonPropertyName("voting_open")]
     public bool VotingOpen { get; set; }
 
@@ -157,11 +166,32 @@ public sealed class GovernanceSessionData
     [JsonPropertyName("closed_at")]
     public string? ClosedAt { get; set; }
 
+    [JsonPropertyName("vote_type")]
+    public string VoteType { get; set; } = "one_choice";
+
+    [JsonPropertyName("vote_cost_mn")]
+    public int VoteCostMn { get; set; } = 1;
+
+    [JsonPropertyName("duration_value")]
+    public int DurationValue { get; set; }
+
+    [JsonPropertyName("duration_unit")]
+    public string DurationUnit { get; set; } = "hours";
+
+    [JsonPropertyName("number_min")]
+    public int? NumberMin { get; set; }
+
+    [JsonPropertyName("number_max")]
+    public int? NumberMax { get; set; }
+
     [JsonPropertyName("total_mn_spent")]
     public int TotalMnSpent { get; set; }
 
     [JsonPropertyName("total_vote_power")]
     public double TotalVotePower { get; set; }
+
+    [JsonPropertyName("total_votes_cast")]
+    public int TotalVotesCast { get; set; }
 
     [JsonPropertyName("unique_voter_count")]
     public int UniqueVoterCount { get; set; }
@@ -189,6 +219,9 @@ public sealed class GovernanceOptionTally
 
     [JsonPropertyName("vote_count")]
     public int VoteCount { get; set; }
+
+    [JsonPropertyName("vote_quantity")]
+    public int VoteQuantity { get; set; }
 }
 
 public sealed class GovernanceUserVoteSummary
@@ -204,4 +237,7 @@ public sealed class GovernanceUserVoteSummary
 
     [JsonPropertyName("vote_power")]
     public double VotePower { get; set; }
+
+    [JsonPropertyName("vote_quantity")]
+    public int VoteQuantity { get; set; }
 }
