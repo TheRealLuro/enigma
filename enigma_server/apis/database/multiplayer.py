@@ -41,7 +41,7 @@ from .redis_store import (
 router = APIRouter(prefix="/database/multiplayer")
 _SESSION_SOCKETS: dict[str, list[tuple[str, WebSocket]]] = {}
 _PENDING_SOCKET_ABANDON_TASKS: dict[tuple[str, str], asyncio.Task[None]] = {}
-SOCKET_ABANDON_GRACE_SECONDS = 22.0
+SOCKET_ABANDON_GRACE_SECONDS = 8.0
 ROOM_SIZE = 1080.0
 PLAYER_SIZE = 60.0
 SPAWN_EDGE_INSET = 6.0
@@ -404,7 +404,10 @@ async def _abandon_session_after_socket_disconnect(session_id: str, username: st
 
         with session_lock(session_id):
             session = load_json(session_key(session_id))
-            if not session or str(session.get("status") or "").strip().lower() != "active":
+            if not session:
+                return
+            status = str(session.get("status") or "").strip().lower()
+            if status in {"completed", "abandoned"}:
                 return
 
             if not _session_has_member(session, username):
@@ -612,7 +615,20 @@ def _session_should_soft_close(session_id: str, session: dict[str, Any], usernam
         return (not has_guest) or len(players) <= 1
 
     if status == "ready_check":
-        return (not has_guest) or len(players) < 2
+        if (not has_guest) or len(players) < 2:
+            return True
+
+        if not _session_has_live_socket(session_id):
+            return True
+
+        if not _session_has_live_socket(session_id, username) and _player_is_stale(
+            session,
+            username,
+            stale_after=timedelta(seconds=5),
+        ):
+            return True
+
+        return False
 
     if status == "active":
         if _all_players_stale(session, stale_after=timedelta(minutes=3)):
@@ -977,39 +993,54 @@ def _finish_multiplayer_session_locked(session_id: str, session: dict[str, Any],
 def _leave_multiplayer_session_locked(session_id: str, session: dict[str, Any], username: str, reason: str) -> None:
     _assert_session_member(session, username)
 
-    fee_total = 0
-    penalties: dict[str, Any] = {}
-    for player_username in session.get("players", {}).keys():
-        try:
-            user = _load_user(player_username)
-        except HTTPException:
-            continue
+    current_status = str(session.get("status") or "").strip().lower()
+    if current_status in {"completed", "abandoned"}:
+        _clear_user_session(username)
+        return
 
-        loss_fee = compute_loss_fee(user)
-        fee_applied = int(loss_fee["applied_fee"] or 0)
-        update_query: dict[str, Any] = {
-            "$inc": {
-                "number_of_maps_played": 1,
-                "maps_lost": 1,
-                "maze_nuggets": -fee_applied,
-            }
-        }
-        users_collection.update_one({"username": player_username}, update_query)
-        penalties[player_username] = {"loss_fee_applied": fee_applied}
-        fee_total += fee_applied
-
+    player_usernames = [str(player_username).strip() for player_username in session.get("players", {}).keys() if str(player_username).strip()]
     session["status"] = "abandoned"
     session["completed_at"] = _utc_now_iso()
     session["abandoned_by"] = username
     session["abandon_reason"] = (reason or "left_session").strip() or "left_session"
-    session["abandon_penalties"] = penalties
+    session["abandon_penalties"] = {}
     save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
     _clear_pending_invites(session)
 
-    for player_username in session.get("players", {}).keys():
+    for player_username in player_usernames:
         _clear_user_session(player_username)
 
-    credit_bank_dividend(users_collection, fee_total)
+    # Only active in-maze sessions apply loss penalties. Lobby exits close immediately with no fee.
+    if current_status != "active":
+        return
+
+    fee_total = 0
+    penalties: dict[str, Any] = {}
+    for player_username in player_usernames:
+        try:
+            user = _load_user(player_username)
+            loss_fee = compute_loss_fee(user)
+            fee_applied = int(loss_fee["applied_fee"] or 0)
+            update_query: dict[str, Any] = {
+                "$inc": {
+                    "number_of_maps_played": 1,
+                    "maps_lost": 1,
+                    "maze_nuggets": -fee_applied,
+                }
+            }
+            users_collection.update_one({"username": player_username}, update_query)
+            penalties[player_username] = {"loss_fee_applied": fee_applied}
+            fee_total += fee_applied
+        except Exception:
+            penalties[player_username] = {"loss_fee_applied": 0}
+
+    session["abandon_penalties"] = penalties
+    save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    if fee_total > 0:
+        try:
+            credit_bank_dividend(users_collection, fee_total)
+        except Exception:
+            pass
 
 
 @router.get("/puzzle_catalog")

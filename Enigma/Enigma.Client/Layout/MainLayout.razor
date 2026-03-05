@@ -212,7 +212,8 @@
             Description = "Experience live movement, room transitions, and puzzle interaction without risking a real run.",
             Objective = "Open the tutorial demo run and move through at least one room.",
             HelperText = "Use movement keys, approach puzzle consoles, and interact to feel the loop directly.",
-            Path = "/game"
+            Path = "/game",
+            CompletionEventKey = "tutorial-demo-room-transition"
         },
         new()
         {
@@ -776,6 +777,11 @@
                 continue;
             }
 
+            if (!string.IsNullOrWhiteSpace(_tutorialSteps[index].CompletionEventKey))
+            {
+                continue;
+            }
+
             if (!DoesUriMatchTutorialStep(_tutorialSteps[index], uri))
             {
                 continue;
@@ -790,6 +796,44 @@
         }
 
         return markedAny;
+    }
+
+    [JSInvokable]
+    public Task HandleTutorialObjectiveCompletedAsync(string? completionEventKey)
+    {
+        var normalizedKey = (completionEventKey ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(normalizedKey))
+        {
+            return Task.CompletedTask;
+        }
+
+        var markedAny = false;
+        for (var index = 0; index < _tutorialSteps.Count; index++)
+        {
+            if (_completedTutorialStepIndexes.Contains(index))
+            {
+                continue;
+            }
+
+            if (!string.Equals(_tutorialSteps[index].CompletionEventKey, normalizedKey, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            _completedTutorialStepIndexes.Add(index);
+            markedAny = true;
+            if (_announcedTutorialStepIndexes.Add(index))
+            {
+                Notifications.Success($"Objective complete: {_tutorialSteps[index].Title}", 3);
+            }
+        }
+
+        if (!markedAny)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(StateHasChanged);
     }
 
     private bool DoesUriMatchTutorialStep(TutorialStepDefinition step, string uri)

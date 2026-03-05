@@ -20,6 +20,7 @@
     let currentCoopLeavePayload = null;
     let tutorialDotNetRef = null;
     let tutorialRequestHandler = null;
+    let tutorialObjectiveHandler = null;
     let userSessionDotNetRef = null;
     let userSessionHandler = null;
     let audioContext = null;
@@ -394,6 +395,11 @@
         if (tutorialRequestHandler) {
             window.removeEventListener("enigma:tutorial-requested", tutorialRequestHandler);
             tutorialRequestHandler = null;
+        }
+
+        if (tutorialObjectiveHandler) {
+            window.removeEventListener("enigma:tutorial-objective-completed", tutorialObjectiveHandler);
+            tutorialObjectiveHandler = null;
         }
 
         tutorialDotNetRef = null;
@@ -829,8 +835,17 @@
                     tutorialDotNetRef.invokeMethodAsync("HandleTutorialRequestedAsync");
                 }
             };
+            tutorialObjectiveHandler = function (event) {
+                const objectiveKey = event && event.detail && typeof event.detail.objectiveKey === "string"
+                    ? event.detail.objectiveKey.trim()
+                    : "";
+                if (tutorialDotNetRef && objectiveKey) {
+                    tutorialDotNetRef.invokeMethodAsync("HandleTutorialObjectiveCompletedAsync", objectiveKey).catch(() => {});
+                }
+            };
 
             addWindowListener("enigma:tutorial-requested", tutorialRequestHandler);
+            addWindowListener("enigma:tutorial-objective-completed", tutorialObjectiveHandler);
         },
 
         disposeTutorialListener: function () {
@@ -865,6 +880,17 @@
             const requested = getStorageItem("session", tutorialRequestKey) === "true";
             removeStorageItem("session", tutorialRequestKey);
             return requested;
+        },
+
+        reportTutorialObjective: function (objectiveKey) {
+            const normalizedKey = String(objectiveKey || "").trim();
+            if (!normalizedKey) {
+                return;
+            }
+
+            dispatchCustomEvent("enigma:tutorial-objective-completed", {
+                objectiveKey: normalizedKey
+            });
         },
 
         requestFullscreen: async function (elementId) {

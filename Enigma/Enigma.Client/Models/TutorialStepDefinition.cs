@@ -11,4 +11,5 @@ public sealed class TutorialStepDefinition
     public bool AllowPathPrefixMatch { get; init; }
     public string Eyebrow { get; init; } = string.Empty;
     public string HelperText { get; init; } = string.Empty;
+    public string CompletionEventKey { get; init; } = string.Empty;
 }

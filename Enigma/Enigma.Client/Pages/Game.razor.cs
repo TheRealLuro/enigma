@@ -67,6 +67,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private DateTime _timerPauseUntilUtc = DateTime.MinValue;
     private DateTime _visionBoostUntilUtc = DateTime.MinValue;
     private DateTime _pathRevealUntilUtc = DateTime.MinValue;
+    private GridPoint? _tutorialStartRoomCoordinates;
+    private bool _tutorialRoomTransitionReported;
 
     [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
@@ -185,6 +187,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
         _runNonce = Guid.NewGuid().ToString("N");
         _abandonTriggered = false;
         _allowRouteExit = false;
+        _tutorialStartRoomCoordinates = null;
+        _tutorialRoomTransitionReported = false;
 
         try
         {
@@ -204,6 +208,10 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
             CurrentRoom = ParsedSeed.StartRoom;
             CurrentRoomState = _roomStates[CurrentRoom.Coordinates];
+            if (IsTutorialRun)
+            {
+                _tutorialStartRoomCoordinates = CurrentRoom.Coordinates;
+            }
             CenterPlayer();
             _sessionStopwatch.Restart();
             IsLoaded = true;
@@ -1253,7 +1261,30 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         ClampInsideRoomWalls();
         ShowBanner($"Entered room {CurrentRoom.Coordinates}", 0.8d);
+        _ = ReportTutorialRoomTransitionAsync(CurrentRoom.Coordinates);
         return true;
+    }
+
+    private async Task ReportTutorialRoomTransitionAsync(GridPoint currentRoomCoordinates)
+    {
+        if (!IsTutorialRun || _tutorialRoomTransitionReported || !_jsReady || _tutorialStartRoomCoordinates is null)
+        {
+            return;
+        }
+
+        if (currentRoomCoordinates == _tutorialStartRoomCoordinates.Value)
+        {
+            return;
+        }
+
+        _tutorialRoomTransitionReported = true;
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.reportTutorialObjective", "tutorial-demo-room-transition");
+        }
+        catch
+        {
+        }
     }
 
     private IEnumerable<WallSegment> BuildWallSegments(bool hasDoor, bool isHorizontal, double edge, double before, double after, double fixedAxisValue, string side)

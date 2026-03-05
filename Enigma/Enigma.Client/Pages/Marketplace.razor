@@ -58,9 +58,9 @@ else
             </div>
         </section>
 
-        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        @if (HasError && !string.IsNullOrWhiteSpace(StatusMessage))
         {
-            <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
+            <div class="alert alert-warning">@StatusMessage</div>
         }
 
         <div class="profile-tabbar marketplace-tabbar" data-tour-id="marketplace-tabs">

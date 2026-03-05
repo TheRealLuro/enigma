@@ -69,9 +69,9 @@ else
             </div>
         </section>
 
-        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        @if (HasError && !string.IsNullOrWhiteSpace(StatusMessage))
         {
-            <div class="alert @(HasError ? "alert-warning" : "alert-info")">@StatusMessage</div>
+            <div class="alert alert-warning">@StatusMessage</div>
         }
 
         @if (IsOwnProfile)

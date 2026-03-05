@@ -635,7 +635,7 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
                 if debit_result.modified_count != 1:
                     raise HTTPException(status_code=409, detail="Not enough Maze Nuggets to cast that vote")
 
-                credit_bank_dividend(users_collection, mn_spent, session=mongo_session)
+                credit_bank_dividend(users_collection, mn_spent, mongo_session=mongo_session)
 
                 inc_payload: dict[str, int | float] = {
                     "total_mn_spent": mn_spent,

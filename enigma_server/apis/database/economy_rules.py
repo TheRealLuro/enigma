@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from decimal import Decimal
 from typing import Any
 
 from bson.decimal128 import Decimal128
@@ -101,7 +102,24 @@ def compute_marketplace_sale_split(price: int) -> dict[str, int]:
 
 
 def compute_loss_fee(user: dict[str, Any]) -> dict[str, int]:
-    balance = max(0, int(user.get("maze_nuggets", 0) or 0))
+    raw_balance = user.get("maze_nuggets", 0)
+    if isinstance(raw_balance, Decimal128):
+        try:
+            balance = int(raw_balance.to_decimal())
+        except (ArithmeticError, ValueError):
+            balance = 0
+    elif isinstance(raw_balance, Decimal):
+        try:
+            balance = int(raw_balance)
+        except (ArithmeticError, ValueError):
+            balance = 0
+    else:
+        try:
+            balance = int(raw_balance or 0)
+        except (TypeError, ValueError):
+            balance = 0
+
+    balance = max(0, balance)
     applied_fee = min(balance, LOSS_FEE_MN)
     return {
         "base_fee": LOSS_FEE_MN,
