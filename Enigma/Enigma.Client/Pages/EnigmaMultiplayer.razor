@@ -1,7 +1,7 @@
 @page "/enigma-multiplayer"
 
 <SeoHead Title="Enigma Multiplayer | Co-op Maze Sessions and Shared Puzzle Runs"
-         Description="Learn how Enigma multiplayer works, from invites and ready checks to synchronized room movement, shared puzzle progress, and co-op completion."
+         Description="Learn how Enigma co-op works, from invites and ready checks to synchronized room state, shared puzzle progress, and team completion."
          OpenGraphType="article"
          SchemaType="Article"
          Keywords="Enigma multiplayer, co-op maze game, shared puzzle runs, cooperative puzzle maze" />
@@ -10,30 +10,40 @@
     <section class="panel seo-page-hero">
         <span class="profile-kicker">Co-op</span>
         <h1>Enigma Multiplayer</h1>
-        <p>Enigma multiplayer is designed for two-player co-op. One player creates a session, invites a friend, and both players enter the same maze once they are ready.</p>
+        <p>Enigma multiplayer is built for two-player cooperative runs with shared room progression, synchronized puzzle state, and live session updates.</p>
     </section>
 
     <section class="panel seo-page-section">
         <h2>Session Flow</h2>
-        <h3>Invite and Join</h3>
-        <p>The owner creates a co-op session and invites one friend. The invited player can join through the co-op lobby.</p>
+        <h3>Create and Invite</h3>
+        <p>The session owner starts a co-op lobby and invites a friend from their active friends list.</p>
+        <h3>Join from Anywhere</h3>
+        <p>Invites appear as live notifications and in the co-op lobby queue, so invited players can respond quickly without manual refresh.</p>
         <h3>Ready Check</h3>
-        <p>Both players must be present and ready before the shared maze begins.</p>
+        <p>Both players must be present and ready before entering the shared maze.</p>
     </section>
 
     <section class="panel seo-page-section">
         <h2>Shared Run Rules</h2>
-        <h3>Synchronized Movement</h3>
-        <p>Both players move through the same room sequence. Room transitions are synchronized and rely on shared session state.</p>
-        <h3>Shared Progress</h3>
-        <p>Puzzle completion, room rewards, and finish conditions all operate at the session level rather than as two separate solo runs.</p>
+        <h3>Synchronized Room State</h3>
+        <p>Room transitions, puzzle completion, and major run events are synchronized at the session level.</p>
+        <h3>Shared Objective Progress</h3>
+        <p>Co-op puzzles and finish objectives are tracked for the team, not as separate solo attempts.</p>
     </section>
 
     <section class="panel seo-page-section">
-        <h2>Completion and Loss</h2>
-        <h3>Finish Rules</h3>
-        <p>Co-op completion requires both players to satisfy the finish conditions together.</p>
-        <h3>Abandoning the Session</h3>
-        <p>If one player leaves the real co-op game, the session is abandoned and the run is lost for the team.</p>
+        <h2>Completion and Failure</h2>
+        <h3>Team Completion</h3>
+        <p>A co-op run completes when both players satisfy the session finish conditions.</p>
+        <h3>Session Abandonment</h3>
+        <p>If a player leaves during an active co-op run, the session is marked abandoned and the run is recorded as a loss.</p>
+    </section>
+
+    <section class="panel seo-page-section">
+        <h2>Live Multiplayer UX</h2>
+        <h3>Status and Presence</h3>
+        <p>Player online status, friend activity, and invite state are updated dynamically to reduce lobby friction.</p>
+        <h3>Notification System</h3>
+        <p>Invite arrivals, joins, and session state changes use the global app notification stream for fast feedback.</p>
     </section>
 </div>
