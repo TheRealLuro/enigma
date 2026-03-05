@@ -125,7 +125,7 @@ else
                                         <label class="form-label">Size</label>
                                         <EnigmaIntStepper Class="form-control"
                                                           Min="2"
-                                                          Max="10"
+                                                          Max="250"
                                                           @bind-Value="CreateRequest.Size" />
                                     </div>
                                 </div>
@@ -301,7 +301,7 @@ else
         [Required]
         public Difficulty Difficulty { get; set; } = Difficulty.Easy;
 
-        [Range(2, int.MaxValue)]
+        [Range(2, 250, ErrorMessage = "Co-op maze size must be between 2 and 250.")]
         public int Size { get; set; } = 4;
     }
 

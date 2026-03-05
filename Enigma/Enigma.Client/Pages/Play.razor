@@ -41,7 +41,7 @@
                         <label class="form-label">Size</label>
                         <EnigmaIntStepper Class="form-control"
                                           Min="2"
-                                          Max="10"
+                                          Max="250"
                                           @bind-Value="newMazeRequest.Size" />
                         <ValidationMessage For="() => newMazeRequest.Size" />
                     </div>
@@ -508,7 +508,7 @@
         [Required]
         public Difficulty Difficulty { get; set; } = Difficulty.Easy;
 
-        [Range(2, int.MaxValue, ErrorMessage = "A map's dimensions must be at least a 2x2")]
+        [Range(2, 250, ErrorMessage = "A map's dimensions must be between 2 and 250.")]
         public int Size { get; set; } = 4;
     }
 
