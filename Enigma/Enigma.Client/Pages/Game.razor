@@ -29,9 +29,9 @@ else if (!IsLoaded || !CanShowRoom)
 }
 else
 {
-    <div class="enigma-game-page">
+    <div class="enigma-game-page" data-tour-id="game-shell">
         <NavigationLock OnBeforeInternalNavigation="HandleBeforeInternalNavigation" ConfirmExternalNavigation="true" />
-        <section class="enigma-game-shell">
+        <section class="enigma-game-shell" data-tour-id="game-stage">
             <div class="enigma-room-stage-wrap">
                 <div id="@GameSurfaceId"
                      tabindex="0"

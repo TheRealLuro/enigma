@@ -29,8 +29,8 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage) && Overview is null)
 }
 else
 {
-    <div class="content economy-shell">
-        <section class="economy-banner">
+    <div class="content economy-shell" data-tour-id="economy-shell">
+        <section class="economy-banner" data-tour-id="economy-banner">
             <div>
                 <span class="profile-eyebrow">Economy</span>
                 <h1>Market Pulse</h1>
@@ -53,10 +53,10 @@ else
         }
 
         <div class="profile-tabbar economy-tabbar">
-            <button class="@GetTabClass(OverviewTab)" type="button" @onclick='@(() => SetActiveTab(OverviewTab))'>Overview</button>
-            <button class="@GetTabClass(MarketplaceTab)" type="button" @onclick='@(() => SetActiveTab(MarketplaceTab))'>Marketplace</button>
-            <button class="@GetTabClass(StakingTab)" type="button" @onclick='@(() => SetActiveTab(StakingTab))'>Staking</button>
-            <button class="@GetTabClass(VotingTab)" type="button" @onclick='@(() => SetActiveTab(VotingTab))'>Voting</button>
+            <button class="@GetTabClass(OverviewTab)" type="button" data-tour-id="economy-tab-overview" @onclick='@(() => SetActiveTab(OverviewTab))'>Overview</button>
+            <button class="@GetTabClass(MarketplaceTab)" type="button" data-tour-id="economy-tab-marketplace" @onclick='@(() => SetActiveTab(MarketplaceTab))'>Marketplace</button>
+            <button class="@GetTabClass(StakingTab)" type="button" data-tour-id="economy-tab-staking" @onclick='@(() => SetActiveTab(StakingTab))'>Staking</button>
+            <button class="@GetTabClass(VotingTab)" type="button" data-tour-id="economy-tab-voting" @onclick='@(() => SetActiveTab(VotingTab))'>Voting</button>
         </div>
 
         @if (ActiveTab == OverviewTab)

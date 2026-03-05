@@ -10,18 +10,18 @@
          OpenGraphType="website"
          SchemaType="WebPage" />
 
-<div class="container mt-5 play-page-shell">
+<div class="container mt-5 play-page-shell" data-tour-id="play-shell">
 
-    <section class="play-page-header play-page-banner">
+    <section class="play-page-header play-page-banner" data-tour-id="play-banner">
         <div class="play-page-header-copy">
             <h1 class="mb-2">Start a Discovery</h1>
         </div>
         <div class="play-header-actions">
-            <button class="btn btn-secondary" type="button" @onclick="OpenCoopLobby">Co-op Lobby</button>
+            <button class="btn btn-secondary" type="button" data-tour-id="play-open-coop" @onclick="OpenCoopLobby">Co-op Lobby</button>
         </div>
     </section>
 
-    <div class="play-setup-grid">
+    <div class="play-setup-grid" data-tour-id="play-setup-grid">
         <div class="play-forms-column">
             <div class="card shadow-sm p-4 mb-4 play-card">
                 <h4 class="mb-3">Generate New Maze</h4>

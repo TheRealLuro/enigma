@@ -7,15 +7,15 @@
          OpenGraphType="website"
          SchemaType="WebPage" />
 
-<div class="home-page-shell">
-    <div class="hero hero-panel home-hero-panel">
+<div class="home-page-shell" data-tour-id="home-hub">
+    <div class="hero hero-panel home-hero-panel" data-tour-id="home-banner">
         <div class="home-hero-copy">
             <h1>@($"Welcome to Enigma, {Username}")</h1>
         </div>
     </div>
 
     <div class="grid grid-auto home-tab-grid">
-        <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayClick">
+        <button class="game-card clickable menu-image-card" type="button" data-tour-id="home-play-card" @onclick="OnPlayClick">
             <div class="menu-card-media">
                 <img class="menu-card-image" src="/images/mainmenu-tabs/PlayTab.png" alt="Play" />
             </div>
@@ -25,7 +25,7 @@
             </div>
         </button>
 
-        <button class="game-card clickable menu-image-card" type="button" @onclick="OnLeaderboardsClick">
+        <button class="game-card clickable menu-image-card" type="button" data-tour-id="home-leaderboard-card" @onclick="OnLeaderboardsClick">
             <div class="menu-card-media">
                 <img class="menu-card-image" src="/images/mainmenu-tabs/LeaderboardTab.png" alt="Leaderboard" />
             </div>
@@ -35,7 +35,7 @@
             </div>
         </button>
 
-        <button class="game-card clickable menu-image-card" type="button" @onclick="OnProfileClick">
+        <button class="game-card clickable menu-image-card" type="button" data-tour-id="home-profile-card" @onclick="OnProfileClick">
             <div class="menu-card-media">
                 <img class="menu-card-image" src="/images/mainmenu-tabs/ProfileTab.png" alt="Profile" />
             </div>
@@ -45,7 +45,7 @@
             </div>
         </button>
 
-        <button class="game-card clickable menu-image-card" type="button" @onclick="OnMarketplaceClick">
+        <button class="game-card clickable menu-image-card" type="button" data-tour-id="home-economy-card" @onclick="OnMarketplaceClick">
             <div class="menu-card-media">
                 <img class="menu-card-image" src="/images/mainmenu-tabs/MarketplaceTab.png" alt="Economy" />
             </div>
@@ -55,7 +55,7 @@
             </div>
         </button>
 
-        <button class="game-card clickable menu-image-card" type="button" @onclick="OnPlayersClick">
+        <button class="game-card clickable menu-image-card" type="button" data-tour-id="home-players-card" @onclick="OnPlayersClick">
             <div class="menu-card-media">
                 <img class="menu-card-image" src="/images/mainmenu-tabs/PlayersTab.png" alt="Players" />
             </div>

@@ -21,12 +21,12 @@
             </div>
 
             <nav class="app-shell-nav">
-                <NavLink class="nav-link" href="/home">Home</NavLink>
-                <NavLink class="nav-link" href="/play">Play</NavLink>
-                <NavLink class="nav-link" href="/leaderboard">Leaderboard</NavLink>
-                <NavLink class="nav-link" href="/players">Players</NavLink>
-                <NavLink class="nav-link" href="/profile">Profile</NavLink>
-                <NavLink class="nav-link" href="/economy">Economy</NavLink>
+                <NavLink class="nav-link" href="/home" data-tour-id="nav-home">Home</NavLink>
+                <NavLink class="nav-link" href="/play" data-tour-id="nav-play">Play</NavLink>
+                <NavLink class="nav-link" href="/leaderboard" data-tour-id="nav-leaderboard">Leaderboard</NavLink>
+                <NavLink class="nav-link" href="/players" data-tour-id="nav-players">Players</NavLink>
+                <NavLink class="nav-link" href="/profile" data-tour-id="nav-profile">Profile</NavLink>
+                <NavLink class="nav-link" href="/economy" data-tour-id="nav-economy">Economy</NavLink>
             </nav>
 
             <div class="app-shell-account">
@@ -91,9 +91,16 @@
 {
     <div class="enigma-modal-backdrop tutorial-backdrop @(IsGamePath() ? "tutorial-backdrop-game" : string.Empty)">
         <div class="enigma-modal-card tutorial-modal-card">
-            <span class="profile-kicker">@CurrentTutorialStep.Eyebrow</span>
+            <span class="profile-kicker">@CurrentTutorialStep.Chapter</span>
             <h2>@CurrentTutorialStep.Title</h2>
             <p>@CurrentTutorialStep.Description</p>
+            <div class="tutorial-objective-card">
+                <span class="profile-eyebrow">@CurrentTutorialStep.Eyebrow Objective</span>
+                <p>@CurrentTutorialStep.Objective</p>
+                <span class="tutorial-objective-status @(IsCurrentTutorialStepComplete ? "complete" : string.Empty)">
+                    @(IsCurrentTutorialStepComplete ? "Objective complete." : "Objective pending.")
+                </span>
+            </div>
             @if (!string.IsNullOrWhiteSpace(CurrentTutorialStep.HelperText))
             {
                 <p class="tutorial-helper-copy">@CurrentTutorialStep.HelperText</p>
@@ -102,14 +109,18 @@
             {
                 <p class="tutorial-helper-copy">Inactive for 60 consecutive days means permanent deletion of this account and all owned maps.</p>
             }
+            <div class="tutorial-progress-track" aria-hidden="true">
+                <span class="tutorial-progress-fill" style="@GetTutorialProgressStyle()"></span>
+            </div>
             <div class="tutorial-progress-row">
                 <span>Step @(_tutorialIndex + 1) of @_tutorialSteps.Count</span>
-                <span>@GetTutorialRouteLabel()</span>
+                <span>@CompletedTutorialStepCount / @_tutorialSteps.Count completed</span>
             </div>
             <div class="enigma-end-actions tutorial-action-row">
                 <button class="btn btn-secondary" type="button" @onclick="SkipTutorialAsync">Skip</button>
                 <button class="btn btn-secondary" type="button" disabled="@(_tutorialIndex == 0)" @onclick="GoToPreviousTutorialStepAsync">Previous</button>
-                <button class="btn btn-primary" type="button" @onclick="GoToNextTutorialStepAsync">@(_tutorialIndex == _tutorialSteps.Count - 1 ? "Finish" : "Next")</button>
+                <button class="btn btn-secondary" type="button" @onclick="OpenCurrentTutorialObjectiveAsync">Open Objective</button>
+                <button class="btn btn-primary" type="button" disabled="@(!CanAdvanceTutorialStep)" @onclick="GoToNextTutorialStepAsync">@(_tutorialIndex == _tutorialSteps.Count - 1 ? "Finish" : "Continue")</button>
             </div>
         </div>
     </div>
@@ -158,88 +169,173 @@
     private HashSet<string> _knownFriendRequests = new(StringComparer.OrdinalIgnoreCase);
     private bool _invitesInitialized;
     private HashSet<string> _knownInviteSessionIds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<int> _completedTutorialStepIndexes = [];
+    private readonly HashSet<int> _announcedTutorialStepIndexes = [];
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
         new()
         {
+            Chapter = "Act I - Arrival",
             Eyebrow = "Home",
-            Title = "Home",
-            Description = "Home is the main hub. From here you jump into Play, Leaderboard, Players, Profile, Economy, and Voting without hunting through nested menus.",
-            HelperText = "Use the header for fast navigation on normal pages. The home cards are the quick launch version of the same major sections.",
+            Title = "Enter the Enigma Hub",
+            Description = "This is your command deck. Every core system branches from here.",
+            Objective = "Visit Home and identify where Play, Leaderboard, Players, Profile, and Economy are launched.",
+            HelperText = "You can always return here when exploring a new system.",
             Path = "/home"
         },
         new()
         {
+            Chapter = "Act I - Arrival",
             Eyebrow = "Play",
             Title = "Start a Discovery",
-            Description = "Play is where single-player runs start. Generate a new maze, load a saved one, choose your run items, and then enter the maze.",
-            HelperText = "The fullscreen choice is remembered. If you lock in fullscreen and choose not to be asked again, future runs try that mode on the next start click.",
+            Description = "Play is your run launcher for new seeds and saved maps.",
+            Objective = "Open Play and review Generate, Load, and Loadout controls.",
+            HelperText = "Pick up to 3 items in loadout before entering a run.",
             Path = "/play"
         },
         new()
         {
+            Chapter = "Act II - Linkup",
             Eyebrow = "Co-op",
             Title = "Dual Expedition",
-            Description = "Co-op is the shared session lobby. Create a run, invite exactly one friend, wait for both players to ready up, then enter together.",
-            HelperText = "This page is only for session setup. If a new co-op maze is saved after completion, the host becomes the owner and both explorers receive discovery credit.",
+            Description = "Co-op is the live lobby for shared maze sessions.",
+            Objective = "Open Co-op lobby and review invite, create, and join flows.",
+            HelperText = "Owner creates the session, invites one friend, both ready up, then enter together.",
             Path = "/play/coop"
         },
         new()
         {
+            Chapter = "Act II - Linkup",
             Eyebrow = "Game",
-            Title = "Maze Run",
-            Description = "This safe demo shows the live maze layout. Move through rooms, watch the in-room HUD, walk to the console, and press E to open puzzle overlays.",
-            HelperText = "Some puzzles are console-based and some resolve directly on the stage. Real runs are permanent if you leave them; this tutorial demo is exempt so you can revisit it safely.",
+            Title = "Run a Safe Demo",
+            Description = "Experience live movement, room transitions, and puzzle interaction without risking a real run.",
+            Objective = "Open the tutorial demo run and move through at least one room.",
+            HelperText = "Use movement keys, approach puzzle consoles, and interact to feel the loop directly.",
             Path = "/game"
         },
         new()
         {
+            Chapter = "Act II - Linkup",
             Eyebrow = "Leaderboard",
-            Title = "Top Maps and Players",
-            Description = "Leaderboard switches between ranked maps and ranked players. It now loads in rank sections instead of trying to dump the whole board at once.",
-            HelperText = "Map mode tracks records, ratings, founders, and plays. Player mode tracks discoverers, owned maps, Maze Nuggets, wins, losses, and overall performance.",
+            Title = "Read the Rankings",
+            Description = "Leaderboard tracks top maps and top explorers in paged sections.",
+            Objective = "Open Leaderboard and review either map rankings or player rankings.",
+            HelperText = "Sections keep large leaderboards fast and readable.",
             Path = "/leaderboard"
         },
         new()
         {
-            Eyebrow = "Economy",
-            Title = "Economy",
-            Description = "Economy is the market hub. It has an overview snapshot plus Marketplace and Staking subtabs.",
-            HelperText = "Use Marketplace for map trading and item stock. Use Staking for daily map yield and claim timing.",
-            Path = "/economy"
-        },
-        new()
-        {
+            Chapter = "Act II - Linkup",
             Eyebrow = "Players",
-            Title = "Find Players",
-            Description = "Players is the live explorer search page. Search usernames, jump straight into exact profiles, and review the featured top discoverers.",
-            HelperText = "Results update as you type. The featured explorers here are the current top three by discovered maps, not just a generic popularity list.",
+            Title = "Scout Explorers",
+            Description = "Player search is your social lookup system.",
+            Objective = "Open Players and test live username search.",
+            HelperText = "Search updates as you type and profile cards show live online state.",
             Path = "/players"
         },
         new()
         {
+            Chapter = "Act III - Economy",
+            Eyebrow = "Economy",
+            Title = "Watch Market Pulse",
+            Description = "Economy overview shows live circulation, activity, and health metrics.",
+            Objective = "Open Economy overview and confirm the dashboard loads.",
+            HelperText = "Overview is your live macro view before taking action in subtabs.",
+            Path = "/economy"
+        },
+        new()
+        {
+            Chapter = "Act III - Economy",
+            Eyebrow = "Marketplace",
+            Title = "Trade Maps and Items",
+            Description = "Marketplace supports map listings, listing management, and item purchases.",
+            Objective = "Open Economy > Marketplace (or standalone Marketplace) and review active listings.",
+            HelperText = "Listings and item stock refresh continuously.",
+            Path = "/economy?tab=marketplace",
+            MatchPaths = ["/economy?tab=marketplace", "/marketplace"]
+        },
+        new()
+        {
+            Chapter = "Act III - Economy",
+            Eyebrow = "Staking",
+            Title = "Lock Yield Sources",
+            Description = "Staking converts owned maps into daily MN yield.",
+            Objective = "Open Economy > Staking (or standalone Staking) and review claim timer + stake lists.",
+            HelperText = "Staked maps respect lock windows before unstake.",
+            Path = "/economy?tab=staking",
+            MatchPaths = ["/economy?tab=staking", "/staking"]
+        },
+        new()
+        {
+            Chapter = "Act III - Economy",
+            Eyebrow = "Voting",
+            Title = "Council Governance",
+            Description = "Voting converts MN into weighted governance power.",
+            Objective = "Open Economy > Voting (or standalone Voting) and inspect active/closed session panels.",
+            HelperText = "When council is closed, results and your recent vote history remain visible.",
+            Path = "/economy?tab=voting",
+            MatchPaths = ["/economy?tab=voting", "/voting"]
+        },
+        new()
+        {
+            Chapter = "Act IV - Identity",
             Eyebrow = "Profile",
             Title = "Explorer Ledger",
-            Description = "Profile holds your overview, map collection, inventory, and social state. When you view another explorer, only the public sections stay visible.",
-            HelperText = "Owned maps, discovered maps, run stats, and relationship state all live here. This is also where you check whether a map is owned or only discovered.",
-            Path = "/profile"
+            Description = "Profile overview combines social, ownership, and performance state.",
+            Objective = "Open your profile overview and review identity + run stats.",
+            HelperText = "Other users only see public profile sections.",
+            Path = "/profile",
+            MatchPaths = ["/profile", "/profile/"],
+            AllowPathPrefixMatch = true
         },
         new()
         {
+            Chapter = "Act IV - Identity",
+            Eyebrow = "Maps",
+            Title = "Collection Depth",
+            Description = "Maps tab separates owned collection from discovered archive.",
+            Objective = "Open Profile > Maps tab and inspect owned/discovered panels.",
+            HelperText = "Owned and discovered are different systems and are tracked separately.",
+            Path = "/profile?tab=maps",
+            MatchPaths = ["/profile?tab=maps"],
+            AllowPathPrefixMatch = true
+        },
+        new()
+        {
+            Chapter = "Act IV - Identity",
+            Eyebrow = "Inventory",
+            Title = "Loadout Inventory",
+            Description = "Inventory tab holds owned gameplay items and cosmetics.",
+            Objective = "Open Profile > Inventory tab and review gear/cosmetic sections.",
+            HelperText = "Inventory controls what can be used in run loadouts.",
+            Path = "/profile?tab=inventory",
+            MatchPaths = ["/profile?tab=inventory"],
+            AllowPathPrefixMatch = true
+        },
+        new()
+        {
+            Chapter = "Act IV - Identity",
             Eyebrow = "Settings",
-            Title = "Profile Settings",
-            Description = "Settings hold your account controls: update email, change password, save a profile picture, replay the tutorial, and manage account deletion.",
-            HelperText = "Profile pictures come from owned map art and use the default crop automatically. There is no manual crop workflow in the current app.",
-            Path = "/profile?tab=settings"
+            Title = "Account Controls",
+            Description = "Settings contains identity, security, and tutorial replay controls.",
+            Objective = "Open Profile > Settings and locate username/email/password controls.",
+            HelperText = "You can replay this journey anytime from Settings.",
+            Path = "/profile?tab=settings",
+            MatchPaths = ["/profile?tab=settings"],
+            AllowPathPrefixMatch = true
         },
         new()
         {
+            Chapter = "Act IV - Identity",
             Eyebrow = "Retention",
-            Title = "60-Day Inactivity Rule",
-            Description = "If the account is inactive for 60 consecutive days, the account and all owned maps are deleted permanently.",
-            HelperText = "This rule matters because ownership and discovery are separate. Losing the account removes your owned maps, so keep the inactivity window in mind.",
-            Path = "/profile?tab=settings&tutorialstep=policy"
+            Title = "System Policy",
+            Description = "Retention rules are part of safe account ownership.",
+            Objective = "Open the retention policy view in Settings and confirm the 60-day inactivity rule.",
+            HelperText = "Once complete, this guided journey is fully unlocked.",
+            Path = "/profile?tab=settings&tutorialstep=policy",
+            MatchPaths = ["/profile?tab=settings&tutorialstep=policy"],
+            AllowPathPrefixMatch = true
         },
     ];
 
@@ -247,6 +343,9 @@
         _tutorialIndex >= 0 && _tutorialIndex < _tutorialSteps.Count
             ? _tutorialSteps[_tutorialIndex]
             : null;
+    private bool IsCurrentTutorialStepComplete => _completedTutorialStepIndexes.Contains(_tutorialIndex);
+    private bool CanAdvanceTutorialStep => IsCurrentTutorialStepComplete;
+    private int CompletedTutorialStepCount => _completedTutorialStepIndexes.Count;
 
     private bool ShouldShowHeader => !IsPublicPath() && !IsGamePath() && AuthCheckComplete && IsAuthenticated;
     private bool ShouldShowHeaderBalance => ShouldShowHeader && Session is not null;
@@ -400,7 +499,11 @@
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
     {
         IsAccountMenuOpen = false;
-        UpdateTutorialIndexFromUri(args.Location);
+        if (TutorialVisible)
+        {
+            TryMarkTutorialProgressFromUri(args.Location, announce: true);
+            UpdateTutorialIndexFromUri(args.Location);
+        }
         ResetAuthStateForCurrentPath(args.Location);
         if (IsPublicPath(args.Location) || !IsAuthenticated)
         {
@@ -493,8 +596,7 @@
             }
         }
 
-        TutorialVisible = true;
-        UpdateTutorialIndexFromUri(NavigationManager.Uri);
+        StartTutorialJourney(resetProgress: true);
     }
 
     [JSInvokable]
@@ -506,8 +608,7 @@
         }
 
         await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
-        TutorialVisible = true;
-        _tutorialIndex = 0;
+        StartTutorialJourney(resetProgress: true);
 
         if (!string.Equals(GetCleanPath(NavigationManager.Uri), "home", StringComparison.OrdinalIgnoreCase))
         {
@@ -566,59 +667,28 @@
             return;
         }
 
-        _tutorialIndex = GetTutorialIndexForUri(uri);
+        var nextIndex = GetTutorialIndexForUri(uri);
+        if (nextIndex >= 0)
+        {
+            _tutorialIndex = nextIndex;
+        }
     }
 
     private int GetTutorialIndexForUri(string uri)
     {
-        var (path, query) = SplitPathAndQuery(uri);
-
-        if (path == "play/coop")
+        var bestIndex = -1;
+        var bestScore = -1;
+        for (var index = 0; index < _tutorialSteps.Count; index++)
         {
-            return 2;
+            var score = GetTutorialStepMatchScore(_tutorialSteps[index], uri);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestIndex = index;
+            }
         }
 
-        if (path == "play")
-        {
-            return 1;
-        }
-
-        if (path == "game" && (query.Contains("tutorial=1", StringComparison.Ordinal) || query.Contains("tutorial=true", StringComparison.Ordinal)))
-        {
-            return 3;
-        }
-
-        if (path == "leaderboard")
-        {
-            return 4;
-        }
-
-        if (path == "marketplace")
-        {
-            return 5;
-        }
-
-        if (path == "players")
-        {
-            return 6;
-        }
-
-        if (path == "profile" && query.Contains("tutorialstep=policy", StringComparison.Ordinal))
-        {
-            return 9;
-        }
-
-        if (path == "profile" && query.Contains("tab=settings", StringComparison.Ordinal))
-        {
-            return 8;
-        }
-
-        if (path == "profile")
-        {
-            return 7;
-        }
-
-        return 0;
+        return bestIndex;
     }
 
     private static (string Path, string Query) SplitPathAndQuery(string? uri)
@@ -657,15 +727,197 @@
         return (path, query);
     }
 
-    private string GetTutorialRouteLabel()
+    private void StartTutorialJourney(bool resetProgress)
     {
-        var step = CurrentTutorialStep;
-        if (step is null)
+        if (resetProgress)
         {
-            return string.Empty;
+            ResetTutorialJourneyProgress();
         }
 
-        return step.Eyebrow;
+        TutorialVisible = true;
+        TryMarkTutorialProgressFromUri(NavigationManager.Uri, announce: false);
+        var matchedIndex = GetTutorialIndexForUri(NavigationManager.Uri);
+        if (matchedIndex >= 0)
+        {
+            _tutorialIndex = matchedIndex;
+            return;
+        }
+
+        _tutorialIndex = GetFirstIncompleteTutorialStepIndex();
+    }
+
+    private void ResetTutorialJourneyProgress()
+    {
+        _completedTutorialStepIndexes.Clear();
+        _announcedTutorialStepIndexes.Clear();
+        _tutorialIndex = 0;
+    }
+
+    private int GetFirstIncompleteTutorialStepIndex()
+    {
+        for (var index = 0; index < _tutorialSteps.Count; index++)
+        {
+            if (!_completedTutorialStepIndexes.Contains(index))
+            {
+                return index;
+            }
+        }
+
+        return 0;
+    }
+
+    private bool TryMarkTutorialProgressFromUri(string uri, bool announce)
+    {
+        var markedAny = false;
+        for (var index = 0; index < _tutorialSteps.Count; index++)
+        {
+            if (_completedTutorialStepIndexes.Contains(index))
+            {
+                continue;
+            }
+
+            if (!DoesUriMatchTutorialStep(_tutorialSteps[index], uri))
+            {
+                continue;
+            }
+
+            _completedTutorialStepIndexes.Add(index);
+            markedAny = true;
+            if (announce && _announcedTutorialStepIndexes.Add(index))
+            {
+                Notifications.Success($"Objective complete: {_tutorialSteps[index].Title}", 3);
+            }
+        }
+
+        return markedAny;
+    }
+
+    private bool DoesUriMatchTutorialStep(TutorialStepDefinition step, string uri)
+    {
+        return GetTutorialStepMatchScore(step, uri) >= 0;
+    }
+
+    private int GetTutorialStepMatchScore(TutorialStepDefinition step, string uri)
+    {
+        var matchCandidates = step.MatchPaths.Count > 0 ? step.MatchPaths : [step.Path];
+        var (actualPath, actualQueryRaw) = SplitPathAndQuery(uri);
+        var actualQuery = ParseQueryMap(actualQueryRaw);
+        var bestScore = -1;
+
+        foreach (var candidate in matchCandidates)
+        {
+            var (expectedPath, expectedQueryRaw) = SplitPathAndQuery(candidate);
+            if (!PathMatches(actualPath, expectedPath, step.AllowPathPrefixMatch))
+            {
+                continue;
+            }
+
+            var expectedQuery = ParseQueryMap(expectedQueryRaw);
+            if (QueryMatches(actualQuery, expectedQuery))
+            {
+                var score = (expectedQuery.Count * 10) + expectedPath.Length;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                }
+            }
+        }
+
+        return bestScore;
+    }
+
+    private static bool PathMatches(string actualPath, string expectedPath, bool allowPrefix)
+    {
+        if (string.Equals(actualPath, expectedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!allowPrefix || string.IsNullOrWhiteSpace(expectedPath))
+        {
+            return false;
+        }
+
+        return actualPath.StartsWith(expectedPath + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool QueryMatches(
+        Dictionary<string, string> actualQuery,
+        Dictionary<string, string> expectedQuery)
+    {
+        if (expectedQuery.Count == 0)
+        {
+            return true;
+        }
+
+        foreach (var required in expectedQuery)
+        {
+            if (!actualQuery.TryGetValue(required.Key, out var actualValue))
+            {
+                return false;
+            }
+
+            if (!string.Equals(actualValue, required.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static Dictionary<string, string> ParseQueryMap(string query)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var trimmed = (query ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return values;
+        }
+
+        var withoutQuestionMark = trimmed.TrimStart('?');
+        if (string.IsNullOrWhiteSpace(withoutQuestionMark))
+        {
+            return values;
+        }
+
+        var pairs = withoutQuestionMark.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var pair in pairs)
+        {
+            var delimiterIndex = pair.IndexOf('=');
+            string key;
+            string value;
+            if (delimiterIndex < 0)
+            {
+                key = Uri.UnescapeDataString(pair).Trim();
+                value = string.Empty;
+            }
+            else
+            {
+                key = Uri.UnescapeDataString(pair[..delimiterIndex]).Trim();
+                value = Uri.UnescapeDataString(pair[(delimiterIndex + 1)..]).Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            values[key] = value;
+        }
+
+        return values;
+    }
+
+    private string GetTutorialProgressStyle()
+    {
+        if (_tutorialSteps.Count == 0)
+        {
+            return "width:0%;";
+        }
+
+        var percent = Math.Clamp((CompletedTutorialStepCount * 100.0) / _tutorialSteps.Count, 0.0, 100.0);
+        return $"width:{percent:0.##}%;";
     }
 
     private async Task GoToPreviousTutorialStepAsync()
@@ -675,19 +927,36 @@
             return;
         }
 
-        _tutorialIndex--;
+        _tutorialIndex = Math.Max(0, _tutorialIndex - 1);
         await NavigateToTutorialStepAsync(_tutorialIndex);
+    }
+
+    private Task OpenCurrentTutorialObjectiveAsync()
+    {
+        return NavigateToTutorialStepAsync(_tutorialIndex);
     }
 
     private async Task GoToNextTutorialStepAsync()
     {
+        if (!CanAdvanceTutorialStep)
+        {
+            await OpenCurrentTutorialObjectiveAsync();
+            return;
+        }
+
         if (_tutorialIndex >= _tutorialSteps.Count - 1)
         {
             await CompleteTutorialAsync();
             return;
         }
 
-        _tutorialIndex++;
+        var nextIndex = _tutorialIndex + 1;
+        while (nextIndex < _tutorialSteps.Count && _completedTutorialStepIndexes.Contains(nextIndex))
+        {
+            nextIndex++;
+        }
+
+        _tutorialIndex = Math.Min(nextIndex, _tutorialSteps.Count - 1);
         await NavigateToTutorialStepAsync(_tutorialIndex);
     }
 
@@ -712,6 +981,7 @@
     private async Task SkipTutorialAsync()
     {
         TutorialVisible = false;
+        ResetTutorialJourneyProgress();
         await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
         try
         {
@@ -725,10 +995,13 @@
     private async Task CompleteTutorialAsync()
     {
         TutorialVisible = false;
+        _completedTutorialStepIndexes.Clear();
+        _announcedTutorialStepIndexes.Clear();
         await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
         try
         {
             await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "completed" });
+            Notifications.Success("Tutorial journey complete. Replay anytime from Profile Settings.", 5);
         }
         catch
         {
@@ -1109,6 +1382,8 @@
         _knownFriendRequests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         _invitesInitialized = false;
         _knownInviteSessionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        _completedTutorialStepIndexes.Clear();
+        _announcedTutorialStepIndexes.Clear();
         _notifications.Clear();
     }
 

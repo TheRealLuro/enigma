@@ -41,6 +41,7 @@ builder.Services.AddScoped(sp =>
     return new HttpClient { BaseAddress = new Uri(navigationManager.BaseUri) };
 });
 builder.Services.AddScoped<EnigmaApiClient>();
+builder.Services.AddScoped<UiNotificationService>();
 builder.Services.AddControllers();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
