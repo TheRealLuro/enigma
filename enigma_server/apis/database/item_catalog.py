@@ -36,31 +36,31 @@ DEFAULT_ITEM_CATALOG = [
     },
     {
         "item_id": "trap_shield",
-        "name": "Trap Shield",
-        "description": "Negates the first penalty or failure effect in a run.",
-        "kind": "defense",
-        "slot_kind": "passive",
+        "name": "Tactical Compass",
+        "description": "Provides an extended directional guide toward the finish room.",
+        "kind": "navigation",
+        "slot_kind": "support",
         "rarity": "rare",
         "price": 180,
         "stock": 10,
         "stackable": False,
         "max_per_run": 1,
-        "effect_config": {"type": "trap_block", "charges": 1},
-        "icon": "shield",
+        "effect_config": {"type": "direction_hint", "duration_seconds": 16},
+        "icon": "compass",
     },
     {
         "item_id": "reward_magnet",
-        "name": "Reward Magnet",
-        "description": "Boosts the completion payout by 15 percent.",
-        "kind": "economy",
-        "slot_kind": "passive",
+        "name": "Route Beacon",
+        "description": "Reveals the shortest route to your current objective for a longer window.",
+        "kind": "navigation",
+        "slot_kind": "support",
         "rarity": "epic",
         "price": 320,
         "stock": 6,
         "stackable": False,
         "max_per_run": 1,
-        "effect_config": {"type": "reward_multiplier", "value": 1.15},
-        "icon": "magnet",
+        "effect_config": {"type": "path_reveal", "duration_seconds": 16},
+        "icon": "drone",
     },
     {
         "item_id": "time_freeze",
@@ -139,9 +139,57 @@ DEFAULT_ITEM_CATALOG = [
     },
 ]
 
+# Patch legacy DB records in-place at serialization time so old non-functional items
+# become usable without requiring an immediate backfill script.
+LEGACY_ITEM_RUNTIME_PATCHES = {
+    "trap_shield": {
+        "name": "Tactical Compass",
+        "description": "Provides an extended directional guide toward the finish room.",
+        "kind": "navigation",
+        "category": "navigation",
+        "slot_kind": "support",
+        "stackable": False,
+        "max_per_run": 1,
+        "max_uses": 1,
+        "effect_config": {"type": "direction_hint", "duration_seconds": 16},
+        "effect": {"type": "direction_hint", "duration_seconds": 16},
+        "icon": "compass",
+    },
+    "reward_magnet": {
+        "name": "Route Beacon",
+        "description": "Reveals the shortest route to your current objective for a longer window.",
+        "kind": "navigation",
+        "category": "navigation",
+        "slot_kind": "support",
+        "stackable": False,
+        "max_per_run": 1,
+        "max_uses": 1,
+        "effect_config": {"type": "path_reveal", "duration_seconds": 16},
+        "effect": {"type": "path_reveal", "duration_seconds": 16},
+        "icon": "drone",
+    },
+}
+
+SUPPORTED_ACTIVE_EFFECT_TYPES = {
+    "direction_hint",
+    "puzzle_hint",
+    "timer_pause_seconds",
+    "vision_boost",
+    "path_reveal",
+    "skip_puzzle",
+}
+SUPPORTED_PASSIVE_EFFECT_TYPES = {
+    "reward_multiplier",
+}
+
 
 def normalize_item_doc(item: dict) -> dict:
     normalized = deepcopy(item)
+    item_id = str(normalized.get("item_id") or "").strip().lower()
+    legacy_patch = LEGACY_ITEM_RUNTIME_PATCHES.get(item_id)
+    if legacy_patch:
+        normalized.update(deepcopy(legacy_patch))
+
     kind = normalized.get("kind") or normalized.get("category") or "utility"
     slot_kind = normalized.get("slot_kind") or infer_slot_kind(kind, normalized.get("item_id"))
     effect_config = normalized.get("effect_config") or normalized.get("effect") or {}
@@ -165,6 +213,23 @@ def normalize_item_doc(item: dict) -> dict:
     normalized["purchase_limit"] = int(normalized.get("purchase_limit", 0) or 0)
     normalized["requires_tasks"] = bool(normalized.get("requires_tasks", False))
     return normalized
+
+
+def is_item_supported_for_current_app(item: dict) -> bool:
+    normalized = normalize_item_doc(item)
+    slot_kind = str(normalized.get("slot_kind") or "").strip().lower()
+    effect_type = str((normalized.get("effect_config") or {}).get("type") or "").strip().lower()
+
+    if slot_kind == "perk":
+        return True
+
+    if not effect_type:
+        return False
+
+    if slot_kind == "passive":
+        return effect_type in SUPPORTED_PASSIVE_EFFECT_TYPES
+
+    return effect_type in SUPPORTED_ACTIVE_EFFECT_TYPES
 
 
 def serialize_shop_item(item: dict) -> dict:
@@ -196,8 +261,6 @@ def infer_slot_kind(kind: str, item_id: str | None = None) -> str:
     category = str(kind or "").lower()
     if key == FOUNDERS_MARK_ITEM_ID:
         return "perk"
-    if key in {"trap_shield", "reward_magnet"}:
-        return "passive"
     if key in {"time_freeze", "puzzle_skip"}:
         return "high_power"
     if category in {"passive", "high_power", "support"}:

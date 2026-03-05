@@ -877,6 +877,15 @@
         {
             _knownInviteSessionIds = latest;
             _invitesInitialized = true;
+            if (latest.Count > 0 && !string.Equals(GetCleanPath(NavigationManager.Uri), "play/coop", StringComparison.OrdinalIgnoreCase))
+            {
+                var initialInvite = session.PendingMultiplayerInvites.FirstOrDefault();
+                var initialSender = string.IsNullOrWhiteSpace(initialInvite?.OwnerUsername) ? "a teammate" : initialInvite!.OwnerUsername.Trim();
+                var initialToast = latest.Count == 1
+                    ? $"New co-op invite received from {initialSender}."
+                    : $"{latest.Count} co-op invites are waiting.";
+                ShowInviteToast(initialToast);
+            }
             return;
         }
 
@@ -906,6 +915,7 @@
         FriendRequestToastMessage = message;
         _friendRequestToastCancellation = new CancellationTokenSource();
         _ = AutoHideFriendRequestToastAsync(_friendRequestToastCancellation.Token);
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private void HideFriendRequestToast()
@@ -963,6 +973,7 @@
         InviteToastMessage = message;
         _inviteToastCancellation = new CancellationTokenSource();
         _ = AutoHideInviteToastAsync(_inviteToastCancellation.Token);
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private void HideInviteToast()

@@ -14,7 +14,7 @@ from main import limiter
 from .account_cleanup import delete_user_account
 from .db import client, item_inventory, maps_collection, marketplace_collection, run_results, users_collection
 from .economy_rules import compute_loss_fee, credit_bank_dividend
-from .item_catalog import serialize_shop_item
+from .item_catalog import is_item_supported_for_current_app, serialize_shop_item
 from .redis_store import delete_keys, load_json, save_json, session_key, user_invites_key, user_session_key
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
@@ -324,6 +324,8 @@ def _serialize_inventory_items(user: dict[str, Any]) -> list[dict[str, Any]]:
     for item_id in sorted(item_ids):
         doc = doc_lookup.get(item_id)
         if not doc:
+            continue
+        if not is_item_supported_for_current_app(doc):
             continue
 
         serialized = serialize_shop_item(doc)

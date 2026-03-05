@@ -300,14 +300,15 @@ else
                                     {
                                         <div class="enigma-stage-run-pill">
                                             <strong>@item.Name</strong>
-                                            <span>@($"x{item.Quantity}")</span>
+                                            <span class="enigma-loadout-count">@($"x{item.Quantity}")</span>
                                             @if (CanActivateLoadoutItem(item))
                                             {
                                                 <button type="button"
                                                         class="enigma-item-use-button"
                                                         disabled="@(!CanUseLoadoutItem(item))"
                                                         @onclick="() => UseLoadoutItemFromUiAsync(item.ItemId)">
-                                                    Use @GetLoadoutHotkeyLabel(item)
+                                                    <span>Use</span>
+                                                    <kbd>@GetLoadoutHotkeyLabel(item)</kbd>
                                                 </button>
                                             }
                                             else
@@ -369,14 +370,15 @@ else
                                     {
                                         <div class="enigma-status-loadout-pill">
                                             <strong>@item.Name</strong>
-                                            <span>@($"x{item.Quantity}")</span>
+                                            <span class="enigma-loadout-count">@($"x{item.Quantity}")</span>
                                             @if (CanActivateLoadoutItem(item))
                                             {
                                                 <button type="button"
                                                         class="enigma-item-use-button"
                                                         disabled="@(!CanUseLoadoutItem(item))"
                                                         @onclick="() => UseLoadoutItemFromUiAsync(item.ItemId)">
-                                                    Use @GetLoadoutHotkeyLabel(item)
+                                                    <span>Use</span>
+                                                    <kbd>@GetLoadoutHotkeyLabel(item)</kbd>
                                                 </button>
                                             }
                                             else

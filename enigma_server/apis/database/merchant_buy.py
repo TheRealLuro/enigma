@@ -3,6 +3,7 @@ from pymongo.errors import PyMongoError
 from .db import client, item_inventory, maps_collection, merchant, users_collection
 from .economy_rules import credit_bank_dividend
 from .founders_mark import FOUNDERS_MARK_ITEM_ID, evaluate_founders_mark_requirements
+from .item_catalog import is_item_supported_for_current_app
 from .system_accounts import ensure_bank_account
 from main import limiter
 
@@ -35,6 +36,8 @@ def buy_item(request: Request, username: str, item_id: str, quantity: int = 1):
                     )
                 if not item:
                     raise HTTPException(status_code=404, detail="Item not found in shop")
+                if not is_item_supported_for_current_app(item):
+                    raise HTTPException(status_code=409, detail="This item is not available in the current app version")
 
                 category = item.get("category")
                 price = item.get("price")

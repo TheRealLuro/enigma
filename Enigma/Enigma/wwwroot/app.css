@@ -937,7 +937,7 @@ tbody tr:last-child td {
     top: 84px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 1500;
+    z-index: 3200;
     min-height: 38px;
     padding: 8px 14px;
     border-radius: 999px;
@@ -958,7 +958,7 @@ tbody tr:last-child td {
     top: 128px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 1500;
+    z-index: 3200;
     min-height: 38px;
     padding: 8px 14px;
     border-radius: 999px;
@@ -4901,10 +4901,10 @@ h1:focus {
 
 .profile-avatar-presence {
     position: absolute;
-    right: 8px;
-    bottom: 8px;
-    width: 16px;
-    height: 16px;
+    top: 10px;
+    right: 10px;
+    width: 20px;
+    height: 20px;
     border-radius: 999px;
     pointer-events: none;
     z-index: 4;
@@ -6386,6 +6386,97 @@ h1:focus {
 .enigma-stage-run-pill span {
     color: var(--epic-text-secondary);
     font-size: 0.82rem;
+}
+
+.enigma-loadout-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: rgba(111, 166, 255, 0.22);
+    border: 1px solid rgba(147, 195, 255, 0.26);
+    color: #e4f2ff;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+}
+
+.enigma-item-use-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    margin-left: 2px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(120, 180, 255, 0.42);
+    background:
+        radial-gradient(circle at top, rgba(144, 192, 255, 0.18), transparent 70%),
+        linear-gradient(180deg, rgba(61, 124, 232, 0.94), rgba(35, 86, 171, 0.94));
+    color: #eef7ff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease, opacity 0.16s ease;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.enigma-item-use-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    filter: brightness(1.05);
+}
+
+.enigma-item-use-button:focus-visible {
+    outline: 2px solid rgba(138, 199, 255, 0.72);
+    outline-offset: 2px;
+}
+
+.enigma-item-use-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.56;
+    filter: saturate(0.68);
+}
+
+.enigma-item-use-button kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    min-height: 20px;
+    margin: 0;
+    padding: 0 6px;
+    border-radius: 7px;
+    border: 1px solid rgba(210, 231, 255, 0.42);
+    background: linear-gradient(180deg, rgba(16, 34, 65, 0.96), rgba(10, 23, 44, 0.98));
+    color: #f2f8ff;
+    font-size: 0.72rem;
+    font-weight: 900;
+    font-family: inherit;
+    line-height: 1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.enigma-item-passive-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    margin-left: 2px;
+    padding: 0 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(171, 193, 220, 0.3);
+    background: rgba(169, 192, 221, 0.12);
+    color: #d9e9ff;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 
 .enigma-puzzle-console {
