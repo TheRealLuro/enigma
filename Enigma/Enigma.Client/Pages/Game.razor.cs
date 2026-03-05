@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Enigma.Client.Models.Gameplay;
 using Enigma.Client.Services;
 using Microsoft.AspNetCore.Components;
@@ -12,6 +13,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
 {
     private sealed record PuzzleGuide(string Goal, string Controls, string Success);
     private sealed record RoomInteractionProgressState(PlayAreaRect AnchorRect, double Progress, string Label);
+    private sealed record ActivePuzzleConsole(PlayAreaRect Bounds, bool IsLocal);
     private const double RoomSize = 1080d;
     private const double StageAspectRatio = 16d / 9d;
     private const double RenderWidth = RoomSize * StageAspectRatio;
@@ -28,6 +30,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         new(892d, 82d, PuzzleConsoleSize, PuzzleConsoleSize),
         new(892d, 482d, PuzzleConsoleSize, PuzzleConsoleSize),
     ];
+    private const double CoopConsoleMinSeparation = 300d;
     private const string CompletionSummaryStorageKey = "enigma.game.summary";
     private static readonly TimeSpan PlayerStateSyncInterval = TimeSpan.FromMilliseconds(120);
     private static readonly string[] YarnStrandColors =
@@ -45,6 +48,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private readonly Stopwatch _sessionStopwatch = new();
     private readonly HashSet<string> _pressedKeys = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<GridPoint, RoomRuntimeState> _roomStates = [];
+    private readonly List<string> _consumedItemIds = [];
     private DotNetObjectReference<Game>? _dotNetReference;
     private CancellationTokenSource? _loopCancellation;
     private Task? _loopTask;
@@ -58,6 +62,10 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private bool _jsReady;
     private bool _playerStateDirty = true;
     private bool _roomInteractionWasActive;
+    private bool _loadoutConsumptionPrimed;
+    private DateTime _timerPauseUntilUtc = DateTime.MinValue;
+    private DateTime _visionBoostUntilUtc = DateTime.MinValue;
+    private DateTime _pathRevealUntilUtc = DateTime.MinValue;
 
     [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
@@ -148,6 +156,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         or RecursiveActivationSequencePuzzle
         or CrossingPathPuzzle;
     protected bool CanInteractWithPuzzleConsole => CanShowRoom && HasPuzzleOverlayContent && !IsCurrentPuzzleSolved && !UsesRoomNativePuzzleInteraction;
+    protected bool HasHotkeyUsableItems => GetActiveLoadoutItems().Count > 0;
     protected bool PortalReady => IsCoopRun
         ? CurrentRoomState?.Definition.Kind == MazeRoomKind.Finish && IsCurrentCoopRoomSolved
         : CurrentRoomState?.FinishPortalVisible == true;
@@ -239,6 +248,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             EquippedLoadout = (storedLoadout ?? [])
                 .Where(item => !string.IsNullOrWhiteSpace(item.ItemId) && item.Quantity > 0)
                 .ToList();
+            PrimePassiveLoadoutConsumption();
 
             try
             {
@@ -296,6 +306,12 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return Task.CompletedTask;
         }
 
+        if (isPressed && TryGetLoadoutItemIdForHotkey(keyCode, out var loadoutItemId))
+        {
+            _ = UseLoadoutItemFromUiAsync(loadoutItemId);
+            return Task.CompletedTask;
+        }
+
         if (IsCoopRun)
         {
             return HandleCoopPuzzleKeyChangeAsync(keyCode, isPressed);
@@ -349,11 +365,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    protected string GetPuzzleConsoleStyle() => GetRectStyle(GetCurrentPuzzleConsoleBounds());
+    protected string GetPuzzleConsoleStyle() => GetRectStyle(GetLocalPuzzleConsoleBounds());
 
     protected string GetPuzzleConsolePromptStyle()
     {
-        var consoleBounds = GetCurrentPuzzleConsoleBounds();
+        var consoleBounds = GetLocalPuzzleConsoleBounds();
         const double promptWidth = 344d;
         const double promptHeight = 42d;
         var left = Math.Clamp(consoleBounds.CenterX - (promptWidth / 2d), 22d, RoomSize - promptWidth - 22d);
@@ -373,11 +389,12 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         var playerCenterX = PlayerX + (PlayerSize / 2d);
         var playerCenterY = PlayerY + (PlayerSize / 2d);
-        var consoleBounds = GetCurrentPuzzleConsoleBounds();
+        var consoleBounds = GetLocalPuzzleConsoleBounds();
         var consoleCenterX = consoleBounds.CenterX;
         var consoleCenterY = consoleBounds.CenterY;
         var distance = Math.Sqrt(Math.Pow(playerCenterX - consoleCenterX, 2d) + Math.Pow(playerCenterY - consoleCenterY, 2d));
-        return distance <= 165d;
+        var interactionDistance = DateTime.UtcNow < _visionBoostUntilUtc ? 235d : 165d;
+        return distance <= interactionDistance;
     }
 
     protected bool ShowRoomInteractionProgress => TryGetRoomInteractionProgressState(out _);
@@ -413,12 +430,17 @@ public partial class Game : ComponentBase, IAsyncDisposable
         TryGetRoomInteractionProgressState(out var progressState) ? progressState.Label : string.Empty;
 
     protected string MovementHintText => CanInteractWithPuzzleConsole
-        ? "Move with WASD or the arrow keys. Walk to the console and press E to work the room puzzle."
+        ? IsCoopRun
+            ? "Move with WASD or the arrow keys. Walk to your blue console and press E to work the room puzzle."
+            : "Move with WASD or the arrow keys. Walk to the console and press E to work the room puzzle."
         : UsesRoomNativePuzzleInteraction
             ? "Move with WASD or the arrow keys. Solve this room by stepping onto or moving the active room elements."
             : IsCoopRun
                 ? "Move with WASD or the arrow keys. Both players must vote the same doorway to change rooms."
                 : "Move with WASD or the arrow keys.";
+    protected string PuzzleConsolePromptText => IsCoopRun
+        ? "Press E at your blue console to access the puzzle interface."
+        : "Press E to access the puzzle interface.";
 
     protected void TogglePuzzleOverlay()
     {
@@ -925,6 +947,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return;
         }
 
+        UpdateTimedItemEffects();
+
         if (_bannerExpiresAtUtc != DateTime.MinValue && DateTime.UtcNow >= _bannerExpiresAtUtc)
         {
             StatusBanner = string.Empty;
@@ -1128,7 +1152,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             }
         }
 
-        if (CanInteractWithPuzzleConsole && IntersectsPuzzleConsoleBase(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize)))
+        if (CanInteractWithPuzzleConsole && IntersectsAnyPuzzleConsoleBase(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize)))
         {
             PlayerX = previousX;
             PlayerY = previousY;
@@ -1334,6 +1358,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
         _abandonTriggered = false;
         _allowRouteExit = false;
         _pressedKeys.Clear();
+        _consumedItemIds.Clear();
+        _loadoutConsumptionPrimed = false;
+        _timerPauseUntilUtc = DateTime.MinValue;
+        _visionBoostUntilUtc = DateTime.MinValue;
+        _pathRevealUntilUtc = DateTime.MinValue;
         _lastPlayerStateSyncUtc = DateTime.MinValue;
         _playerStateDirty = true;
         _roomInteractionWasActive = false;
@@ -1432,6 +1461,32 @@ public partial class Game : ComponentBase, IAsyncDisposable
         };
     }
 
+    private IEnumerable<ActivePuzzleConsole> GetActivePuzzleConsoles()
+    {
+        if (!CanInteractWithPuzzleConsole)
+        {
+            yield break;
+        }
+
+        if (!IsCoopRun)
+        {
+            yield return new ActivePuzzleConsole(GetCurrentPuzzleConsoleBounds(), IsLocal: true);
+            yield break;
+        }
+
+        var (ownerConsole, guestConsole) = GetCoopConsolePairBounds();
+        if (IsLocalCoopOwner())
+        {
+            yield return new ActivePuzzleConsole(ownerConsole, IsLocal: true);
+            yield return new ActivePuzzleConsole(guestConsole, IsLocal: false);
+        }
+        else
+        {
+            yield return new ActivePuzzleConsole(guestConsole, IsLocal: true);
+            yield return new ActivePuzzleConsole(ownerConsole, IsLocal: false);
+        }
+    }
+
     private PlayAreaRect GetCurrentPuzzleConsoleBounds()
     {
         if (CurrentRoom is null || ParsedSeed is null)
@@ -1444,6 +1499,91 @@ public partial class Game : ComponentBase, IAsyncDisposable
         return PuzzleConsoleCandidates[candidateIndex];
     }
 
+    private PlayAreaRect GetLocalPuzzleConsoleBounds()
+    {
+        if (!IsCoopRun)
+        {
+            return GetCurrentPuzzleConsoleBounds();
+        }
+
+        var (ownerConsole, guestConsole) = GetCoopConsolePairBounds();
+        return IsLocalCoopOwner() ? ownerConsole : guestConsole;
+    }
+
+    private (PlayAreaRect OwnerConsole, PlayAreaRect GuestConsole) GetCoopConsolePairBounds()
+    {
+        if (CurrentRoom is null || ParsedSeed is null || PuzzleConsoleCandidates.Length < 2)
+        {
+            return (PuzzleConsoleCandidates[0], PuzzleConsoleCandidates[Math.Min(1, PuzzleConsoleCandidates.Length - 1)]);
+        }
+
+        var stableKey = $"{ParsedSeed.RawSeed}|{CurrentRoom.Coordinates.X}|{CurrentRoom.Coordinates.Y}|{CurrentRoom.ConnectionKey}|{CurrentRoom.PuzzleKey}|coop-console";
+        var ownerIndex = GetStableHash(stableKey) % PuzzleConsoleCandidates.Length;
+        var ownerConsole = PuzzleConsoleCandidates[ownerIndex];
+        var guestIndex = -1;
+
+        var scanSeed = GetStableHash($"{stableKey}|guest-scan");
+        for (var offset = 1; offset < PuzzleConsoleCandidates.Length; offset++)
+        {
+            var candidateIndex = (ownerIndex + offset + scanSeed) % PuzzleConsoleCandidates.Length;
+            if (candidateIndex == ownerIndex)
+            {
+                continue;
+            }
+
+            var candidate = PuzzleConsoleCandidates[candidateIndex];
+            if (Distance(ownerConsole, candidate) >= CoopConsoleMinSeparation)
+            {
+                guestIndex = candidateIndex;
+                break;
+            }
+        }
+
+        if (guestIndex < 0)
+        {
+            var farthestDistance = double.MinValue;
+            for (var index = 0; index < PuzzleConsoleCandidates.Length; index++)
+            {
+                if (index == ownerIndex)
+                {
+                    continue;
+                }
+
+                var candidate = PuzzleConsoleCandidates[index];
+                var candidateDistance = Distance(ownerConsole, candidate);
+                if (candidateDistance > farthestDistance)
+                {
+                    farthestDistance = candidateDistance;
+                    guestIndex = index;
+                }
+            }
+        }
+
+        if (guestIndex < 0)
+        {
+            guestIndex = (ownerIndex + 1) % PuzzleConsoleCandidates.Length;
+        }
+
+        return (ownerConsole, PuzzleConsoleCandidates[guestIndex]);
+    }
+
+    private bool IsLocalCoopOwner()
+    {
+        if (_coopSession?.You is not null)
+        {
+            return string.Equals(_coopSession.You.Role, "owner", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(_coopSession?.OwnerUsername, Username, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static double Distance(PlayAreaRect a, PlayAreaRect b)
+    {
+        var dx = a.CenterX - b.CenterX;
+        var dy = a.CenterY - b.CenterY;
+        return Math.Sqrt((dx * dx) + (dy * dy));
+    }
+
     private static PlayAreaRect GetPuzzleConsoleBaseBounds(PlayAreaRect consoleBounds) =>
         new(
             consoleBounds.X + (consoleBounds.Width * 0.2d),
@@ -1451,8 +1591,18 @@ public partial class Game : ComponentBase, IAsyncDisposable
             consoleBounds.Width * 0.6d,
             consoleBounds.Height * 0.2d);
 
-    private bool IntersectsPuzzleConsoleBase(PlayAreaRect playerBounds) =>
-        GetPuzzleConsoleBaseBounds(GetCurrentPuzzleConsoleBounds()).Intersects(playerBounds);
+    private bool IntersectsAnyPuzzleConsoleBase(PlayAreaRect playerBounds)
+    {
+        foreach (var puzzleConsole in GetActivePuzzleConsoles())
+        {
+            if (GetPuzzleConsoleBaseBounds(puzzleConsole.Bounds).Intersects(playerBounds))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static int GetStableHash(string value)
     {
@@ -1779,6 +1929,12 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
     protected IEnumerable<RunLoadoutSelection> GetVisibleLoadoutItems() =>
         EquippedLoadout.Where(item => !string.IsNullOrWhiteSpace(item.ItemId) && item.Quantity > 0);
 
+    private List<RunLoadoutSelection> GetActiveLoadoutItems() =>
+        GetVisibleLoadoutItems()
+            .Where(CanActivateLoadoutItem)
+            .Take(3)
+            .ToList();
+
     protected bool CanActivateLoadoutItem(RunLoadoutSelection item)
     {
         if (item is null || item.Quantity <= 0)
@@ -1814,6 +1970,37 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
             entry.Quantity > 0);
     }
 
+    private static bool TryMapLoadoutHotkey(string keyCode, out int slotIndex)
+    {
+        slotIndex = keyCode switch
+        {
+            "Digit1" or "Numpad1" => 0,
+            "Digit2" or "Numpad2" => 1,
+            "Digit3" or "Numpad3" => 2,
+            _ => -1,
+        };
+
+        return slotIndex >= 0;
+    }
+
+    private bool TryGetLoadoutItemIdForHotkey(string keyCode, out string itemId)
+    {
+        itemId = string.Empty;
+        if (!TryMapLoadoutHotkey(keyCode, out var slotIndex))
+        {
+            return false;
+        }
+
+        var activeItems = GetActiveLoadoutItems();
+        if (slotIndex < 0 || slotIndex >= activeItems.Count)
+        {
+            return false;
+        }
+
+        itemId = activeItems[slotIndex].ItemId;
+        return !string.IsNullOrWhiteSpace(itemId);
+    }
+
     protected async Task UseLoadoutItemFromUiAsync(string itemId)
     {
         if (string.IsNullOrWhiteSpace(itemId))
@@ -1829,14 +2016,19 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
             return;
         }
 
+        if (!ApplyLoadoutItemEffect(item))
+        {
+            return;
+        }
+
         item.Quantity = Math.Max(0, item.Quantity - 1);
         if (item.Quantity <= 0)
         {
             EquippedLoadout.Remove(item);
         }
 
+        RecordConsumedLoadoutItem(item.ItemId);
         _playerStateDirty = true;
-        ShowBanner($"{item.Name} consumed.", 1.0d);
 
         try
         {
@@ -1856,15 +2048,51 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
             return "item";
         }
 
-        var activeItems = GetVisibleLoadoutItems()
-            .Where(CanActivateLoadoutItem)
-            .Take(9)
-            .ToList();
+        var activeItems = GetActiveLoadoutItems();
 
         var index = activeItems.FindIndex(candidate =>
             string.Equals(candidate.ItemId, item.ItemId, StringComparison.OrdinalIgnoreCase));
 
         return index >= 0 ? (index + 1).ToString(CultureInfo.InvariantCulture) : "item";
+    }
+
+    private void PrimePassiveLoadoutConsumption()
+    {
+        if (_loadoutConsumptionPrimed)
+        {
+            return;
+        }
+
+        _consumedItemIds.Clear();
+        foreach (var item in EquippedLoadout)
+        {
+            if (string.IsNullOrWhiteSpace(item.ItemId) || item.Quantity <= 0)
+            {
+                continue;
+            }
+
+            if (CanActivateLoadoutItem(item))
+            {
+                continue;
+            }
+
+            for (var index = 0; index < item.Quantity; index++)
+            {
+                _consumedItemIds.Add(item.ItemId);
+            }
+        }
+
+        _loadoutConsumptionPrimed = true;
+    }
+
+    private void RecordConsumedLoadoutItem(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId))
+        {
+            return;
+        }
+
+        _consumedItemIds.Add(itemId);
     }
 
     private static string GetLoadoutEffectType(RunLoadoutSelection item)
@@ -1874,26 +2102,436 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
             return string.Empty;
         }
 
+        if (rawType is JsonElement jsonElement)
+        {
+            return jsonElement.ValueKind == JsonValueKind.String
+                ? jsonElement.GetString()?.Trim().ToLowerInvariant() ?? string.Empty
+                : string.Empty;
+        }
+
         return rawType.ToString()?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 
-    private List<string> BuildSelectedItemIds()
+    private static double GetLoadoutEffectNumber(RunLoadoutSelection item, string key, double fallback)
     {
-        var usedItems = new List<string>();
-        foreach (var item in EquippedLoadout)
+        if (item.EffectConfig is null || !item.EffectConfig.TryGetValue(key, out var rawValue) || rawValue is null)
         {
-            if (string.IsNullOrWhiteSpace(item.ItemId) || item.Quantity <= 0)
+            return fallback;
+        }
+
+        if (rawValue is JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind == JsonValueKind.Number && jsonElement.TryGetDouble(out var jsonNumber))
+            {
+                return jsonNumber;
+            }
+
+            if (jsonElement.ValueKind == JsonValueKind.String
+                && double.TryParse(jsonElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedText))
+            {
+                return parsedText;
+            }
+
+            return fallback;
+        }
+
+        try
+        {
+            return Convert.ToDouble(rawValue, CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private bool ApplyLoadoutItemEffect(RunLoadoutSelection item)
+    {
+        var effectType = GetLoadoutEffectType(item);
+        return effectType switch
+        {
+            "skip_puzzle" => TryApplyPuzzleSkipEffect(item),
+            "timer_pause_seconds" => TryApplyTimerPauseEffect(item),
+            "direction_hint" => TryApplyDirectionHintEffect(item),
+            "puzzle_hint" => TryApplyPuzzleHintEffect(item),
+            "vision_boost" => TryApplyVisionBoostEffect(item),
+            "path_reveal" => TryApplyPathRevealEffect(item),
+            _ => TryApplyDefaultLoadoutEffect(item),
+        };
+    }
+
+    private bool TryApplyPuzzleSkipEffect(RunLoadoutSelection item)
+    {
+        if (IsCoopRun)
+        {
+            ShowBanner("Puzzle Skip is unavailable in co-op runs.", 1.1d);
+            return false;
+        }
+
+        if (CurrentRoomState is null || CurrentRoomState.Puzzle.IsCompleted)
+        {
+            ShowBanner("This room is already unlocked.", 1.0d);
+            return false;
+        }
+
+        CurrentRoomState.Puzzle.SyncCompleted("Puzzle bypassed.");
+        var reward = CurrentRoomState.GrantPuzzleReward();
+        if (reward > 0)
+        {
+            TotalGold += reward;
+        }
+
+        ClosePuzzleOverlay();
+        ShowBanner(
+            reward > 0
+                ? $"{item.Name} bypassed the puzzle. +{reward} MN"
+                : $"{item.Name} bypassed the puzzle.",
+            1.5d);
+        return true;
+    }
+
+    private bool TryApplyTimerPauseEffect(RunLoadoutSelection item)
+    {
+        var pauseSeconds = GetLoadoutEffectNumber(item, "value", 20d);
+        if (pauseSeconds <= 0d)
+        {
+            pauseSeconds = GetLoadoutEffectNumber(item, "duration_seconds", 20d);
+        }
+
+        pauseSeconds = Math.Clamp(pauseSeconds, 1d, 120d);
+        var now = DateTime.UtcNow;
+        var pauseStart = _timerPauseUntilUtc > now ? _timerPauseUntilUtc : now;
+        _timerPauseUntilUtc = pauseStart.AddSeconds(pauseSeconds);
+        if (_sessionStopwatch.IsRunning)
+        {
+            _sessionStopwatch.Stop();
+        }
+
+        ShowBanner($"{item.Name} froze the run timer for {pauseSeconds:0.#}s.", 1.4d);
+        return true;
+    }
+
+    private bool TryApplyDirectionHintEffect(RunLoadoutSelection item)
+    {
+        if (ParsedSeed is null || CurrentRoom is null)
+        {
+            ShowBanner("Compass data unavailable in this room.", 1.1d);
+            return false;
+        }
+
+        var duration = Math.Clamp(GetLoadoutEffectNumber(item, "duration_seconds", 10d), 2d, 12d);
+        var path = TryFindRoute(CurrentRoom.Coordinates, ParsedSeed.FinishRoom.Coordinates);
+        if (path is null)
+        {
+            ShowBanner("Compass cannot resolve a route right now.", 1.1d);
+            return false;
+        }
+
+        if (path.Count == 0)
+        {
+            ShowBanner($"{item.Name}: you are already in the finish room.", duration);
+            return true;
+        }
+
+        var firstDirection = DirectionToWord(path[0]);
+        ShowBanner($"{item.Name}: move {firstDirection}. {FormatDirectionPath(path)}", duration);
+        return true;
+    }
+
+    private bool TryApplyPuzzleHintEffect(RunLoadoutSelection item)
+    {
+        if (CurrentRoomState?.Puzzle is null)
+        {
+            ShowBanner("No puzzle is active in this room.", 1.1d);
+            return false;
+        }
+
+        var hintText = BuildRuntimePuzzleHint();
+        ShowBanner($"{item.Name}: {hintText}", 5.5d);
+        return true;
+    }
+
+    private bool TryApplyVisionBoostEffect(RunLoadoutSelection item)
+    {
+        var duration = Math.Clamp(GetLoadoutEffectNumber(item, "duration_seconds", 12d), 2d, 60d);
+        var now = DateTime.UtcNow;
+        var boostStart = _visionBoostUntilUtc > now ? _visionBoostUntilUtc : now;
+        _visionBoostUntilUtc = boostStart.AddSeconds(duration);
+        ShowBanner($"{item.Name} active for {duration:0.#}s. Console interaction range increased.", 2.2d);
+        return true;
+    }
+
+    private bool TryApplyPathRevealEffect(RunLoadoutSelection item)
+    {
+        if (CurrentRoom is null)
+        {
+            ShowBanner("Pathfinder route unavailable.", 1.1d);
+            return false;
+        }
+
+        var duration = Math.Clamp(GetLoadoutEffectNumber(item, "duration_seconds", 10d), 2d, 20d);
+        var now = DateTime.UtcNow;
+        var revealStart = _pathRevealUntilUtc > now ? _pathRevealUntilUtc : now;
+        _pathRevealUntilUtc = revealStart.AddSeconds(duration);
+
+        var route = FindNearestObjectiveRoute();
+        if (route.Path is null)
+        {
+            ShowBanner("Pathfinder cannot resolve a route right now.", 1.1d);
+            return false;
+        }
+
+        if (route.Path.Count == 0)
+        {
+            ShowBanner($"{item.Name}: objective already reached in this room.", duration);
+            return true;
+        }
+
+        ShowBanner($"{item.Name}: {route.TargetLabel} -> {FormatDirectionPath(route.Path)}", duration);
+        return true;
+    }
+
+    private bool TryApplyDefaultLoadoutEffect(RunLoadoutSelection item)
+    {
+        ShowBanner($"{item.Name} has no active runtime effect in this room.", 1.1d);
+        return false;
+    }
+
+    private string BuildRuntimePuzzleHint()
+    {
+        if (CurrentRoomState?.Puzzle is null)
+        {
+            return "No puzzle is currently active.";
+        }
+
+        return CurrentRoomState.Puzzle switch
+        {
+            QuickTimePuzzle quickTime =>
+                $"Stop the pulse inside the bright window. Clean hits: {quickTime.SuccessfulHits}/{quickTime.RequiredHits}.",
+            SequenceMemoryPuzzle sequenceMemory =>
+                sequenceMemory.IsSequenceVisible
+                    ? "Memorize now. Input starts after the rune sequence disappears."
+                    : $"Enter the rune order from memory. Progress {sequenceMemory.Entered.Count}/{sequenceMemory.Sequence.Count}.",
+            UnlockPatternPuzzle unlockPattern =>
+                unlockPattern.IsPatternVisible
+                    ? "Wait for the preview to vanish, then replay the pattern."
+                    : $"Replay the pattern exactly. Progress {unlockPattern.Entered.Count}/{unlockPattern.Pattern.Count}.",
+            YarnUntanglePuzzle untangle =>
+                $"Swap right endpoints until crossings are zero. Current crossings: {untangle.CrossingCount}.",
+            _ => GetCurrentPuzzleGuide().Controls,
+        };
+    }
+
+    private (List<PlayerDirection>? Path, string TargetLabel) FindNearestObjectiveRoute()
+    {
+        if (ParsedSeed is null || CurrentRoom is null)
+        {
+            return (null, "Objective");
+        }
+
+        List<PlayerDirection>? bestPath = null;
+        var bestLabel = "finish room";
+
+        foreach (var room in ParsedSeed.Rooms.Values.Where(room => room.Kind == MazeRoomKind.Reward))
+        {
+            if (!_roomStates.TryGetValue(room.Coordinates, out var state) || state.RewardPickupCollected)
             {
                 continue;
             }
 
-            for (var index = 0; index < item.Quantity; index++)
+            var rewardPath = TryFindRoute(CurrentRoom.Coordinates, room.Coordinates);
+            if (rewardPath is null)
             {
-                usedItems.Add(item.ItemId);
+                continue;
+            }
+
+            if (bestPath is null || rewardPath.Count < bestPath.Count)
+            {
+                bestPath = rewardPath;
+                bestLabel = "nearest reward";
             }
         }
 
-        return usedItems;
+        if (bestPath is not null)
+        {
+            return (bestPath, bestLabel);
+        }
+
+        var finishPath = TryFindRoute(CurrentRoom.Coordinates, ParsedSeed.FinishRoom.Coordinates);
+        return (finishPath, "finish room");
+    }
+
+    private List<PlayerDirection>? TryFindRoute(GridPoint start, GridPoint target)
+    {
+        if (ParsedSeed is null || !ParsedSeed.TryGetRoom(start, out _))
+        {
+            return null;
+        }
+
+        if (start == target)
+        {
+            return [];
+        }
+
+        var queue = new Queue<GridPoint>();
+        var visited = new HashSet<GridPoint> { start };
+        var previous = new Dictionary<GridPoint, (GridPoint Parent, PlayerDirection Direction)>();
+        queue.Enqueue(start);
+
+        while (queue.Count > 0)
+        {
+            var currentPoint = queue.Dequeue();
+            if (!ParsedSeed.TryGetRoom(currentPoint, out var currentRoom))
+            {
+                continue;
+            }
+
+            foreach (var (nextPoint, direction) in EnumerateConnectedNeighbors(currentRoom))
+            {
+                if (!visited.Add(nextPoint))
+                {
+                    continue;
+                }
+
+                previous[nextPoint] = (currentPoint, direction);
+                if (nextPoint == target)
+                {
+                    return BuildDirectionPath(previous, start, target);
+                }
+
+                queue.Enqueue(nextPoint);
+            }
+        }
+
+        return null;
+    }
+
+    private IEnumerable<(GridPoint Point, PlayerDirection Direction)> EnumerateConnectedNeighbors(MazeRoomDefinition room)
+    {
+        if (ParsedSeed is null)
+        {
+            yield break;
+        }
+
+        if (room.Connections.North)
+        {
+            var next = new GridPoint(room.Coordinates.X, room.Coordinates.Y - 1);
+            if (ParsedSeed.TryGetRoom(next, out _))
+            {
+                yield return (next, PlayerDirection.Up);
+            }
+        }
+
+        if (room.Connections.East)
+        {
+            var next = new GridPoint(room.Coordinates.X + 1, room.Coordinates.Y);
+            if (ParsedSeed.TryGetRoom(next, out _))
+            {
+                yield return (next, PlayerDirection.Right);
+            }
+        }
+
+        if (room.Connections.South)
+        {
+            var next = new GridPoint(room.Coordinates.X, room.Coordinates.Y + 1);
+            if (ParsedSeed.TryGetRoom(next, out _))
+            {
+                yield return (next, PlayerDirection.Down);
+            }
+        }
+
+        if (room.Connections.West)
+        {
+            var next = new GridPoint(room.Coordinates.X - 1, room.Coordinates.Y);
+            if (ParsedSeed.TryGetRoom(next, out _))
+            {
+                yield return (next, PlayerDirection.Left);
+            }
+        }
+    }
+
+    private static List<PlayerDirection> BuildDirectionPath(
+        IReadOnlyDictionary<GridPoint, (GridPoint Parent, PlayerDirection Direction)> previous,
+        GridPoint start,
+        GridPoint target)
+    {
+        var path = new List<PlayerDirection>();
+        var cursor = target;
+        while (cursor != start && previous.TryGetValue(cursor, out var previousStep))
+        {
+            path.Add(previousStep.Direction);
+            cursor = previousStep.Parent;
+        }
+
+        path.Reverse();
+        return path;
+    }
+
+    private static string FormatDirectionPath(IReadOnlyList<PlayerDirection> path)
+    {
+        if (path.Count == 0)
+        {
+            return "Already at target.";
+        }
+
+        var previewSteps = path.Take(6).Select(DirectionToWord).ToList();
+        var extraSteps = path.Count - previewSteps.Count;
+        var suffix = extraSteps > 0 ? $" (+{extraSteps} more)" : string.Empty;
+        return $"Route: {string.Join(" -> ", previewSteps)}{suffix}.";
+    }
+
+    private static string DirectionToWord(PlayerDirection direction) => direction switch
+    {
+        PlayerDirection.Up => "up",
+        PlayerDirection.Right => "right",
+        PlayerDirection.Down => "down",
+        PlayerDirection.Left => "left",
+        _ => "forward",
+    };
+
+    private void UpdateTimedItemEffects()
+    {
+        var now = DateTime.UtcNow;
+        if (_timerPauseUntilUtc != DateTime.MinValue)
+        {
+            if (now < _timerPauseUntilUtc)
+            {
+                if (_sessionStopwatch.IsRunning)
+                {
+                    _sessionStopwatch.Stop();
+                }
+            }
+            else
+            {
+                _timerPauseUntilUtc = DateTime.MinValue;
+                if (!_completionTriggered && !_abandonTriggered && !_sessionStopwatch.IsRunning)
+                {
+                    _sessionStopwatch.Start();
+                    ShowBanner("Timer resumed.", 0.8d);
+                }
+            }
+        }
+        else if (!_completionTriggered && !_abandonTriggered && !_sessionStopwatch.IsRunning)
+        {
+            _sessionStopwatch.Start();
+        }
+
+        if (_visionBoostUntilUtc != DateTime.MinValue && now >= _visionBoostUntilUtc)
+        {
+            _visionBoostUntilUtc = DateTime.MinValue;
+        }
+
+        if (_pathRevealUntilUtc != DateTime.MinValue && now >= _pathRevealUntilUtc)
+        {
+            _pathRevealUntilUtc = DateTime.MinValue;
+        }
+    }
+
+    private List<string> BuildSelectedItemIds()
+    {
+        return _consumedItemIds
+            .Where(itemId => !string.IsNullOrWhiteSpace(itemId))
+            .ToList();
     }
 
     private async Task UpdatePendingLossDraftAsync(bool force = false)

@@ -213,17 +213,32 @@ else
 
                         @if (CanInteractWithPuzzleConsole)
                         {
-                            <button type="button"
-                                    class="enigma-puzzle-console @(IsNearPuzzleConsole() ? "nearby" : string.Empty)"
-                                    style="@GetPuzzleConsoleStyle()"
-                                    @onclick="OpenPuzzleOverlay">
-                                <span class="enigma-puzzle-console-screen"></span>
-                                <span class="enigma-puzzle-console-base"></span>
-                            </button>
+                            @foreach (var puzzleConsole in GetActivePuzzleConsoles())
+                            {
+                                if (puzzleConsole.IsLocal)
+                                {
+                                    <button type="button"
+                                            class="enigma-puzzle-console console-blue @(IsNearPuzzleConsole() ? "nearby" : string.Empty)"
+                                            style="@GetRectStyle(puzzleConsole.Bounds)"
+                                            @onclick="OpenPuzzleOverlay">
+                                        <span class="enigma-puzzle-console-screen"></span>
+                                        <span class="enigma-puzzle-console-base"></span>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <div class="enigma-puzzle-console console-red partner-console"
+                                         style="@GetRectStyle(puzzleConsole.Bounds)"
+                                         aria-hidden="true">
+                                        <span class="enigma-puzzle-console-screen"></span>
+                                        <span class="enigma-puzzle-console-base"></span>
+                                    </div>
+                                }
+                            }
 
                             @if (IsNearPuzzleConsole())
                             {
-                                <div class="enigma-console-prompt" style="@GetPuzzleConsolePromptStyle()">Press E to access the puzzle interface.</div>
+                                <div class="enigma-console-prompt" style="@GetPuzzleConsolePromptStyle()">@PuzzleConsolePromptText</div>
                             }
                         }
 
@@ -270,6 +285,10 @@ else
                         </div>
                         <div class="enigma-stage-run-items">
                             <span class="enigma-stage-run-items-label">Equipped</span>
+                            @if (HasHotkeyUsableItems)
+                            {
+                                <span class="enigma-stage-run-hotkey-hint">Hotkeys: 1-3</span>
+                            }
                             @if (EquippedLoadout.Count == 0)
                             {
                                 <div class="enigma-stage-run-empty">No items equipped.</div>
@@ -335,6 +354,10 @@ else
                         </div>
                         <div class="enigma-status-loadout">
                             <span class="enigma-status-section-label">Equipped Items</span>
+                            @if (HasHotkeyUsableItems)
+                            {
+                                <span class="enigma-stage-run-hotkey-hint">Hotkeys: 1-3</span>
+                            }
                             @if (EquippedLoadout.Count == 0)
                             {
                                 <div class="enigma-status-empty">No items equipped for this run.</div>

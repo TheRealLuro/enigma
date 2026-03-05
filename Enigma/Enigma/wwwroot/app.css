@@ -6096,6 +6096,13 @@ h1:focus {
     text-transform: uppercase;
 }
 
+.enigma-stage-run-hotkey-hint {
+    color: rgba(213, 232, 255, 0.86);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
 .enigma-stage-run-empty {
     padding: 10px 12px;
     border-radius: 14px;
@@ -6152,6 +6159,13 @@ h1:focus {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 0 24px rgba(66, 135, 255, 0.2);
 }
 
+.enigma-puzzle-console.console-red .enigma-puzzle-console-screen {
+    background:
+        linear-gradient(180deg, rgba(245, 124, 133, 0.94), rgba(153, 42, 51, 0.96)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 0 24px rgba(237, 82, 92, 0.24);
+}
+
 .enigma-puzzle-console-base {
     position: absolute;
     bottom: 8%;
@@ -6165,6 +6179,16 @@ h1:focus {
 
 .enigma-puzzle-console.nearby .enigma-puzzle-console-screen {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 32px rgba(66, 135, 255, 0.38);
+}
+
+.enigma-puzzle-console.console-red.nearby .enigma-puzzle-console-screen {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 34px rgba(237, 82, 92, 0.4);
+}
+
+.enigma-puzzle-console.partner-console {
+    cursor: default;
+    pointer-events: none;
+    opacity: 0.96;
 }
 
 .enigma-console-prompt {

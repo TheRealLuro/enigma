@@ -127,6 +127,9 @@
     private int _tutorialIndex;
     private bool _tutorialListenerRegistered;
     private DotNetObjectReference<MainLayout>? _tutorialListenerRef;
+    private bool _userSessionListenerRegistered;
+    private DotNetObjectReference<MainLayout>? _userSessionListenerRef;
+    private bool _handlingUserSessionUpdate;
 
     private readonly List<TutorialStepDefinition> _tutorialSteps =
     [
@@ -235,6 +238,13 @@
             _tutorialListenerRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("enigmaGame.registerTutorialListener", _tutorialListenerRef);
             _tutorialListenerRegistered = true;
+        }
+
+        if (firstRender && !_userSessionListenerRegistered)
+        {
+            _userSessionListenerRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("enigmaGame.registerUserSessionListener", _userSessionListenerRef);
+            _userSessionListenerRegistered = true;
         }
 
         if (IsPublicPath())
@@ -460,6 +470,40 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    [JSInvokable]
+    public async Task HandleUserSessionUpdatedAsync()
+    {
+        if (_handlingUserSessionUpdate || IsPublicPath())
+        {
+            return;
+        }
+
+        _handlingUserSessionUpdate = true;
+        try
+        {
+            var session = await Api.GetSessionAsync();
+            AuthCheckComplete = true;
+            IsAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
+            Session = session;
+
+            if (!IsAuthenticated)
+            {
+                await ClearBrowserSessionAsync();
+                NavigationManager.NavigateTo("/", replace: true);
+                return;
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+        }
+        finally
+        {
+            _handlingUserSessionUpdate = false;
+        }
+    }
+
     private void UpdateTutorialIndexFromUri(string uri)
     {
         if (!TutorialVisible)
@@ -666,5 +710,17 @@
         }
 
         _tutorialListenerRef?.Dispose();
+        if (_userSessionListenerRegistered)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("enigmaGame.disposeUserSessionListener");
+            }
+            catch
+            {
+            }
+        }
+
+        _userSessionListenerRef?.Dispose();
     }
 }

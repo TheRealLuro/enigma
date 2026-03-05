@@ -20,6 +20,8 @@
     let currentCoopLeavePayload = null;
     let tutorialDotNetRef = null;
     let tutorialRequestHandler = null;
+    let userSessionDotNetRef = null;
+    let userSessionHandler = null;
     let audioContext = null;
     let pageHideHandler = null;
     const dropdownClosers = new Map();
@@ -30,6 +32,7 @@
     const desktopZoomOutValue = 0.8;
     const desktopZoomOutMinWidth = 1024;
     let viewportZoomHandler = null;
+    let historyZoomPatchApplied = false;
     const storageFallback = {
         session: Object.create(null),
         local: Object.create(null)
@@ -176,13 +179,25 @@
             case "arrowleft":
             case "a":
                 return event.key.length === 1 ? "KeyA" : "ArrowLeft";
+            case "1":
+                return "Digit1";
+            case "2":
+                return "Digit2";
+            case "3":
+                return "Digit3";
             default:
                 return "";
         }
     }
 
     function shouldHandleKey(code) {
-        return ["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft", "KeyW", "KeyA", "KeyS", "KeyD", "KeyE", "Escape"].includes(code);
+        return [
+            "ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft",
+            "KeyW", "KeyA", "KeyS", "KeyD",
+            "KeyE", "Escape",
+            "Digit1", "Digit2", "Digit3",
+            "Numpad1", "Numpad2", "Numpad3"
+        ].includes(code);
     }
 
     function removeListeners() {
@@ -205,7 +220,25 @@
         }
     }
 
+    function getNormalizedPathname() {
+        try {
+            const path = String(window.location.pathname || "").trim().toLowerCase();
+            return path.replace(/\/+$/, "") || "/";
+        } catch {
+            return "/";
+        }
+    }
+
+    function isGameplayPath() {
+        const path = getNormalizedPathname();
+        return path === "/game" || path.startsWith("/game/");
+    }
+
     function shouldApplyDesktopZoomOut() {
+        if (isGameplayPath()) {
+            return false;
+        }
+
         if (typeof window.matchMedia === "function") {
             return window.matchMedia(`(min-width: ${desktopZoomOutMinWidth}px)`).matches;
         }
@@ -258,6 +291,27 @@
 
         addWindowListener("resize", viewportZoomHandler, { passive: true });
         addWindowListener("orientationchange", viewportZoomHandler, { passive: true });
+        addWindowListener("popstate", viewportZoomHandler, { passive: true });
+        if (!historyZoomPatchApplied && window.history) {
+            const historyStateChanged = function () {
+                setTimeout(applyDesktopZoomOut, 0);
+            };
+
+            const originalPushState = window.history.pushState;
+            const originalReplaceState = window.history.replaceState;
+            window.history.pushState = function () {
+                const result = originalPushState.apply(this, arguments);
+                historyStateChanged();
+                return result;
+            };
+            window.history.replaceState = function () {
+                const result = originalReplaceState.apply(this, arguments);
+                historyStateChanged();
+                return result;
+            };
+
+            historyZoomPatchApplied = true;
+        }
         if (document.readyState === "loading") {
             addWindowListener("DOMContentLoaded", viewportZoomHandler, { once: true });
         }
@@ -343,6 +397,19 @@
         }
 
         tutorialDotNetRef = null;
+    }
+
+    function removeUserSessionListener() {
+        if (userSessionHandler) {
+            window.removeEventListener("enigma:user-session-updated", userSessionHandler);
+            userSessionHandler = null;
+        }
+
+        userSessionDotNetRef = null;
+    }
+
+    function emitUserSessionUpdate(session) {
+        dispatchCustomEvent("enigma:user-session-updated", { session: session || null });
     }
 
     function clearCoopReconnect() {
@@ -486,11 +553,13 @@
 
             addWindowListener("keydown", keyDownHandler, { passive: false });
             addWindowListener("keyup", keyUpHandler, { passive: false });
+            applyDesktopZoomOut();
         },
 
         disposeInput: function () {
             removeListeners();
             dotNetRef = null;
+            applyDesktopZoomOut();
         },
 
         focusElement: function (elementId) {
@@ -535,11 +604,13 @@
             if (rememberMe) {
                 setStoredJson("local", userStorageKey, session);
                 removeStorageItem("session", userStorageKey);
+                emitUserSessionUpdate(session);
                 return;
             }
 
             setStoredJson("session", userStorageKey, session);
             removeStorageItem("local", userStorageKey);
+            emitUserSessionUpdate(session);
         },
 
         getUserSession: function () {
@@ -552,10 +623,12 @@
 
         refreshUserSession: function (session) {
             refreshStoredJson(userStorageKey, session);
+            emitUserSessionUpdate(session);
         },
 
         clearUserSession: function () {
             clearStoredJson(userStorageKey);
+            emitUserSessionUpdate(null);
         },
 
         setActiveGameSession: function (session) {
@@ -762,6 +835,22 @@
 
         disposeTutorialListener: function () {
             removeTutorialListener();
+        },
+
+        registerUserSessionListener: function (helper) {
+            removeUserSessionListener();
+            userSessionDotNetRef = helper;
+            userSessionHandler = function () {
+                if (userSessionDotNetRef) {
+                    userSessionDotNetRef.invokeMethodAsync("HandleUserSessionUpdatedAsync").catch(() => {});
+                }
+            };
+
+            addWindowListener("enigma:user-session-updated", userSessionHandler);
+        },
+
+        disposeUserSessionListener: function () {
+            removeUserSessionListener();
         },
 
         registerDropdownOutsideClick: function (dropdownId, element, helper) {
