@@ -28,9 +28,37 @@ public class APIController : ControllerBase
     private HttpClient CreateClient()
     {
         var client = new HttpClient { BaseAddress = new Uri(_backendBaseUrl) };
+        client.Timeout = TimeSpan.FromSeconds(20);
         client.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return client;
+    }
+
+    private IActionResult BuildBackendFailureResponse(Exception exception)
+    {
+        if (exception is UriFormatException)
+        {
+            return StatusCode(500, new
+            {
+                status = "error",
+                detail = "Backend base URL is invalid. Set ENIGMA_BACKEND_URL or Backend:BaseUrl."
+            });
+        }
+
+        if (exception is TaskCanceledException)
+        {
+            return StatusCode(504, new
+            {
+                status = "error",
+                detail = "Backend request timed out."
+            });
+        }
+
+        return StatusCode(503, new
+        {
+            status = "error",
+            detail = "Backend service is unavailable."
+        });
     }
 
     private static async Task<IActionResult> RelayAsync(HttpResponseMessage response)
@@ -86,66 +114,80 @@ public class APIController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] SessionLoginRequest request)
     {
-        using var client = CreateClient();
-        using var response = await client.PostAsJsonAsync("database/users/login", new
+        try
         {
-            username = request.Username,
-            passwd = request.Password,
-        });
+            using var client = CreateClient();
+            using var response = await client.PostAsJsonAsync("database/users/login", new
+            {
+                username = request.Username,
+                passwd = request.Password,
+            });
 
-        if (!response.IsSuccessStatusCode)
-        {
-            return await RelayAsync(response);
+            if (!response.IsSuccessStatusCode)
+            {
+                return await RelayAsync(response);
+            }
+
+            var content = await ReadContentAsync(response);
+            using var document = JsonDocument.Parse(content);
+            var username = document.RootElement
+                .GetProperty("user")
+                .GetProperty("username")
+                .GetString();
+
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return StatusCode(502, new { detail = "Backend login payload was missing the username." });
+            }
+
+            await SignInAsync(username, request.RememberMe);
+
+            return Content(content, response.Content.Headers.ContentType?.ToString() ?? "application/json");
         }
-
-        var content = await ReadContentAsync(response);
-        using var document = JsonDocument.Parse(content);
-        var username = document.RootElement
-            .GetProperty("user")
-            .GetProperty("username")
-            .GetString();
-
-        if (string.IsNullOrWhiteSpace(username))
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
         {
-            return StatusCode(502, new { detail = "Backend login payload was missing the username." });
+            return BuildBackendFailureResponse(ex);
         }
-
-        await SignInAsync(username, request.RememberMe);
-
-        return Content(content, response.Content.Headers.ContentType?.ToString() ?? "application/json");
     }
 
     [HttpPost("session/signup")]
     [HttpPost("signUp")]
     public async Task<IActionResult> SignUp([FromBody] SessionSignUpRequest request)
     {
-        using var client = CreateClient();
-        using var signUpResponse = await client.PostAsJsonAsync("database/users/signup", new
+        try
         {
-            username = request.Username,
-            email = request.Email,
-            passwd = request.Password,
-        });
+            using var client = CreateClient();
+            using var signUpResponse = await client.PostAsJsonAsync("database/users/signup", new
+            {
+                username = request.Username,
+                email = request.Email,
+                passwd = request.Password,
+            });
 
-        if (!signUpResponse.IsSuccessStatusCode)
-        {
-            return await RelayAsync(signUpResponse);
+            if (!signUpResponse.IsSuccessStatusCode)
+            {
+                return await RelayAsync(signUpResponse);
+            }
+
+            using var loginResponse = await client.PostAsJsonAsync("database/users/login", new
+            {
+                username = request.Username,
+                passwd = request.Password,
+            });
+
+            if (!loginResponse.IsSuccessStatusCode)
+            {
+                return await RelayAsync(loginResponse);
+            }
+
+            var content = await ReadContentAsync(loginResponse);
+            await SignInAsync(request.Username, request.RememberMe);
+            return Content(content, loginResponse.Content.Headers.ContentType?.ToString() ?? "application/json");
         }
-
-        using var loginResponse = await client.PostAsJsonAsync("database/users/login", new
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
         {
-            username = request.Username,
-            passwd = request.Password,
-        });
-
-        if (!loginResponse.IsSuccessStatusCode)
-        {
-            return await RelayAsync(loginResponse);
+            return BuildBackendFailureResponse(ex);
         }
-
-        var content = await ReadContentAsync(loginResponse);
-        await SignInAsync(request.Username, request.RememberMe);
-        return Content(content, loginResponse.Content.Headers.ContentType?.ToString() ?? "application/json");
     }
 
     [Authorize]
@@ -160,15 +202,22 @@ public class APIController : ControllerBase
     [HttpGet("session/me")]
     public async Task<IActionResult> Me()
     {
-        using var client = CreateClient();
-        var username = RequireAuthenticatedUsername();
-        using var response = await client.GetAsync($"database/users/account?username={Esc(username)}");
-        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        try
         {
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        }
+            using var client = CreateClient();
+            var username = RequireAuthenticatedUsername();
+            using var response = await client.GetAsync($"database/users/account?username={Esc(username)}");
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
 
-        return await RelayAsync(response);
+            return await RelayAsync(response);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            return BuildBackendFailureResponse(ex);
+        }
     }
 
     [Authorize]
@@ -623,14 +672,21 @@ public class APIController : ControllerBase
     [HttpPost("multiplayer/session/join")]
     public async Task<IActionResult> JoinMultiplayerSession([FromBody] MultiplayerSessionRequest request)
     {
-        using var client = CreateClient();
-        var username = RequireAuthenticatedUsername();
-        using var response = await client.PostAsJsonAsync("database/multiplayer/session/join", new
+        try
         {
-            username,
-            session_id = request.SessionId,
-        });
-        return await RelayAsync(response);
+            using var client = CreateClient();
+            var username = RequireAuthenticatedUsername();
+            using var response = await client.PostAsJsonAsync("database/multiplayer/session/join", new
+            {
+                username,
+                session_id = request.SessionId,
+            });
+            return await RelayAsync(response);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            return BuildBackendFailureResponse(ex);
+        }
     }
 
     [Authorize]

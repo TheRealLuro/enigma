@@ -43,11 +43,21 @@ def login_user(request: Request, username: str | None = None, passwd: str | None
     DAILY_REWARD = 50
     now = datetime.now(timezone.utc)
     last_login_at = user.get("last_login_at")
+    if isinstance(last_login_at, str):
+        try:
+            last_login_at = datetime.fromisoformat(last_login_at.replace("Z", "+00:00"))
+        except ValueError:
+            last_login_at = None
+    elif not isinstance(last_login_at, datetime):
+        last_login_at = None
+
+    if isinstance(last_login_at, datetime) and last_login_at.tzinfo is None:
+        last_login_at = last_login_at.replace(tzinfo=timezone.utc)
 
     update: dict = {"$set": {"last_login_at": now}}
     rewarded = False
 
-    if last_login_at is None or last_login_at.date() < now.date():
+    if last_login_at is None or last_login_at.astimezone(timezone.utc).date() < now.date():
         update["$inc"] = {"maze_nuggets": DAILY_REWARD}
         rewarded = True
 

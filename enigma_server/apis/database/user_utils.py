@@ -16,6 +16,18 @@ DEFAULT_PROFILE_IMAGE_CROP = {
 }
 
 
+def _safe_float(value: Any, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+
+    if parsed != parsed:  # NaN guard
+        return default
+
+    return parsed
+
+
 def normalize_email(value: str | None) -> str:
     return (value or "").strip().lower()
 
@@ -136,9 +148,9 @@ def serialize_profile_image(profile_image: Any, map_docs: Iterable[dict[str, Any
         "map_name": map_name,
         "image_url": image_url,
         "crop": {
-            "x": float(crop.get("x", DEFAULT_PROFILE_IMAGE_CROP["x"])),
-            "y": float(crop.get("y", DEFAULT_PROFILE_IMAGE_CROP["y"])),
-            "size": float(crop.get("size", DEFAULT_PROFILE_IMAGE_CROP["size"])),
+            "x": _safe_float(crop.get("x", DEFAULT_PROFILE_IMAGE_CROP["x"]), DEFAULT_PROFILE_IMAGE_CROP["x"]),
+            "y": _safe_float(crop.get("y", DEFAULT_PROFILE_IMAGE_CROP["y"]), DEFAULT_PROFILE_IMAGE_CROP["y"]),
+            "size": _safe_float(crop.get("size", DEFAULT_PROFILE_IMAGE_CROP["size"]), DEFAULT_PROFILE_IMAGE_CROP["size"]),
         },
         "updated_at": profile_image.get("updated_at"),
     }
