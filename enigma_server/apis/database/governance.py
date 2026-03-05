@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
@@ -11,7 +12,7 @@ from main import limiter
 
 from .db import client, governance_sessions, governance_votes, maps_collection, users_collection
 from .economy_rules import credit_bank_dividend
-from .staking_rules import normalize_staked_map_ids, vote_weight_multiplier
+from .staking_rules import normalize_staked_map_ids, vote_multiplier_breakdown
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
     build_owned_maps_sync_update,
@@ -228,6 +229,12 @@ def _serialize_session(
     user_vote_summary = {
         "staked_maps_count": 0,
         "stake_weight_multiplier": 1.0,
+        "effective_vote_multiplier": 1.0,
+        "stake_multiplier": 1.0,
+        "participation_multiplier": 1.0,
+        "raw_multiplier": 1.0,
+        "multiplier_cap": 2.25,
+        "participation_votes_count": 0,
         "mn_spent": 0,
         "vote_power": 0.0,
         "vote_quantity": 0,
@@ -235,8 +242,18 @@ def _serialize_session(
     if user:
         normalized_staked_ids, _ = normalize_staked_map_ids(user, maps_collection)
         staked_maps_count = len(normalized_staked_ids)
+        participation_votes_count = governance_votes.count_documents(
+            {"username": str(user.get("username") or "")}
+        )
+        multiplier_breakdown = vote_multiplier_breakdown(staked_maps_count, participation_votes_count)
         user_vote_summary["staked_maps_count"] = staked_maps_count
-        user_vote_summary["stake_weight_multiplier"] = vote_weight_multiplier(staked_maps_count)
+        user_vote_summary["stake_weight_multiplier"] = float(multiplier_breakdown["effective_multiplier"])
+        user_vote_summary["effective_vote_multiplier"] = float(multiplier_breakdown["effective_multiplier"])
+        user_vote_summary["stake_multiplier"] = float(multiplier_breakdown["stake_multiplier"])
+        user_vote_summary["participation_multiplier"] = float(multiplier_breakdown["participation_multiplier"])
+        user_vote_summary["raw_multiplier"] = float(multiplier_breakdown["raw_multiplier"])
+        user_vote_summary["multiplier_cap"] = float(multiplier_breakdown["multiplier_cap"])
+        user_vote_summary["participation_votes_count"] = int(multiplier_breakdown["participation_votes_count"])
 
         aggregate = list(
             governance_votes.aggregate(
@@ -406,6 +423,16 @@ def _normalize_unique_ids(raw_ids: list[str]) -> list[str]:
         dedupe.add(option_id)
         normalized.append(option_id)
     return normalized
+
+
+def _normalize_text_vote_value(value: Any) -> str:
+    return str(value or "").strip()[:120]
+
+
+def _text_tally_key(value: str) -> str:
+    normalized = _normalize_text_vote_value(value).casefold()
+    digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:24]
+    return f"text:{digest}"
 
 
 @router.get("/session")
@@ -585,6 +612,7 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
     elif vote_type == VOTE_TYPE_TEXT_ENTRY:
         tallies = active_session.get("tallies")
         text_option_lookup: dict[str, str] = {}
+        text_lookup_by_label: dict[str, tuple[str, str]] = {}
         if isinstance(tallies, dict):
             for tally_key, tally_value in tallies.items():
                 option_id = str(tally_key or "").strip()
@@ -593,6 +621,7 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
                 option_label = str(tally_value.get("label") or "").strip()
                 if option_label:
                     text_option_lookup[option_id] = option_label
+                    text_lookup_by_label.setdefault(option_label.casefold(), (option_id, option_label))
 
         text_value = str(payload.text_entry or "").strip()
         has_new_entry = bool(text_value)
@@ -612,9 +641,13 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
                 raise HTTPException(status_code=400, detail="Invalid text entry selection")
             selections = [(selected_id, selected_label)]
         elif has_new_entry:
-            text_value = text_value[:120]
-            text_key = f"text:{text_value.casefold()}"
-            selections = [(text_key, text_option_lookup.get(text_key) or text_value)]
+            text_value = _normalize_text_vote_value(text_value)
+            existing_match = text_lookup_by_label.get(text_value.casefold())
+            if existing_match:
+                selections = [existing_match]
+            else:
+                text_key = _text_tally_key(text_value)
+                selections = [(text_key, text_value)]
         else:
             raise HTTPException(status_code=400, detail="Choose a text entry to upvote or submit a new one")
     else:
@@ -644,7 +677,13 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
         user = _sync_user(username)
         normalized_staked_ids, _ = normalize_staked_map_ids(user, maps_collection)
 
-    multiplier = vote_weight_multiplier(len(normalized_staked_ids))
+    prior_votes_count = governance_votes.count_documents({"username": username})
+    multiplier_breakdown = vote_multiplier_breakdown(len(normalized_staked_ids), prior_votes_count)
+    multiplier = float(multiplier_breakdown["effective_multiplier"])
+    stake_multiplier = float(multiplier_breakdown["stake_multiplier"])
+    participation_multiplier = float(multiplier_breakdown["participation_multiplier"])
+    raw_multiplier = float(multiplier_breakdown["raw_multiplier"])
+    multiplier_cap = float(multiplier_breakdown["multiplier_cap"])
     vote_power = round(mn_spent * multiplier, 4)
     per_selection_spent = unit_vote_cost * vote_quantity
     per_selection_power = round(per_selection_spent * multiplier, 4)
@@ -707,6 +746,12 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
                         "vote_cost_mn": unit_vote_cost,
                         "mn_spent": mn_spent,
                         "stake_weight_multiplier": multiplier,
+                        "effective_vote_multiplier": multiplier,
+                        "stake_multiplier": stake_multiplier,
+                        "participation_multiplier": participation_multiplier,
+                        "raw_multiplier_before_cap": raw_multiplier,
+                        "multiplier_cap": multiplier_cap,
+                        "prior_votes_count": prior_votes_count,
                         "vote_power": vote_power,
                         "staked_maps_count": len(normalized_staked_ids),
                         "created_at": now,
@@ -729,6 +774,12 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
         "mn_spent": mn_spent,
         "vote_power": vote_power,
         "stake_weight_multiplier": multiplier,
+        "effective_vote_multiplier": multiplier,
+        "stake_multiplier": stake_multiplier,
+        "participation_multiplier": participation_multiplier,
+        "raw_multiplier_before_cap": raw_multiplier,
+        "multiplier_cap": multiplier_cap,
+        "prior_votes_count": prior_votes_count,
         "vote_quantity": vote_quantity,
         "vote_cost_mn": unit_vote_cost,
         "selection_count": selection_count,

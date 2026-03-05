@@ -13,6 +13,11 @@ DAILY_STAKE_BASE_BY_DIFFICULTY = {
 }
 SIZE_MULTIPLIER_CAP = 2.0
 STAKED_MAP_LOCK_HOURS = 48
+VOTE_POWER_MAX_MULTIPLIER = 2.25
+VOTE_STAKE_CURVE_SCALE = 0.22
+VOTE_STAKE_BONUS_CAP = 0.95
+VOTE_PARTICIPATION_STEP = 0.01
+VOTE_PARTICIPATION_BONUS_CAP = 0.20
 
 
 def _utc_now() -> datetime:
@@ -258,10 +263,31 @@ def claim_daily_staking_reward(users_collection, maps_collection, user: dict[str
 
 
 def vote_weight_multiplier(staked_maps_count: int) -> float:
-    count = max(1, int(staked_maps_count or 0))
-    if count <= 1:
-        return 1.0
+    return vote_multiplier_breakdown(staked_maps_count)["effective_multiplier"]
 
-    # Balanced growth: meaningful boost from staking, but sub-linear so MN still dominates.
-    bonus = (math.sqrt(count) - 1.0) * 0.35
-    return round(1.0 + min(1.25, max(0.0, bonus)), 4)
+
+def vote_multiplier_breakdown(staked_maps_count: int, participation_votes_count: int = 0) -> dict[str, float | int]:
+    stake_count = max(0, int(staked_maps_count or 0))
+    effective_stake_count = max(1, stake_count)
+    sqrt_stake = math.sqrt(effective_stake_count)
+
+    stake_bonus = max(0.0, (sqrt_stake - 1.0) * VOTE_STAKE_CURVE_SCALE)
+    stake_multiplier = 1.0 + min(VOTE_STAKE_BONUS_CAP, stake_bonus)
+
+    participation_count = max(0, int(participation_votes_count or 0))
+    participation_bonus = min(VOTE_PARTICIPATION_BONUS_CAP, participation_count * VOTE_PARTICIPATION_STEP)
+    participation_multiplier = 1.0 + participation_bonus
+
+    raw_multiplier = stake_multiplier * participation_multiplier
+    effective_multiplier = min(VOTE_POWER_MAX_MULTIPLIER, raw_multiplier)
+
+    return {
+        "staked_maps_count": stake_count,
+        "participation_votes_count": participation_count,
+        "sqrt_stake": round(sqrt_stake, 6),
+        "stake_multiplier": round(stake_multiplier, 4),
+        "participation_multiplier": round(participation_multiplier, 4),
+        "raw_multiplier": round(raw_multiplier, 4),
+        "effective_multiplier": round(effective_multiplier, 4),
+        "multiplier_cap": round(VOTE_POWER_MAX_MULTIPLIER, 4),
+    }

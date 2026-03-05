@@ -172,6 +172,24 @@ public sealed class GovernanceVoteResponse
     [JsonPropertyName("stake_weight_multiplier")]
     public double StakeWeightMultiplier { get; set; }
 
+    [JsonPropertyName("effective_vote_multiplier")]
+    public double EffectiveVoteMultiplier { get; set; }
+
+    [JsonPropertyName("stake_multiplier")]
+    public double StakeMultiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("participation_multiplier")]
+    public double ParticipationMultiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("raw_multiplier_before_cap")]
+    public double RawMultiplierBeforeCap { get; set; } = 1.0;
+
+    [JsonPropertyName("multiplier_cap")]
+    public double MultiplierCap { get; set; } = 2.25;
+
+    [JsonPropertyName("prior_votes_count")]
+    public int PriorVotesCount { get; set; }
+
     [JsonPropertyName("vote_quantity")]
     public int VoteQuantity { get; set; }
 
@@ -288,6 +306,24 @@ public sealed class GovernanceUserVoteSummary
 
     [JsonPropertyName("stake_weight_multiplier")]
     public double StakeWeightMultiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("effective_vote_multiplier")]
+    public double EffectiveVoteMultiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("stake_multiplier")]
+    public double StakeMultiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("participation_multiplier")]
+    public double ParticipationMultiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("raw_multiplier")]
+    public double RawMultiplier { get; set; } = 1.0;
+
+    [JsonPropertyName("multiplier_cap")]
+    public double MultiplierCap { get; set; } = 2.25;
+
+    [JsonPropertyName("participation_votes_count")]
+    public int ParticipationVotesCount { get; set; }
 
     [JsonPropertyName("mn_spent")]
     public int MnSpent { get; set; }

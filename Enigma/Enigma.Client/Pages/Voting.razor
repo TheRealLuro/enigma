@@ -45,7 +45,9 @@ else
             </div>
             <div class="voting-banner-meta">
                 <span class="profile-chip">Balance @(Session?.MazeNuggets.ToString("N0") ?? "0") MN</span>
-                <span class="profile-chip">@($"Stake Weight x{CurrentStakeMultiplier:0.00}")</span>
+                <span class="profile-chip">@($"Vote Weight x{CurrentVoteMultiplier:0.00}")</span>
+                <span class="profile-chip">@($"Stake x{CurrentStakeComponent:0.00}")</span>
+                <span class="profile-chip">@($"Participation x{CurrentParticipationComponent:0.00}")</span>
                 <span class="profile-chip">@CurrentStakedCount staked map(s)</span>
             </div>
         </section>
@@ -178,8 +180,13 @@ else
                     <label class="form-label">Vote quantity</label>
                     <input class="form-control voting-mn-input" type="number" min="1" max="1000" @bind="VoteQuantity" />
                     <span class="voting-power-preview">
-                        Cost @CurrentVoteCostPreview.ToString("N0") MN | Power @CurrentVotePowerPreview.ToString("N2")
+                        Cost @CurrentVoteCostPreview.ToString("N0") MN | Weight x@CurrentVoteMultiplier.ToString("0.00") | Power @CurrentVotePowerPreview.ToString("N2")
                     </span>
+                </div>
+                <div class="voting-option-meta">
+                    <span>Stake factor x@CurrentStakeComponent.ToString("0.00")</span>
+                    <span>Participation factor x@CurrentParticipationComponent.ToString("0.00") (@CurrentParticipationVotesCount prior vote batches)</span>
+                    <span>Raw x@CurrentRawVoteMultiplier.ToString("0.00"), capped at x@CurrentMultiplierCap.ToString("0.00")</span>
                 </div>
 
                 @if (ActiveSession.VoteType == "one_choice")
@@ -451,7 +458,15 @@ else
     private bool CanCloseSession => IsBankUser && ActiveSession is not null;
 
     private int CurrentStakedCount => ActiveSession?.UserVoteSummary?.StakedMapsCount ?? Session?.StakedMapsCount ?? 0;
-    private double CurrentStakeMultiplier => ActiveSession?.UserVoteSummary?.StakeWeightMultiplier ?? ComputeStakeMultiplier(CurrentStakedCount);
+    private int CurrentParticipationVotesCount => ActiveSession?.UserVoteSummary?.ParticipationVotesCount ?? 0;
+    private double CurrentStakeComponent => ActiveSession?.UserVoteSummary?.StakeMultiplier ?? ComputeStakeMultiplier(CurrentStakedCount);
+    private double CurrentParticipationComponent => ActiveSession?.UserVoteSummary?.ParticipationMultiplier ?? ComputeParticipationMultiplier(CurrentParticipationVotesCount);
+    private double CurrentRawVoteMultiplier => ActiveSession?.UserVoteSummary?.RawMultiplier ?? Math.Round(CurrentStakeComponent * CurrentParticipationComponent, 4);
+    private double CurrentMultiplierCap => ActiveSession?.UserVoteSummary?.MultiplierCap ?? 2.25;
+    private double CurrentVoteMultiplier =>
+        ActiveSession?.UserVoteSummary?.EffectiveVoteMultiplier
+        ?? ActiveSession?.UserVoteSummary?.StakeWeightMultiplier
+        ?? Math.Min(CurrentMultiplierCap, CurrentRawVoteMultiplier);
 
     private int CurrentSelectionCount =>
         ActiveSession?.VoteType switch
@@ -468,7 +483,7 @@ else
             ? 0
             : Math.Max(0, VoteQuantity) * Math.Max(0, CurrentSelectionCount) * Math.Max(0, ActiveSession.VoteCostMn);
 
-    private double CurrentVotePowerPreview => CurrentVoteCostPreview * CurrentStakeMultiplier;
+    private double CurrentVotePowerPreview => CurrentVoteCostPreview * CurrentVoteMultiplier;
 
     private bool CanSubmitVote
     {
@@ -718,7 +733,7 @@ else
             "text_entry" => new
             {
                 optionId = string.IsNullOrWhiteSpace(VoteTextEntry) ? SelectedTextOptionId : null,
-                textEntry = VoteTextEntry.Trim(),
+                textEntry = string.IsNullOrWhiteSpace(VoteTextEntry) ? null : VoteTextEntry.Trim(),
                 voteQuantity = VoteQuantity,
             },
             "number_selection" => new
@@ -750,7 +765,7 @@ else
             var payload = await Api.ReadJsonAsync<GovernanceSessionResponse>(response);
             if (!response.IsSuccessStatusCode || payload is null)
             {
-                throw new InvalidOperationException("Request failed.");
+                throw new InvalidOperationException(await ExtractErrorDetailAsync(response, "Request failed."));
             }
 
             IsBankUser = payload.IsBankUser;
@@ -807,7 +822,7 @@ else
             var payload = await Api.ReadJsonAsync<GovernanceVoteResponse>(response);
             if (!response.IsSuccessStatusCode || payload is null)
             {
-                throw new InvalidOperationException("Vote failed.");
+                throw new InvalidOperationException(await ExtractErrorDetailAsync(response, "Vote failed."));
             }
 
             ActiveSession = payload.ActiveSession ?? ActiveSession;
@@ -819,7 +834,10 @@ else
             await SyncClientSessionAsync(payload.User);
             ApplySessionDefaults();
             TrackVotingStateTransitions(ActiveSession);
-            StatusMessage = $"Vote cast: {payload.MnSpent:N0} MN ({payload.VoteQuantity:N0} vote(s)) -> {payload.VotePower:N2} power.";
+            var effectiveMultiplier = payload.EffectiveVoteMultiplier > 0
+                ? payload.EffectiveVoteMultiplier
+                : payload.StakeWeightMultiplier;
+            StatusMessage = $"Vote cast: {payload.MnSpent:N0} MN ({payload.VoteQuantity:N0} vote(s)) x {effectiveMultiplier:0.00} = {payload.VotePower:N2} power.";
             Notifications.Success(StatusMessage);
             await LoadAsync(silent: true);
         }
@@ -833,6 +851,43 @@ else
         {
             IsBusy = false;
             await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static async Task<string> ExtractErrorDetailAsync(HttpResponseMessage response, string fallback)
+    {
+        try
+        {
+            var raw = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            try
+            {
+                using var document = System.Text.Json.JsonDocument.Parse(raw);
+                if (document.RootElement.TryGetProperty("detail", out var detailElement))
+                {
+                    var detail = detailElement.ValueKind == System.Text.Json.JsonValueKind.String
+                        ? detailElement.GetString()
+                        : detailElement.ToString();
+                    if (!string.IsNullOrWhiteSpace(detail))
+                    {
+                        return detail;
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // ignore and fallback to raw text
+            }
+
+            return raw;
+        }
+        catch
+        {
+            return fallback;
         }
     }
 
@@ -1036,8 +1091,15 @@ else
             return 1.0;
         }
 
-        var bonus = (Math.Sqrt(count) - 1.0) * 0.35;
-        return Math.Round(1.0 + Math.Min(1.25, Math.Max(0.0, bonus)), 4);
+        var bonus = (Math.Sqrt(count) - 1.0) * 0.22;
+        return Math.Round(1.0 + Math.Min(0.95, Math.Max(0.0, bonus)), 4);
+    }
+
+    private static double ComputeParticipationMultiplier(int participationVotesCount)
+    {
+        var count = Math.Max(0, participationVotesCount);
+        var bonus = Math.Min(0.20, count * 0.01);
+        return Math.Round(1.0 + bonus, 4);
     }
 
     private async Task SyncClientSessionAsync(LoginUserSummary? session)
