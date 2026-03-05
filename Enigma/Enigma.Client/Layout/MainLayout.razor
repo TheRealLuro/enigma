@@ -101,7 +101,7 @@
                 <span>Target Route</span>
                 <strong>@GetTutorialDestinationLabel(CurrentTutorialStep)</strong>
             </div>
-            <div class="tutorial-step-rail" role="list" aria-label="Tutorial mission steps">
+            <div class="tutorial-step-rail" role="list" aria-label="Tutorial guide steps">
                 @for (var index = 0; index < _tutorialSteps.Count; index++)
                 {
                     var step = _tutorialSteps[index];
@@ -116,32 +116,28 @@
                 }
             </div>
             <div class="tutorial-objective-card">
-                <span class="profile-eyebrow">@CurrentTutorialStep.Eyebrow Objective</span>
+                <span class="profile-eyebrow">@CurrentTutorialStep.Eyebrow Guide</span>
                 <p>@CurrentTutorialStep.Objective</p>
                 <span class="tutorial-objective-status @(IsCurrentTutorialStepComplete ? "complete" : string.Empty)">
-                    @(IsCurrentTutorialStepComplete ? "Objective complete." : "Objective pending.")
+                    @(IsCurrentTutorialStepComplete ? "Page visited." : "Visit this page to mark it complete.")
                 </span>
             </div>
             @if (!string.IsNullOrWhiteSpace(CurrentTutorialStep.HelperText))
             {
                 <p class="tutorial-helper-copy">@CurrentTutorialStep.HelperText</p>
             }
-            @if (_tutorialIndex == _tutorialSteps.Count - 1)
-            {
-                <p class="tutorial-helper-copy">Inactive for 60 consecutive days means permanent deletion of this account and all owned maps.</p>
-            }
             <div class="tutorial-progress-track" aria-hidden="true">
                 <span class="tutorial-progress-fill" style="@GetTutorialProgressStyle()"></span>
             </div>
             <div class="tutorial-progress-row">
                 <span>Step @(_tutorialIndex + 1) of @_tutorialSteps.Count</span>
-                <span>@CompletedTutorialStepCount / @_tutorialSteps.Count completed</span>
+                <span>@CompletedTutorialStepCount / @_tutorialSteps.Count pages visited</span>
             </div>
             <div class="enigma-end-actions tutorial-action-row">
                 <button class="btn btn-secondary" type="button" @onclick="RestartTutorialJourneyAsync">Restart</button>
                 <button class="btn btn-secondary" type="button" @onclick="SkipTutorialAsync">Skip</button>
                 <button class="btn btn-secondary" type="button" disabled="@(_tutorialIndex == 0)" @onclick="GoToPreviousTutorialStepAsync">Previous</button>
-                <button class="btn btn-secondary" type="button" @onclick="OpenCurrentTutorialObjectiveAsync">Open Objective</button>
+                <button class="btn btn-secondary" type="button" @onclick="OpenCurrentTutorialObjectiveAsync">Open Page</button>
                 <button class="btn btn-primary" type="button" disabled="@(!CanAdvanceTutorialStep)" @onclick="GoToNextTutorialStepAsync">@(_tutorialIndex == _tutorialSteps.Count - 1 ? "Finish" : "Continue")</button>
             </div>
         </div>
@@ -208,172 +204,144 @@
     [
         new()
         {
-            Chapter = "Act I - Arrival",
+            Chapter = "Guide - Navigation",
             Eyebrow = "Home",
-            Title = "Enter the Enigma Hub",
-            Description = "This is your command deck. Every core system branches from here.",
-            Objective = "Visit Home and identify where Play, Leaderboard, Players, Profile, and Economy are launched.",
-            HelperText = "You can always return here when exploring a new system.",
+            Title = "Home Hub",
+            Description = "Home is your launch point for every major page in the app.",
+            Objective = "Open Home and review the main navigation cards.",
+            HelperText = "Use this page whenever you want a quick jump to core areas.",
             Path = "/home"
         },
         new()
         {
-            Chapter = "Act I - Arrival",
+            Chapter = "Guide - Navigation",
             Eyebrow = "Play",
-            Title = "Start a Discovery",
-            Description = "Play is your run launcher for new seeds and saved maps.",
-            Objective = "Open Play and interact with Generate, Load, or Loadout controls.",
-            HelperText = "Pick up to 3 items in loadout before entering a run.",
-            Path = "/play",
-            CompletionEventKey = "tutorial-play-interacted"
+            Title = "Play Launcher",
+            Description = "Play is where you start new seeds and load saved maps.",
+            Objective = "Open Play and review run setup controls.",
+            HelperText = "This page handles seed setup, loadout, and run start.",
+            Path = "/play"
         },
         new()
         {
-            Chapter = "Act II - Linkup",
+            Chapter = "Guide - Navigation",
             Eyebrow = "Co-op",
-            Title = "Dual Expedition",
-            Description = "Co-op is the live lobby for shared maze sessions.",
-            Objective = "Open Co-op lobby and perform one lobby action (create, join, invite, or ready).",
-            HelperText = "Owner creates the session, invites one friend, both ready up, then enter together.",
-            Path = "/play/coop",
-            CompletionEventKey = "tutorial-coop-interacted"
+            Title = "Co-op Lobby",
+            Description = "Co-op lobby manages invites, ready state, and shared session entry.",
+            Objective = "Open the Co-op page and review lobby sections.",
+            HelperText = "Invites and session status update live while you stay on this page.",
+            Path = "/play/coop"
         },
         new()
         {
-            Chapter = "Act II - Linkup",
-            Eyebrow = "Game",
-            Title = "Run a Safe Demo",
-            Description = "Experience live movement, room transitions, and puzzle interaction without risking a real run.",
-            Objective = "Open the tutorial demo run and move through at least one room.",
-            HelperText = "Use movement keys, approach puzzle consoles, and interact to feel the loop directly.",
-            Path = "/game",
-            CompletionEventKey = "tutorial-demo-room-transition"
-        },
-        new()
-        {
-            Chapter = "Act II - Linkup",
+            Chapter = "Guide - Pages",
             Eyebrow = "Leaderboard",
-            Title = "Read the Rankings",
-            Description = "Leaderboard tracks top maps and top explorers in paged sections.",
-            Objective = "Open Leaderboard and interact with mode, sort, or section controls.",
-            HelperText = "Sections keep large leaderboards fast and readable.",
-            Path = "/leaderboard",
-            CompletionEventKey = "tutorial-leaderboard-interacted"
+            Title = "Leaderboard",
+            Description = "Leaderboard tracks map and player rankings.",
+            Objective = "Open Leaderboard and review ranking sections.",
+            HelperText = "Use filters and tabs to switch between ranking views.",
+            Path = "/leaderboard"
         },
         new()
         {
-            Chapter = "Act II - Linkup",
+            Chapter = "Guide - Pages",
             Eyebrow = "Players",
-            Title = "Scout Explorers",
-            Description = "Player search is your social lookup system.",
-            Objective = "Open Players and run a live search with at least 2 characters.",
-            HelperText = "Search updates as you type and profile cards show live online state.",
-            Path = "/players",
-            CompletionEventKey = "tutorial-players-search-interacted"
+            Title = "Players",
+            Description = "Players page is your social lookup and profile discovery area.",
+            Objective = "Open Players and review search + profile results.",
+            HelperText = "Online status and profile summary data are shown here.",
+            Path = "/players"
         },
         new()
         {
-            Chapter = "Act III - Economy",
-            Eyebrow = "Economy",
-            Title = "Watch Market Pulse",
-            Description = "Economy overview shows live circulation, activity, and health metrics.",
-            Objective = "Open Economy and interact with the tab bar or refresh controls.",
-            HelperText = "Overview is your live macro view before taking action in subtabs.",
-            Path = "/economy",
-            CompletionEventKey = "tutorial-economy-interacted"
-        },
-        new()
-        {
-            Chapter = "Act III - Economy",
-            Eyebrow = "Marketplace",
-            Title = "Trade Maps and Items",
-            Description = "Marketplace supports map listings, listing management, and item purchases.",
-            Objective = "Open Economy > Marketplace (or standalone Marketplace) and review active listings.",
-            HelperText = "Listings and item stock refresh continuously.",
-            Path = "/economy?tab=marketplace",
-            MatchPaths = ["/economy?tab=marketplace", "/marketplace"]
-        },
-        new()
-        {
-            Chapter = "Act III - Economy",
-            Eyebrow = "Staking",
-            Title = "Lock Yield Sources",
-            Description = "Map analysis converts recovered sectors into daily MN research credits.",
-            Objective = "Open Economy > Staking (or standalone Staking) and review containment timer + analysis lists.",
-            HelperText = "Submitted maps stay containment-locked before withdrawal is allowed.",
-            Path = "/economy?tab=staking",
-            MatchPaths = ["/economy?tab=staking", "/staking"]
-        },
-        new()
-        {
-            Chapter = "Act III - Economy",
-            Eyebrow = "Voting",
-            Title = "Council Governance",
-            Description = "Voting converts MN into weighted governance power.",
-            Objective = "Open Economy > Voting (or standalone Voting) and inspect active/closed session panels.",
-            HelperText = "When council is closed, results and your recent vote history remain visible.",
-            Path = "/economy?tab=voting",
-            MatchPaths = ["/economy?tab=voting", "/voting"]
-        },
-        new()
-        {
-            Chapter = "Act IV - Identity",
+            Chapter = "Guide - Profile",
             Eyebrow = "Profile",
-            Title = "Explorer Ledger",
-            Description = "Profile overview combines social, ownership, and performance state.",
-            Objective = "Open your profile overview and review identity + run stats.",
-            HelperText = "Other users only see public profile sections.",
+            Title = "Profile Overview",
+            Description = "Profile combines identity, run stats, and social/account controls.",
+            Objective = "Open Profile overview and review your summary cards.",
+            HelperText = "Other players only see public-facing profile sections.",
             Path = "/profile",
             MatchPaths = ["/profile", "/profile/"],
             AllowPathPrefixMatch = true
         },
         new()
         {
-            Chapter = "Act IV - Identity",
+            Chapter = "Guide - Profile",
             Eyebrow = "Maps",
-            Title = "Collection Depth",
-            Description = "Maps tab separates owned collection from discovered archive.",
-            Objective = "Open Profile > Maps tab and inspect owned/discovered panels.",
-            HelperText = "Owned and discovered are different systems and are tracked separately.",
+            Title = "Profile Maps Tab",
+            Description = "Maps tab separates owned maps and discovered archive data.",
+            Objective = "Open Profile > Maps and review both map lists.",
+            HelperText = "Owned and discovered are tracked separately by design.",
             Path = "/profile?tab=maps",
             MatchPaths = ["/profile?tab=maps"],
             AllowPathPrefixMatch = true
         },
         new()
         {
-            Chapter = "Act IV - Identity",
+            Chapter = "Guide - Profile",
             Eyebrow = "Inventory",
-            Title = "Loadout Inventory",
-            Description = "Inventory tab holds owned gameplay items and cosmetics.",
-            Objective = "Open Profile > Inventory tab and review gear/cosmetic sections.",
-            HelperText = "Inventory controls what can be used in run loadouts.",
+            Title = "Profile Inventory Tab",
+            Description = "Inventory contains gameplay items and cosmetic ownership.",
+            Objective = "Open Profile > Inventory and review item sections.",
+            HelperText = "Inventory state controls what can be used in loadouts.",
             Path = "/profile?tab=inventory",
             MatchPaths = ["/profile?tab=inventory"],
             AllowPathPrefixMatch = true
         },
         new()
         {
-            Chapter = "Act IV - Identity",
+            Chapter = "Guide - Profile",
             Eyebrow = "Settings",
-            Title = "Account Controls",
-            Description = "Settings contains identity, security, and tutorial replay controls.",
-            Objective = "Open Profile > Settings and locate username/email/password controls.",
-            HelperText = "You can replay this journey anytime from Settings.",
+            Title = "Profile Settings Tab",
+            Description = "Settings holds account changes, security actions, and tutorial replay.",
+            Objective = "Open Profile > Settings and review account controls.",
+            HelperText = "You can replay this guide anytime from Settings.",
             Path = "/profile?tab=settings",
             MatchPaths = ["/profile?tab=settings"],
             AllowPathPrefixMatch = true
         },
         new()
         {
-            Chapter = "Act IV - Identity",
-            Eyebrow = "Retention",
-            Title = "System Policy",
-            Description = "Retention rules are part of safe account ownership.",
-            Objective = "Open the retention policy view in Settings and confirm the 60-day inactivity rule.",
-            HelperText = "Once complete, this guided journey is fully unlocked.",
-            Path = "/profile?tab=settings&tutorialstep=policy",
-            MatchPaths = ["/profile?tab=settings&tutorialstep=policy"],
-            AllowPathPrefixMatch = true
+            Chapter = "Guide - Economy",
+            Eyebrow = "Economy",
+            Title = "Economy Overview",
+            Description = "Economy overview shows circulation, activity, and system health.",
+            Objective = "Open Economy and review the top-level metrics.",
+            HelperText = "Use the economy tab bar to switch between subpages.",
+            Path = "/economy"
+        },
+        new()
+        {
+            Chapter = "Guide - Economy",
+            Eyebrow = "Marketplace",
+            Title = "Marketplace Tab",
+            Description = "Marketplace handles map listings, purchases, and listing management.",
+            Objective = "Open Economy > Marketplace and review live listings.",
+            HelperText = "Listing and stock updates are reflected dynamically.",
+            Path = "/economy?tab=marketplace",
+            MatchPaths = ["/economy?tab=marketplace", "/marketplace"]
+        },
+        new()
+        {
+            Chapter = "Guide - Economy",
+            Eyebrow = "Staking",
+            Title = "Staking Tab",
+            Description = "Staking assigns maps to analysis for daily MN and governance influence.",
+            Objective = "Open Economy > Staking and review analysis + available map panels.",
+            HelperText = "Submitted maps remain lock-protected during containment.",
+            Path = "/economy?tab=staking",
+            MatchPaths = ["/economy?tab=staking", "/staking"]
+        },
+        new()
+        {
+            Chapter = "Guide - Economy",
+            Eyebrow = "Voting",
+            Title = "Voting Tab",
+            Description = "Voting converts MN into weighted governance power during active sessions.",
+            Objective = "Open Economy > Voting and review session status and vote panels.",
+            HelperText = "Closed sessions still show results and recent vote history.",
+            Path = "/economy?tab=voting",
+            MatchPaths = ["/economy?tab=voting", "/voting"]
         },
     ];
 
@@ -382,7 +350,7 @@
             ? _tutorialSteps[_tutorialIndex]
             : null;
     private bool IsCurrentTutorialStepComplete => _completedTutorialStepIndexes.Contains(_tutorialIndex);
-    private bool CanAdvanceTutorialStep => IsCurrentTutorialStepComplete;
+    private bool CanAdvanceTutorialStep => _tutorialSteps.Count > 0;
     private int CompletedTutorialStepCount => _completedTutorialStepIndexes.Count;
 
     private bool ShouldShowHeader => !IsPublicPath() && !IsGamePath() && AuthCheckComplete && IsAuthenticated;
@@ -835,7 +803,7 @@
 
         if (announce && _announcedTutorialStepIndexes.Add(index))
         {
-            Notifications.Success($"Objective complete: {_tutorialSteps[index].Title}", 3);
+            Notifications.Success($"Guide page visited: {_tutorialSteps[index].Title}", 3);
         }
 
         return true;
@@ -1288,12 +1256,6 @@
 
     private async Task GoToNextTutorialStepAsync()
     {
-        if (!CanAdvanceTutorialStep)
-        {
-            await OpenCurrentTutorialObjectiveAsync();
-            return;
-        }
-
         if (_tutorialIndex >= _tutorialSteps.Count - 1)
         {
             await CompleteTutorialAsync();
@@ -1356,7 +1318,7 @@
         try
         {
             await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "completed" });
-            Notifications.Success("Tutorial journey complete. Replay anytime from Profile Settings.", 5);
+            Notifications.Success("Guide complete. Replay anytime from Profile Settings.", 5);
         }
         catch
         {
