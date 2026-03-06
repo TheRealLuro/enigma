@@ -275,10 +275,35 @@ html.enigma-global-zoom-fallback body {
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
         var(--epic-elevated);
+    color: var(--epic-text);
+    -webkit-text-fill-color: var(--epic-text);
+    caret-color: var(--epic-text);
 }
 
 .form-control::placeholder {
     color: var(--epic-text-dim);
+}
+
+input.form-control,
+textarea.form-control,
+select.form-control,
+select.form-select {
+    color: var(--epic-text);
+    -webkit-text-fill-color: var(--epic-text);
+    caret-color: var(--epic-text);
+}
+
+input.form-control:-webkit-autofill,
+input.form-control:-webkit-autofill:hover,
+input.form-control:-webkit-autofill:focus,
+textarea.form-control:-webkit-autofill,
+textarea.form-control:-webkit-autofill:hover,
+textarea.form-control:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--epic-text);
+    caret-color: var(--epic-text);
+    -webkit-box-shadow: 0 0 0 1000px rgba(31, 31, 31, 0.98) inset;
+    box-shadow: 0 0 0 1000px rgba(31, 31, 31, 0.98) inset;
+    transition: background-color 9999s ease-in-out 0s;
 }
 
 select.form-control,

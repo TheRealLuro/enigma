@@ -16,6 +16,13 @@ from main import limiter
 from .account_cleanup import delete_user_account
 from .db import client, item_inventory, maps_collection, marketplace_collection, run_results, users_collection
 from .economy_rules import compute_loss_fee, credit_bank_dividend
+from .input_validation import (
+    ensure_safe_text,
+    validate_email_address,
+    validate_login_username,
+    validate_password_strength,
+    validate_username,
+)
 from .item_catalog import is_item_supported_for_current_app, serialize_shop_item
 from .redis_store import delete_keys, load_json, save_json, session_key, user_invites_key, user_session_key
 from .user_utils import (
@@ -43,58 +50,64 @@ DEFAULT_AVATAR_CROP = {
 
 
 class UpdateEmailPayload(BaseModel):
-    username: str
-    current_password: str
-    new_email: str
+    username: str = Field(min_length=1, max_length=64)
+    current_password: str = Field(min_length=1, max_length=128)
+    new_email: str = Field(min_length=3, max_length=254)
 
 
 class UpdatePasswordPayload(BaseModel):
-    username: str
-    current_password: str
-    new_password: str = Field(min_length=8)
+    username: str = Field(min_length=1, max_length=64)
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
 
 
 class UpdateUsernamePayload(BaseModel):
-    username: str
-    current_password: str
+    username: str = Field(min_length=1, max_length=64)
+    current_password: str = Field(min_length=1, max_length=128)
     new_username: str = Field(min_length=3, max_length=32)
 
 
 class UpdateAvatarPayload(BaseModel):
-    username: str
-    map_name: str
+    username: str = Field(min_length=1, max_length=64)
+    map_name: str = Field(min_length=1, max_length=120)
 
 
 class DeleteAccountPayload(BaseModel):
-    username: str
-    current_password: str
-    confirm_username: str
+    username: str = Field(min_length=1, max_length=64)
+    current_password: str = Field(min_length=1, max_length=128)
+    confirm_username: str = Field(min_length=1, max_length=64)
 
 
 class TutorialStatePayload(BaseModel):
-    username: str
-    action: str
+    username: str = Field(min_length=1, max_length=64)
+    action: str = Field(min_length=1, max_length=32)
 
 
 class RemoveFriendPayload(BaseModel):
-    username: str
-    friend_username: str
+    username: str = Field(min_length=1, max_length=64)
+    friend_username: str = Field(min_length=1, max_length=64)
 
 
 class AbandonRunPayload(BaseModel):
-    username: str
-    run_nonce: str
-    seed: str
+    username: str = Field(min_length=1, max_length=64)
+    run_nonce: str = Field(min_length=1, max_length=256)
+    seed: str = Field(min_length=1, max_length=2048)
     used_items: list[str] = []
-    map_name: str | None = None
-    source: str = "new"
+    map_name: str | None = Field(default=None, max_length=120)
+    source: str = Field(default="new", max_length=32)
     forfeited_run_payout: int = 0
     projected_completion_payout: int = 0
     map_value: int = 0
-    reason: str = "abandoned"
+    reason: str = Field(default="abandoned", max_length=64)
 
 
 def _verify_password(user: dict[str, Any], password: str) -> None:
+    password = ensure_safe_text(
+        password,
+        field_name="password",
+        min_length=1,
+        max_length=128,
+    )
     hashed = user.get("password")
     if not hashed:
         raise HTTPException(status_code=400, detail="Password is not configured")
@@ -408,7 +421,7 @@ def _serialize_inventory_items(user: dict[str, Any]) -> list[dict[str, Any]]:
 @router.get("/account")
 @limiter.limit("30/minute")
 def get_account(request: Request, username: str, include_maps: bool = True):
-    normalized_username = str(username or "").strip()
+    normalized_username = validate_login_username(username, field_name="username")
     touch_user_presence(users_collection, normalized_username)
     include_maps = bool(include_maps)
     if include_maps:
@@ -429,15 +442,14 @@ def get_account(request: Request, username: str, include_maps: bool = True):
 @router.put("/update_email")
 @limiter.limit("10/minute")
 def update_email(request: Request, payload: UpdateEmailPayload):
-    user = _sync_user(payload.username)
+    current_username = validate_login_username(payload.username, field_name="username")
+    user = _sync_user(current_username)
     _verify_password(user, payload.current_password)
 
-    next_email = payload.new_email.strip()
-    if not next_email:
-        raise HTTPException(status_code=400, detail="Email is required")
+    next_email = validate_email_address(payload.new_email, field_name="new_email")
 
     normalized = normalize_email(next_email)
-    existing = users_collection.find_one({"email_normalized": normalized, "username": {"$ne": payload.username}})
+    existing = users_collection.find_one({"email_normalized": normalized, "username": {"$ne": current_username}})
     if existing:
         raise HTTPException(status_code=409, detail="Email is already in use")
 
@@ -446,32 +458,30 @@ def update_email(request: Request, payload: UpdateEmailPayload):
         {"$set": {"email": next_email, "email_normalized": normalized}},
     )
 
-    refreshed = _sync_user(payload.username)
+    refreshed = _sync_user(current_username)
     return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
 
 
 @router.put("/update_password")
 @limiter.limit("10/minute")
 def update_password(request: Request, payload: UpdatePasswordPayload):
-    user = _sync_user(payload.username)
+    current_username = validate_login_username(payload.username, field_name="username")
+    user = _sync_user(current_username)
     _verify_password(user, payload.current_password)
+    new_password = validate_password_strength(payload.new_password, field_name="new_password")
 
-    hashed_password = bcrypt.hashpw(payload.new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    hashed_password = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     users_collection.update_one({"_id": user["_id"]}, {"$set": {"password": hashed_password}})
 
-    refreshed = _sync_user(payload.username)
+    refreshed = _sync_user(current_username)
     return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
 
 
 @router.put("/update_username")
 @limiter.limit("5/minute")
 def update_username(request: Request, payload: UpdateUsernamePayload):
-    current_username = payload.username.strip()
-    new_username = payload.new_username.strip()
-    if not current_username:
-        raise HTTPException(status_code=400, detail="Current username is required")
-    if not new_username:
-        raise HTTPException(status_code=400, detail="New username is required")
+    current_username = validate_login_username(payload.username, field_name="username")
+    new_username = validate_username(payload.new_username, field_name="new_username")
     if new_username.lower() == SYSTEM_BANK_USERNAME:
         raise HTTPException(status_code=403, detail="That username is reserved")
     if new_username.casefold() == current_username.casefold():
@@ -542,7 +552,9 @@ def update_username(request: Request, payload: UpdateUsernamePayload):
 @router.put("/update_avatar")
 @limiter.limit("20/minute")
 def update_avatar(request: Request, payload: UpdateAvatarPayload):
-    user = _sync_user(payload.username)
+    current_username = validate_login_username(payload.username, field_name="username")
+    map_name = ensure_safe_text(payload.map_name, field_name="map_name", min_length=1, max_length=120)
+    user = _sync_user(current_username)
     if user.get("is_system_account"):
         raise HTTPException(status_code=403, detail="System accounts cannot change avatars")
 
@@ -551,7 +563,7 @@ def update_avatar(request: Request, payload: UpdateAvatarPayload):
         (
             map_doc
             for map_doc in owned_map_docs
-            if str(map_doc.get("map_name") or "").strip().lower() == payload.map_name.strip().lower()
+            if str(map_doc.get("map_name") or "").strip().lower() == map_name.lower()
         ),
         None,
     )
@@ -559,57 +571,60 @@ def update_avatar(request: Request, payload: UpdateAvatarPayload):
         raise HTTPException(status_code=404, detail="Only owned maps with images can be used as profile pictures")
 
     profile_image = {
-        "map_name": payload.map_name,
+        "map_name": map_name,
         "image_url": owned_map.get("map_image"),
         "crop": dict(DEFAULT_AVATAR_CROP),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     users_collection.update_one({"_id": user["_id"]}, {"$set": {"profile_image": profile_image}})
-    refreshed = _sync_user(payload.username)
+    refreshed = _sync_user(current_username)
     return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
 
 
 @router.delete("/delete_account")
 @limiter.limit("5/minute")
 def delete_account(request: Request, payload: DeleteAccountPayload):
-    if payload.confirm_username != payload.username:
+    username = validate_login_username(payload.username, field_name="username")
+    confirm_username = validate_login_username(payload.confirm_username, field_name="confirm_username")
+    if confirm_username.casefold() != username.casefold():
         raise HTTPException(status_code=400, detail="Username confirmation does not match")
 
-    user = _sync_user(payload.username)
+    user = _sync_user(username)
     _verify_password(user, payload.current_password)
 
-    result = delete_user_account(payload.username)
+    result = delete_user_account(username)
     return {"status": "success", **result}
 
 
 @router.post("/remove_friend")
 @limiter.limit("20/minute")
 def remove_friend(request: Request, payload: RemoveFriendPayload):
-    if not payload.friend_username.strip():
-        raise HTTPException(status_code=400, detail="Friend username is required")
+    username = validate_login_username(payload.username, field_name="username")
+    friend_username = validate_login_username(payload.friend_username, field_name="friend_username")
 
     users_collection.update_one(
-        {"username": payload.username},
-        {"$pull": {"friends": payload.friend_username, "friend_requests": payload.friend_username}},
+        {"username": username},
+        {"$pull": {"friends": friend_username, "friend_requests": friend_username}},
     )
     users_collection.update_one(
-        {"username": payload.friend_username},
-        {"$pull": {"friends": payload.username, "friend_requests": payload.username}},
+        {"username": friend_username},
+        {"$pull": {"friends": username, "friend_requests": username}},
     )
 
-    refreshed = _sync_user(payload.username)
+    refreshed = _sync_user(username)
     return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
 
 
 @router.post("/tutorial_state")
 @limiter.limit("20/minute")
 def update_tutorial_state(request: Request, payload: TutorialStatePayload):
-    action = payload.action.strip().lower()
+    username = validate_login_username(payload.username, field_name="username")
+    action = ensure_safe_text(payload.action, field_name="action", min_length=1, max_length=32).strip().lower()
     if action not in {"seen", "completed", "skipped"}:
-        raise HTTPException(status_code=400, detail="Unsupported tutorial action")
+        raise HTTPException(status_code=400, detail="Action must be one of: seen, completed, skipped")
 
-    user = _sync_user(payload.username)
+    user = _sync_user(username)
     tutorial_state = user.get("tutorial_state") if isinstance(user.get("tutorial_state"), dict) else {}
     tutorial_state = {
         "version": int(tutorial_state.get("version", 1) or 1),
@@ -629,17 +644,18 @@ def update_tutorial_state(request: Request, payload: TutorialStatePayload):
         tutorial_state["skipped_at"] = now
 
     users_collection.update_one({"_id": user["_id"]}, {"$set": {"tutorial_state": tutorial_state}})
-    refreshed = _sync_user(payload.username)
+    refreshed = _sync_user(username)
     return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
 
 
 @router.get("/inventory")
 @limiter.limit("30/minute")
 def get_inventory(request: Request, username: str):
-    user = _sync_user(username)
+    normalized_username = validate_login_username(username, field_name="username")
+    user = _sync_user(normalized_username)
     return {
         "status": "success",
-        "username": username,
+        "username": normalized_username,
         "items": _serialize_inventory_items(user),
     }
 
@@ -647,21 +663,29 @@ def get_inventory(request: Request, username: str):
 @router.post("/abandon_run")
 @limiter.limit("60/minute")
 def abandon_run(request: Request, payload: AbandonRunPayload):
-    if not payload.run_nonce.strip():
-        raise HTTPException(status_code=400, detail="Run nonce is required")
+    username = validate_login_username(payload.username, field_name="username")
+    run_nonce = ensure_safe_text(payload.run_nonce, field_name="run_nonce", min_length=1, max_length=256)
+    seed = ensure_safe_text(payload.seed, field_name="seed", min_length=1, max_length=2048)
+    source = ensure_safe_text(payload.source, field_name="source", min_length=1, max_length=32)
+    reason = ensure_safe_text(payload.reason, field_name="reason", min_length=1, max_length=64)
+    map_name = ensure_safe_text(payload.map_name, field_name="map_name", required=False, max_length=120)
+    used_items = [
+        ensure_safe_text(item_id, field_name="used_item", min_length=1, max_length=64)
+        for item_id in payload.used_items
+    ]
 
-    user = _sync_user(payload.username)
-    if user.get("is_system_account") or payload.username == SYSTEM_BANK_USERNAME:
+    user = _sync_user(username)
+    if user.get("is_system_account") or username == SYSTEM_BANK_USERNAME:
         raise HTTPException(status_code=403, detail="System accounts cannot submit runs")
 
     run_results.create_index("run_nonce", unique=True)
-    if run_results.find_one({"run_nonce": payload.run_nonce}):
-        refreshed_user = _sync_user(payload.username)
+    if run_results.find_one({"run_nonce": run_nonce}):
+        refreshed_user = _sync_user(username)
         return {"status": "success", "already_processed": True, "user": serialize_session_user(refreshed_user, maps_collection)}
 
     item_counts = user.get("item_counts", {})
     requested_use_counts: dict[str, int] = {}
-    for item_id in payload.used_items:
+    for item_id in used_items:
         requested_use_counts[item_id] = requested_use_counts.get(item_id, 0) + 1
 
     for item_id, amount in requested_use_counts.items():
@@ -697,13 +721,13 @@ def abandon_run(request: Request, payload: AbandonRunPayload):
 
                 run_results.insert_one(
                     {
-                        "run_nonce": payload.run_nonce,
-                        "username": payload.username,
-                        "seed": payload.seed,
-                        "map_name": payload.map_name,
-                        "source": payload.source,
-                        "reason": payload.reason,
-                        "used_items": payload.used_items,
+                        "run_nonce": run_nonce,
+                        "username": username,
+                        "seed": seed,
+                        "map_name": map_name,
+                        "source": source,
+                        "reason": reason,
+                        "used_items": used_items,
                         "forfeited_run_payout": int(payload.forfeited_run_payout or 0),
                         "projected_completion_payout": int(payload.projected_completion_payout or 0),
                         "map_value": int(payload.map_value or 0),
@@ -713,10 +737,10 @@ def abandon_run(request: Request, payload: AbandonRunPayload):
                     session=session,
                 )
     except DuplicateKeyError:
-        refreshed_user = _sync_user(payload.username)
+        refreshed_user = _sync_user(username)
         return {"status": "success", "already_processed": True, "user": serialize_session_user(refreshed_user, maps_collection)}
 
-    refreshed = _sync_user(payload.username)
+    refreshed = _sync_user(username)
     return {
         "status": "success",
         "already_processed": False,

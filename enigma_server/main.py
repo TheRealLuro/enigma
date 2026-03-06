@@ -1,3 +1,5 @@
+import json
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -8,6 +10,7 @@ import logging
 import diffusionengine
 from fastapi.middleware.cors import CORSMiddleware
 
+from apis.database.input_validation import sanitize_request_string
 from apis.database.perf_monitor import request_finished, request_started
 from apis.database.item_shop_stocker import ensure_shop_seeded, shop_restock_scheduler
 from apis.database.system_accounts import ensure_bank_account
@@ -39,6 +42,62 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+MAX_SCANNED_JSON_BODY_BYTES = 262_144
+
+
+def _scan_payload_strings(payload, path: str = "body") -> str | None:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            key_label = str(key or "").strip() or "field"
+            child_path = f"{path}.{key_label}"
+            issue = _scan_payload_strings(value, child_path)
+            if issue:
+                return issue
+        return None
+    if isinstance(payload, list):
+        for index, entry in enumerate(payload):
+            issue = _scan_payload_strings(entry, f"{path}[{index}]")
+            if issue:
+                return issue
+        return None
+    if isinstance(payload, str):
+        issue = sanitize_request_string(payload)
+        if issue:
+            return f"{path} {issue}"
+    return None
+
+
+@app.middleware("http")
+async def request_input_security_middleware(request: Request, call_next):
+    for key, value in request.query_params.multi_items():
+        issue = sanitize_request_string(value)
+        if issue:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": f"Invalid query parameter '{key}': {issue}"},
+            )
+
+    content_type = str(request.headers.get("content-type") or "").lower()
+    if request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"} and "application/json" in content_type:
+        body_bytes = await request.body()
+
+        async def receive():
+            return {"type": "http.request", "body": body_bytes, "more_body": False}
+
+        request = Request(request.scope, receive)
+
+        if body_bytes and len(body_bytes) <= MAX_SCANNED_JSON_BODY_BYTES:
+            try:
+                body_payload = json.loads(body_bytes.decode("utf-8"))
+            except (UnicodeDecodeError, ValueError):
+                body_payload = None
+            if body_payload is not None:
+                issue = _scan_payload_strings(body_payload)
+                if issue:
+                    return JSONResponse(status_code=400, content={"detail": f"Invalid request payload: {issue}"})
+
+    return await call_next(request)
+
 
 @app.middleware("http")
 async def runtime_perf_middleware(request: Request, call_next):
@@ -56,7 +115,36 @@ async def runtime_perf_middleware(request: Request, call_next):
 
 @app.exception_handler(RequestValidationError)
 async def validation_json_handler(request: Request, exc: RequestValidationError):
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    formatted_errors: list[dict[str, str]] = []
+    for error in exc.errors():
+        location_parts = [
+            str(part)
+            for part in list(error.get("loc", []))
+            if str(part) not in {"body", "query", "path"}
+        ]
+        field = ".".join(location_parts) if location_parts else "request"
+        message = str(error.get("msg") or "Invalid value")
+        error_type = str(error.get("type") or "validation_error")
+        formatted_errors.append(
+            {
+                "field": field,
+                "message": message,
+                "type": error_type,
+            }
+        )
+
+    top_errors = formatted_errors[:3]
+    summary = "; ".join(f"{entry['field']}: {entry['message']}" for entry in top_errors)
+    if len(formatted_errors) > 3:
+        summary = f"{summary} (+{len(formatted_errors) - 3} more)"
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": summary or "Request validation failed",
+            "errors": formatted_errors,
+        },
+    )
 
 
 @app.exception_handler(StarletteHTTPException)

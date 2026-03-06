@@ -2,11 +2,12 @@ from datetime import datetime, timezone
 
 import bcrypt
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from main import limiter
 
 from .db import maps_collection, users_collection
+from .input_validation import ensure_safe_text, validate_login_username
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
     build_owned_maps_sync_update,
@@ -19,16 +20,21 @@ router = APIRouter(prefix="/database/users")
 
 
 class LoginPayload(BaseModel):
-    username: str
-    passwd: str
+    username: str = Field(min_length=1, max_length=64)
+    passwd: str = Field(min_length=1, max_length=128)
 
 @router.post("/login")
 @limiter.limit("2/minute")
 def login_user(request: Request, username: str | None = None, passwd: str | None = None, body: LoginPayload | None = None):
     username = body.username if body else username
     passwd = body.passwd if body else passwd
-    username = (username or "").strip()
-    passwd = passwd or ""
+    username = validate_login_username(username, field_name="username")
+    passwd = ensure_safe_text(
+        passwd,
+        field_name="password",
+        min_length=1,
+        max_length=128,
+    )
 
     user = users_collection.find_one({"username": username})
     if not user:

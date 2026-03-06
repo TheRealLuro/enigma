@@ -2,20 +2,21 @@ from datetime import datetime, timezone
 
 import bcrypt
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from main import limiter
 
 from .db import users_collection
+from .input_validation import validate_email_address, validate_password_strength, validate_username
 from .user_utils import SYSTEM_BANK_USERNAME, default_user_fields, normalize_email
 
 router = APIRouter(prefix="/database/users")
 
 
 class SignUpPayload(BaseModel):
-    username: str
-    email: str
-    passwd: str
+    username: str = Field(min_length=3, max_length=32)
+    email: str = Field(min_length=3, max_length=254)
+    passwd: str = Field(min_length=10, max_length=128)
 
 
 @router.post("/signup")
@@ -25,22 +26,19 @@ def create_user(request: Request, username: str | None = None, email: str | None
     email = body.email if body else email
     passwd = body.passwd if body else passwd
 
-    username = (username or "").strip()
-    email = (email or "").strip()
-    passwd = passwd or ""
-
-    if not username or not email or not passwd:
-        raise HTTPException(status_code=400, detail="Username, email, and password are required")
+    username = validate_username(username, field_name="username")
+    email = validate_email_address(email, field_name="email")
+    passwd = validate_password_strength(passwd, field_name="password")
 
     if username.lower() == SYSTEM_BANK_USERNAME:
         raise HTTPException(status_code=403, detail="That username is reserved")
 
     if users_collection.find_one({"username": username}):
-        raise HTTPException(status_code=400, detail="User already exists")
+        raise HTTPException(status_code=409, detail="Username is already in use")
 
     normalized_email = normalize_email(email)
     if users_collection.find_one({"email_normalized": normalized_email}):
-        raise HTTPException(status_code=400, detail="Email already exists")
+        raise HTTPException(status_code=409, detail="Email is already in use")
     
     password_bytes = passwd.encode('utf-8')
     hashed_bytes = bcrypt.hashpw(password_bytes, bcrypt.gensalt())
