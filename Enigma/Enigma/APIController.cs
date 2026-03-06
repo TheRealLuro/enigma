@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
@@ -13,9 +12,11 @@ using Microsoft.AspNetCore.Mvc;
 public class APIController : ControllerBase
 {
     private readonly string _backendBaseUrl;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public APIController(IConfiguration configuration)
+    public APIController(IConfiguration configuration, IHttpClientFactory httpClientFactory)
     {
+        _httpClientFactory = httpClientFactory;
         _backendBaseUrl =
             configuration["Backend:BaseUrl"]
             ?? Environment.GetEnvironmentVariable("ENIGMA_BACKEND_URL")
@@ -27,10 +28,11 @@ public class APIController : ControllerBase
 
     private HttpClient CreateClient()
     {
-        var client = new HttpClient { BaseAddress = new Uri(_backendBaseUrl) };
-        client.Timeout = TimeSpan.FromSeconds(20);
-        client.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var client = _httpClientFactory.CreateClient("EnigmaBackend");
+        if (client.BaseAddress is null)
+        {
+            throw new UriFormatException("Backend base URL is not configured.");
+        }
         return client;
     }
 
@@ -200,13 +202,14 @@ public class APIController : ControllerBase
 
     [Authorize]
     [HttpGet("session/me")]
-    public async Task<IActionResult> Me()
+    public async Task<IActionResult> Me([FromQuery] bool lite = false)
     {
         try
         {
             using var client = CreateClient();
             var username = RequireAuthenticatedUsername();
-            using var response = await client.GetAsync($"database/users/account?username={Esc(username)}");
+            var includeMapsQuery = lite ? "&include_maps=false" : string.Empty;
+            using var response = await client.GetAsync($"database/users/account?username={Esc(username)}{includeMapsQuery}");
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -566,6 +569,15 @@ public class APIController : ControllerBase
         using var client = CreateClient();
         var username = RequireAuthenticatedUsername();
         using var response = await client.GetAsync($"database/economy/overview?username={Esc(username)}");
+        return await RelayAsync(response);
+    }
+
+    [Authorize]
+    [HttpGet("system/perf")]
+    public async Task<IActionResult> GetSystemPerformance()
+    {
+        using var client = CreateClient();
+        using var response = await client.GetAsync("database/system/perf");
         return await RelayAsync(response);
     }
 

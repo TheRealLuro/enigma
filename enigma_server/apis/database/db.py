@@ -14,8 +14,23 @@ db_name = os.getenv("MONGO_DB")
 uri = f"mongodb+srv://{user}:{password}{cluster}"
 
 
+mongo_max_pool_size = int(os.getenv("MONGO_MAX_POOL_SIZE", "200") or 200)
+mongo_min_pool_size = int(os.getenv("MONGO_MIN_POOL_SIZE", "0") or 0)
+mongo_wait_queue_timeout_ms = int(os.getenv("MONGO_WAIT_QUEUE_TIMEOUT_MS", "2500") or 2500)
+mongo_server_selection_timeout_ms = int(os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000") or 5000)
+mongo_connect_timeout_ms = int(os.getenv("MONGO_CONNECT_TIMEOUT_MS", "5000") or 5000)
+mongo_socket_timeout_ms = int(os.getenv("MONGO_SOCKET_TIMEOUT_MS", "15000") or 15000)
 
-client = MongoClient(uri)
+client = MongoClient(
+    uri,
+    maxPoolSize=max(20, mongo_max_pool_size),
+    minPoolSize=max(0, mongo_min_pool_size),
+    waitQueueTimeoutMS=max(500, mongo_wait_queue_timeout_ms),
+    serverSelectionTimeoutMS=max(1000, mongo_server_selection_timeout_ms),
+    connectTimeoutMS=max(1000, mongo_connect_timeout_ms),
+    socketTimeoutMS=max(1000, mongo_socket_timeout_ms),
+    retryWrites=True,
+)
 db = client[db_name]
 
 users_collection = db.users

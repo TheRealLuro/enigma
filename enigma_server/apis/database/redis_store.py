@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
 from contextlib import contextmanager
 from functools import lru_cache
 from typing import Any
@@ -14,6 +16,9 @@ from redis.exceptions import RedisError
 DEFAULT_REDIS_URL = "redis://localhost:6379/0"
 SESSION_TTL_SECONDS = 60 * 60 * 6
 COMPLETED_SESSION_TTL_SECONDS = 60 * 60
+REDIS_HEALTHCHECK_INTERVAL_SECONDS = 2.0
+_last_redis_healthcheck_at = 0.0
+_redis_healthcheck_lock = threading.Lock()
 
 
 def get_redis_url() -> str:
@@ -27,10 +32,23 @@ def get_redis_client() -> Redis:
 
 def ensure_redis_available() -> Redis:
     client = get_redis_client()
-    try:
-        client.ping()
-    except RedisError as exc:
-        raise HTTPException(status_code=503, detail=f"Redis unavailable: {exc}") from exc
+    global _last_redis_healthcheck_at
+
+    now = time.monotonic()
+    if now - _last_redis_healthcheck_at < REDIS_HEALTHCHECK_INTERVAL_SECONDS:
+        return client
+
+    with _redis_healthcheck_lock:
+        now = time.monotonic()
+        if now - _last_redis_healthcheck_at < REDIS_HEALTHCHECK_INTERVAL_SECONDS:
+            return client
+
+        try:
+            client.ping()
+            _last_redis_healthcheck_at = now
+        except RedisError as exc:
+            raise HTTPException(status_code=503, detail=f"Redis unavailable: {exc}") from exc
+
     return client
 
 

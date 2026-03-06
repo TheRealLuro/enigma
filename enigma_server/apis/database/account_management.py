@@ -279,13 +279,16 @@ def _migrate_multiplayer_user_keys(current_username: str, new_username: str) -> 
         pass
 
 
-def _sync_user(username: str) -> dict[str, Any]:
+def _sync_user(username: str, include_map_sync: bool = True) -> dict[str, Any]:
     user = users_collection.find_one({"username": username})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     set_updates = build_user_defaults_update(user)
-    owned_to_add, owned_to_remove = build_owned_maps_sync_update(user, maps_collection)
+    owned_to_add: list[Any] = []
+    owned_to_remove: list[Any] = []
+    if include_map_sync:
+        owned_to_add, owned_to_remove = build_owned_maps_sync_update(user, maps_collection)
     update_query: dict[str, Any] = {}
     if set_updates:
         update_query["$set"] = set_updates
@@ -338,10 +341,11 @@ def _serialize_inventory_items(user: dict[str, Any]) -> list[dict[str, Any]]:
 
 @router.get("/account")
 @limiter.limit("30/minute")
-def get_account(request: Request, username: str):
+def get_account(request: Request, username: str, include_maps: bool = True):
     touch_user_presence(users_collection, username)
-    user = _sync_user(username)
-    return {"status": "success", "user": serialize_session_user(user, maps_collection)}
+    include_maps = bool(include_maps)
+    user = _sync_user(username, include_map_sync=include_maps)
+    return {"status": "success", "user": serialize_session_user(user, maps_collection, include_maps=include_maps)}
 
 
 @router.put("/update_email")

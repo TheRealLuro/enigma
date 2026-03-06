@@ -280,10 +280,45 @@ def serialize_pending_multiplayer_invites(username: str | None) -> list[dict[str
     )
 
 
-def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, Any]:
+def serialize_session_user(
+    user: dict[str, Any],
+    maps_collection,
+    include_maps: bool = True,
+) -> dict[str, Any]:
     normalized_user = apply_user_defaults(user)
-    maps_owned_docs, maps_discovered_docs = resolve_user_maps(normalized_user, maps_collection)
-    staked_maps_count = _count_owned_staked_maps(normalized_user, maps_owned_docs)
+    maps_owned_docs: list[dict[str, Any]] = []
+    maps_discovered_docs: list[dict[str, Any]] = []
+
+    if include_maps:
+        maps_owned_docs, maps_discovered_docs = resolve_user_maps(normalized_user, maps_collection)
+        maps_owned_payload = serialize_user_map_documents(maps_owned_docs)
+        maps_discovered_payload = serialize_user_map_documents(maps_discovered_docs)
+        staked_maps_count = _count_owned_staked_maps(normalized_user, maps_owned_docs)
+        owned_maps_count = len(maps_owned_payload)
+        discovered_maps_count = len(maps_discovered_payload)
+    else:
+        maps_owned_payload = []
+        maps_discovered_payload = []
+        owned_map_ids = {
+            str(map_id).strip()
+            for map_id in list(normalized_user.get("maps_owned", []) or [])
+            if str(map_id).strip()
+        }
+        staked_maps_count = len(
+            {
+                str(map_id).strip()
+                for map_id in list(normalized_user.get("staked_map_ids", []) or [])
+                if str(map_id).strip() and str(map_id).strip() in owned_map_ids
+            }
+        )
+        owned_maps_count = len(owned_map_ids)
+        discovered_maps_count = len(
+            {
+                str(map_id).strip()
+                for map_id in list(normalized_user.get("maps_discovered", []) or [])
+                if str(map_id).strip()
+            }
+        )
 
     last_login_at = normalized_user.get("last_login_at")
     if isinstance(last_login_at, datetime):
@@ -320,8 +355,8 @@ def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, A
         "maze_nuggets": normalize_int(normalized_user.get("maze_nuggets")),
         "friends": list(normalized_user.get("friends", [])),
         "friend_requests": list(normalized_user.get("friend_requests", [])),
-        "maps_owned": serialize_user_map_documents(maps_owned_docs),
-        "maps_discovered": serialize_user_map_documents(maps_discovered_docs),
+        "maps_owned": maps_owned_payload,
+        "maps_discovered": maps_discovered_payload,
         "number_of_maps_played": normalize_int(normalized_user.get("number_of_maps_played")),
         "maps_completed": normalize_int(normalized_user.get("maps_completed")),
         "maps_lost": normalize_int(normalized_user.get("maps_lost")),
@@ -339,8 +374,8 @@ def serialize_session_user(user: dict[str, Any], maps_collection) -> dict[str, A
         "tutorial_state": serialize_tutorial_state(normalized_user.get("tutorial_state")),
         "is_system_account": bool(normalized_user.get("is_system_account")),
         "allow_public_profile": bool(normalized_user.get("allow_public_profile", True)),
-        "owned_maps_count": len(serialize_user_map_documents(maps_owned_docs)),
-        "discovered_maps_count": len(serialize_user_map_documents(maps_discovered_docs)),
+        "owned_maps_count": owned_maps_count,
+        "discovered_maps_count": discovered_maps_count,
     }
 
 

@@ -3,9 +3,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import asyncio
+import logging
 import diffusionengine
 from fastapi.middleware.cors import CORSMiddleware
 
+from apis.database.perf_monitor import request_finished, request_started
 from apis.database.item_shop_stocker import ensure_shop_seeded, shop_restock_scheduler
 from apis.database.system_accounts import ensure_bank_account
 
@@ -19,6 +21,7 @@ class NoOpLimiter:
 
 limiter = NoOpLimiter()
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, default_response_class=JSONResponse)
+logger = logging.getLogger("enigma.server")
 
 
 app.state.limiter = limiter
@@ -35,6 +38,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def runtime_perf_middleware(request: Request, call_next):
+    started_at = request_started()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = int(getattr(response, "status_code", 500) or 500)
+        return response
+    except Exception:
+        status_code = 500
+        raise
+    finally:
+        request_finished(request.url.path, status_code, started_at)
+
 @app.exception_handler(RequestValidationError)
 async def validation_json_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=422, content={"detail": exc.errors()})
@@ -47,6 +65,7 @@ async def http_json_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def fallback_json_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled backend exception on %s %s", request.method, request.url.path)
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 

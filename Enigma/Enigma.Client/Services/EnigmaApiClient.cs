@@ -22,9 +22,12 @@ public sealed class EnigmaApiClient
         return new Uri(new Uri(_navigationManager.BaseUri), relativePath).ToString();
     }
 
-    public async Task<LoginUserSummary?> GetSessionAsync(CancellationToken cancellationToken = default)
+    public async Task<LoginUserSummary?> GetSessionAsync(
+        CancellationToken cancellationToken = default,
+        bool lightweight = false)
     {
-        using var response = await _http.GetAsync(BuildUrl("api/auth/session/me"), cancellationToken);
+        var route = lightweight ? "api/auth/session/me?lite=true" : "api/auth/session/me";
+        using var response = await _http.GetAsync(BuildUrl(route), cancellationToken);
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
             return null;

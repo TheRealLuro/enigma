@@ -14,6 +14,99 @@ public sealed class EconomyOverviewResponse
     public LoginUserSummary? User { get; set; }
 }
 
+public sealed class EconomyPerfResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("generated_at")]
+    public string? GeneratedAt { get; set; }
+
+    [JsonPropertyName("runtime")]
+    public EconomyPerfRuntimeSnapshot? Runtime { get; set; }
+
+    [JsonPropertyName("dependencies")]
+    public EconomyPerfDependencies? Dependencies { get; set; }
+}
+
+public sealed class EconomyPerfRuntimeSnapshot
+{
+    [JsonPropertyName("uptime_seconds")]
+    public double UptimeSeconds { get; set; }
+
+    [JsonPropertyName("inflight_requests")]
+    public int InflightRequests { get; set; }
+
+    [JsonPropertyName("peak_inflight_requests")]
+    public int PeakInflightRequests { get; set; }
+
+    [JsonPropertyName("total_requests")]
+    public long TotalRequests { get; set; }
+
+    [JsonPropertyName("total_errors")]
+    public long TotalErrors { get; set; }
+
+    [JsonPropertyName("error_rate_percent")]
+    public double ErrorRatePercent { get; set; }
+
+    [JsonPropertyName("rps_10s")]
+    public double Rps10s { get; set; }
+
+    [JsonPropertyName("rps_60s")]
+    public double Rps60s { get; set; }
+
+    [JsonPropertyName("error_rps_60s")]
+    public double ErrorRps60s { get; set; }
+
+    [JsonPropertyName("avg_response_ms")]
+    public double AvgResponseMs { get; set; }
+
+    [JsonPropertyName("p95_response_ms")]
+    public double P95ResponseMs { get; set; }
+}
+
+public sealed class EconomyPerfDependencies
+{
+    [JsonPropertyName("redis")]
+    public EconomyDependencyPerfSnapshot? Redis { get; set; }
+
+    [JsonPropertyName("mongo")]
+    public EconomyDependencyPerfSnapshot? Mongo { get; set; }
+}
+
+public sealed class EconomyDependencyPerfSnapshot
+{
+    [JsonPropertyName("available")]
+    public bool Available { get; set; }
+
+    [JsonPropertyName("latency_ms")]
+    public double LatencyMs { get; set; }
+
+    [JsonPropertyName("wait_estimate_ms")]
+    public double WaitEstimateMs { get; set; }
+
+    [JsonPropertyName("avg_latency_ms_60s")]
+    public double AvgLatencyMs60s { get; set; }
+
+    [JsonPropertyName("p95_latency_ms_60s")]
+    public double P95LatencyMs60s { get; set; }
+
+    [JsonPropertyName("avg_wait_estimate_ms_60s")]
+    public double AvgWaitEstimateMs60s { get; set; }
+
+    [JsonPropertyName("p95_wait_estimate_ms_60s")]
+    public double P95WaitEstimateMs60s { get; set; }
+
+    [JsonPropertyName("failure_rate_60s")]
+    public double FailureRate60s { get; set; }
+
+    [JsonPropertyName("samples_60s")]
+    public int Samples60s { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
 public sealed class EconomyOverviewData
 {
     [JsonPropertyName("generated_at")]

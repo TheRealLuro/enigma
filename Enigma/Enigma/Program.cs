@@ -3,6 +3,7 @@ using Enigma.Client.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 using System.Net.WebSockets;
 using System.Security.Claims;
 using System.IO;
@@ -34,7 +35,20 @@ var enableWasmDebugging =
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("EnigmaBackend", client =>
+{
+    client.BaseAddress = new Uri(backendBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
+    client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+})
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+    PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+    MaxConnectionsPerServer = 1024,
+    AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+});
 builder.Services.AddScoped(sp =>
 {
     var navigationManager = sp.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();

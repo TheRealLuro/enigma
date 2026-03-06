@@ -394,7 +394,7 @@
         try
         {
             var previousSession = Session;
-            var session = await Api.GetSessionAsync();
+            var session = await Api.GetSessionAsync(lightweight: true);
             if (!string.Equals(Session?.Username, session?.Username, StringComparison.OrdinalIgnoreCase))
             {
                 _tutorialSeenRecorded = false;
@@ -1390,7 +1390,7 @@
                 LoginUserSummary? latestSession;
                 try
                 {
-                    latestSession = await Api.GetSessionAsync(cancellationToken);
+                    latestSession = await Api.GetSessionAsync(cancellationToken, lightweight: true);
                 }
                 catch (OperationCanceledException)
                 {

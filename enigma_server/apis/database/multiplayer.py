@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
@@ -41,7 +42,10 @@ from .redis_store import (
 router = APIRouter(prefix="/database/multiplayer")
 _SESSION_SOCKETS: dict[str, list[tuple[str, WebSocket]]] = {}
 _PENDING_SOCKET_ABANDON_TASKS: dict[tuple[str, str], asyncio.Task[None]] = {}
+_SESSION_LAST_PERSISTED_AT: dict[str, float] = {}
 SOCKET_ABANDON_GRACE_SECONDS = 8.0
+SESSION_PERSIST_MIN_INTERVAL_SECONDS = 0.20
+HEARTBEAT_PERSIST_MIN_INTERVAL_SECONDS = 1.50
 ROOM_SIZE = 1080.0
 PLAYER_SIZE = 60.0
 SPAWN_EDGE_INSET = 6.0
@@ -132,6 +136,35 @@ def _utc_now() -> datetime:
 
 def _utc_now_iso() -> str:
     return _utc_now().isoformat()
+
+
+def _persist_session_state(
+    session_id: str,
+    session: dict[str, Any],
+    *,
+    force: bool = False,
+    ttl_seconds: int = SESSION_TTL_SECONDS,
+    min_interval_seconds: float = SESSION_PERSIST_MIN_INTERVAL_SECONDS,
+) -> None:
+    normalized_session_id = str(session_id or "").strip()
+    if not normalized_session_id:
+        return
+
+    now = time.monotonic()
+    if not force:
+        last_persisted_at = _SESSION_LAST_PERSISTED_AT.get(normalized_session_id, 0.0)
+        if now - last_persisted_at < max(0.0, float(min_interval_seconds or 0.0)):
+            return
+
+    save_json(session_key(normalized_session_id), session, ttl_seconds=ttl_seconds)
+    _SESSION_LAST_PERSISTED_AT[normalized_session_id] = now
+
+
+def _clear_session_persist_marker(session_id: str) -> None:
+    normalized_session_id = str(session_id or "").strip()
+    if not normalized_session_id:
+        return
+    _SESSION_LAST_PERSISTED_AT.pop(normalized_session_id, None)
 
 
 def _position_payload(x: float, y: float) -> dict[str, Any]:
@@ -596,7 +629,8 @@ def _soft_close_stale_session(session_id: str, session: dict[str, Any], reason: 
     session["completed_at"] = _utc_now_iso()
     session["abandon_reason"] = reason
     session["abandoned_by"] = None
-    save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _persist_session_state(session_id, session, force=True, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _clear_session_persist_marker(session_id)
     _clear_pending_invites(session)
 
     for player_username in session.get("players", {}).keys():
@@ -984,7 +1018,8 @@ def _finish_multiplayer_session_locked(session_id: str, session: dict[str, Any],
         "requires_owner_save": map_doc is None and session.get("source") == "new",
     }
 
-    save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _persist_session_state(session_id, session, force=True, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _clear_session_persist_marker(session_id)
     _clear_pending_invites(session)
     delete_keys(user_session_key(owner_username), user_session_key(guest_username))
     return session["completion"]
@@ -1004,7 +1039,8 @@ def _leave_multiplayer_session_locked(session_id: str, session: dict[str, Any], 
     session["abandoned_by"] = username
     session["abandon_reason"] = (reason or "left_session").strip() or "left_session"
     session["abandon_penalties"] = {}
-    save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _persist_session_state(session_id, session, force=True, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _clear_session_persist_marker(session_id)
     _clear_pending_invites(session)
 
     for player_username in player_usernames:
@@ -1035,7 +1071,8 @@ def _leave_multiplayer_session_locked(session_id: str, session: dict[str, Any], 
             penalties[player_username] = {"loss_fee_applied": 0}
 
     session["abandon_penalties"] = penalties
-    save_json(session_key(session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _persist_session_state(session_id, session, force=True, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+    _clear_session_persist_marker(session_id)
     if fee_total > 0:
         try:
             credit_bank_dividend(users_collection, fee_total)
@@ -1098,7 +1135,7 @@ def create_multiplayer_session(request: Request, payload: MultiplayerCreatePaylo
         },
     }
 
-    save_json(session_key(session_id), session)
+    _persist_session_state(session_id, session, force=True)
     _store_user_session(owner_username, session_id)
     for invited_friend in invited_friends:
         _store_pending_invite(invited_friend, session)
@@ -1124,7 +1161,7 @@ def invite_friend_to_session(request: Request, payload: MultiplayerInvitePayload
         invited_friends = set(session.get("invited_friends", []))
         invited_friends.add(friend_username)
         session["invited_friends"] = sorted(invited_friends, key=str.casefold)
-        save_json(session_key(payload.session_id), session)
+        _persist_session_state(payload.session_id, session, force=True)
         _store_pending_invite(friend_username, session)
 
     _broadcast_ws_session_from_thread(session)
@@ -1156,7 +1193,7 @@ def join_multiplayer_session(request: Request, payload: MultiplayerJoinPayload):
         session["guest_username"] = username
         session["status"] = "ready_check"
         session["players"][username] = _create_player_state(username, "guest", session["current_room"])
-        save_json(session_key(payload.session_id), session)
+        _persist_session_state(payload.session_id, session, force=True)
         _store_user_session(username, payload.session_id)
         _clear_pending_invites(session)
 
@@ -1185,7 +1222,7 @@ def set_multiplayer_ready_state(request: Request, payload: MultiplayerReadyPaylo
         else:
             session["status"] = "waiting_for_guest"
 
-        save_json(session_key(payload.session_id), session)
+        _persist_session_state(payload.session_id, session, force=True)
 
     _broadcast_ws_session_from_thread(session)
     return {"status": "success", "session": _serialize_session_for_user(session, username)}
@@ -1208,7 +1245,7 @@ def update_multiplayer_state(request: Request, payload: MultiplayerStatePayload)
     with session_lock(payload.session_id):
         session = _load_session_or_404(payload.session_id)
         _update_multiplayer_state_locked(session, payload)
-        save_json(session_key(payload.session_id), session)
+        _persist_session_state(payload.session_id, session)
 
     _broadcast_ws_session_from_thread(session)
     return {"status": "success", "session": _serialize_session_for_user(session, username)}
@@ -1223,7 +1260,7 @@ def multiplayer_puzzle_action(request: Request, payload: MultiplayerPuzzleAction
     with session_lock(payload.session_id):
         session = _load_session_or_404(payload.session_id)
         _apply_multiplayer_puzzle_action_locked(session, payload)
-        save_json(session_key(payload.session_id), session)
+        _persist_session_state(payload.session_id, session)
 
     _broadcast_ws_session_from_thread(session)
     return {"status": "success", "session": _serialize_session_for_user(session, username)}
@@ -1237,7 +1274,7 @@ def request_room_move(request: Request, payload: MultiplayerMovePayload):
     with session_lock(payload.session_id):
         session = _load_session_or_404(payload.session_id)
         room_moved = _request_room_move_locked(session, payload)
-        save_json(session_key(payload.session_id), session)
+        _persist_session_state(payload.session_id, session, force=True)
 
     _broadcast_ws_session_from_thread(session, room_moved)
     return {
@@ -1311,7 +1348,8 @@ def sync_saved_multiplayer_map(request: Request, payload: MultiplayerSyncSavedMa
             "saved_map_name": map_doc.get("map_name"),
             "discoverers_synced": True,
         }
-        save_json(session_key(payload.session_id), session, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+        _persist_session_state(payload.session_id, session, force=True, ttl_seconds=COMPLETED_SESSION_TTL_SECONDS)
+        _clear_session_persist_marker(payload.session_id)
 
     return {"status": "success", "session": _serialize_session_for_user(session, username), "completion": session.get("completion")}
 
@@ -1353,7 +1391,11 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
                     if message_type in {"ping", "heartbeat"}:
                         player = _assert_session_member(session, normalized_username)
                         player["last_seen_at"] = _utc_now_iso()
-                        save_json(session_key(session_id), session)
+                        _persist_session_state(
+                            session_id,
+                            session,
+                            min_interval_seconds=HEARTBEAT_PERSIST_MIN_INTERVAL_SECONDS,
+                        )
                     elif message_type == "state":
                         payload = MultiplayerStatePayload.model_validate(
                             {
@@ -1370,7 +1412,7 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
                             }
                         )
                         _update_multiplayer_state_locked(session, payload)
-                        save_json(session_key(session_id), session)
+                        _persist_session_state(session_id, session)
                     elif message_type == "puzzle_action":
                         payload = MultiplayerPuzzleActionPayload.model_validate(
                             {
@@ -1381,7 +1423,7 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
                             }
                         )
                         _apply_multiplayer_puzzle_action_locked(session, payload)
-                        save_json(session_key(session_id), session)
+                        _persist_session_state(session_id, session)
                     elif message_type == "room_move":
                         payload = MultiplayerMovePayload.model_validate(
                             {
@@ -1392,7 +1434,7 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
                             }
                         )
                         room_moved = _request_room_move_locked(session, payload)
-                        save_json(session_key(session_id), session)
+                        _persist_session_state(session_id, session, force=True)
                     elif message_type == "finish":
                         payload = MultiplayerFinishPayload.model_validate(
                             {

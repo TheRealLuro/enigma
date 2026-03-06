@@ -187,6 +187,41 @@ else
                 </article>
 
                 <article class="panel profile-release-panel economy-card">
+                    <span class="profile-eyebrow">Runtime</span>
+                    <h2>Live Throughput</h2>
+                    <div class="economy-stat-line"><span>Request rate (10s)</span><strong>@((RuntimePerf?.Rps10s ?? 0).ToString("0.##")) req/s</strong></div>
+                    <div class="economy-stat-line"><span>Request rate (60s)</span><strong>@((RuntimePerf?.Rps60s ?? 0).ToString("0.##")) req/s</strong></div>
+                    <div class="economy-stat-line"><span>In-flight</span><strong>@((RuntimePerf?.InflightRequests ?? 0).ToString("N0"))</strong></div>
+                    <div class="economy-stat-line"><span>P95 latency</span><strong>@((RuntimePerf?.P95ResponseMs ?? 0).ToString("0.##")) ms</strong></div>
+
+                    <div class="economy-progress-stack">
+                        <div class="economy-progress-row">
+                            <div class="economy-progress-label">
+                                <span>Redis latency</span>
+                                <strong>@GetRedisLatencyLabel()</strong>
+                            </div>
+                            <div class="economy-progress-bar">
+                                <span style="@GetProgressStyle(GetLatencyProgress(GetRedisLatencyMs()))"></span>
+                            </div>
+                        </div>
+                        <div class="economy-progress-row">
+                            <div class="economy-progress-label">
+                                <span>Mongo wait estimate</span>
+                                <strong>@GetMongoWaitLabel()</strong>
+                            </div>
+                            <div class="economy-progress-bar">
+                                <span style="@GetProgressStyle(GetLatencyProgress(GetMongoWaitMs()))"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(RuntimePerfGeneratedAt))
+                    {
+                        <p class="economy-card-footnote">Runtime sample @FormatTimestamp(RuntimePerfGeneratedAt).</p>
+                    }
+                </article>
+
+                <article class="panel profile-release-panel economy-card">
                     <span class="profile-eyebrow">Marketplace + Voting</span>
                     <h2>Market Signals</h2>
                     <div class="economy-market-grid">
@@ -287,6 +322,9 @@ else
     private string? ErrorMessage { get; set; }
     private EconomyOverviewData? Overview { get; set; }
     private LoginUserSummary? Session { get; set; }
+    private EconomyPerfRuntimeSnapshot? RuntimePerf { get; set; }
+    private EconomyPerfDependencies? RuntimeDependencies { get; set; }
+    private string? RuntimePerfGeneratedAt { get; set; }
     private string ActiveTab { get; set; } = OverviewTab;
     private CancellationTokenSource? _pollCancellation;
     private Task? _pollTask;
@@ -367,8 +405,9 @@ else
             }
 
             Overview = payload.Overview;
-            Session = payload.User ?? await Api.GetSessionAsync();
+            Session = payload.User ?? await Api.GetSessionAsync(lightweight: true);
             await SyncClientSessionAsync(payload.User);
+            await LoadPerformanceAsync();
 
             if (!silent)
             {
@@ -401,6 +440,26 @@ else
             }
 
             _loadingOverview = false;
+        }
+    }
+
+    private async Task LoadPerformanceAsync()
+    {
+        try
+        {
+            var perfPayload = await Api.GetFromJsonAsync<EconomyPerfResponse>("api/auth/system/perf");
+            if (perfPayload?.Runtime is null)
+            {
+                return;
+            }
+
+            RuntimePerf = perfPayload.Runtime;
+            RuntimeDependencies = perfPayload.Dependencies;
+            RuntimePerfGeneratedAt = perfPayload.GeneratedAt;
+        }
+        catch
+        {
+            // Non-critical telemetry path.
         }
     }
 
@@ -531,6 +590,44 @@ else
     {
         var width = Math.Clamp(value, 0, 100);
         return $"width:{width.ToString("0.##", CultureInfo.InvariantCulture)}%;";
+    }
+
+    private static double GetLatencyProgress(double latencyMs)
+    {
+        var normalized = Math.Clamp(latencyMs, 0, 300);
+        return (normalized / 300.0) * 100.0;
+    }
+
+    private double GetRedisLatencyMs()
+    {
+        return Math.Max(0.0, RuntimeDependencies?.Redis?.LatencyMs ?? 0.0);
+    }
+
+    private double GetMongoWaitMs()
+    {
+        return Math.Max(0.0, RuntimeDependencies?.Mongo?.WaitEstimateMs ?? 0.0);
+    }
+
+    private string GetRedisLatencyLabel()
+    {
+        var redis = RuntimeDependencies?.Redis;
+        if (redis is null || !redis.Available)
+        {
+            return "Unavailable";
+        }
+
+        return $"{GetRedisLatencyMs().ToString("0.##")} ms";
+    }
+
+    private string GetMongoWaitLabel()
+    {
+        var mongo = RuntimeDependencies?.Mongo;
+        if (mongo is null || !mongo.Available)
+        {
+            return "Unavailable";
+        }
+
+        return $"{GetMongoWaitMs().ToString("0.##")} ms";
     }
 
     private double GetOnlineShare()
