@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
@@ -33,6 +35,10 @@ SUPPORTED_VOTE_TYPES = {
     VOTE_TYPE_NUMBER_SELECTION,
 }
 SUPPORTED_DURATION_UNITS = {"hours", "days", "weeks"}
+GOVERNANCE_SESSION_CACHE_TTL_SECONDS = 2.0
+MAX_GOVERNANCE_SESSION_CACHE_ENTRIES = 4000
+_governance_cache_lock = threading.Lock()
+_governance_session_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
 class GovernanceStartPayload(BaseModel):
@@ -139,6 +145,73 @@ def _sync_user(username: str) -> dict[str, Any]:
     return user
 
 
+def _load_user_or_404(username: str) -> dict[str, Any]:
+    user = users_collection.find_one({"username": username})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+def _prune_governance_session_cache_locked(now_monotonic: float) -> None:
+    expired_keys = [
+        cache_key
+        for cache_key, (expires_at, _) in _governance_session_cache.items()
+        if now_monotonic >= float(expires_at or 0.0)
+    ]
+    for cache_key in expired_keys:
+        _governance_session_cache.pop(cache_key, None)
+
+    if len(_governance_session_cache) <= MAX_GOVERNANCE_SESSION_CACHE_ENTRIES:
+        return
+
+    overflow = len(_governance_session_cache) - MAX_GOVERNANCE_SESSION_CACHE_ENTRIES
+    oldest_keys = sorted(
+        _governance_session_cache.items(),
+        key=lambda entry: float(entry[1][0] or 0.0),
+    )[:overflow]
+    for cache_key, _ in oldest_keys:
+        _governance_session_cache.pop(cache_key, None)
+
+
+def _governance_session_cache_get(username: str) -> dict[str, Any] | None:
+    cache_key = str(username or "").strip().lower()
+    if not cache_key:
+        return None
+
+    now_monotonic = time.monotonic()
+    cached = _governance_session_cache.get(cache_key)
+    if cached and now_monotonic < float(cached[0] or 0.0):
+        return cached[1]
+
+    with _governance_cache_lock:
+        now_monotonic = time.monotonic()
+        _prune_governance_session_cache_locked(now_monotonic)
+        cached = _governance_session_cache.get(cache_key)
+        if cached and now_monotonic < float(cached[0] or 0.0):
+            return cached[1]
+
+    return None
+
+
+def _governance_session_cache_set(username: str, payload: dict[str, Any]) -> None:
+    cache_key = str(username or "").strip().lower()
+    if not cache_key:
+        return
+
+    now_monotonic = time.monotonic()
+    with _governance_cache_lock:
+        _prune_governance_session_cache_locked(now_monotonic)
+        _governance_session_cache[cache_key] = (
+            now_monotonic + GOVERNANCE_SESSION_CACHE_TTL_SECONDS,
+            payload,
+        )
+
+
+def _clear_governance_session_cache() -> None:
+    with _governance_cache_lock:
+        _governance_session_cache.clear()
+
+
 def _normalize_options(options: list[str]) -> list[str]:
     normalized: list[str] = []
     dedupe: set[str] = set()
@@ -171,6 +244,7 @@ def _get_active_session() -> dict[str, Any] | None:
             {"_id": active["_id"], "status": "active"},
             {"$set": {"status": "closed", "closed_at": now, "updated_at": now}},
         )
+        _clear_governance_session_cache()
         return None
 
     return active
@@ -438,23 +512,31 @@ def _text_tally_key(value: str) -> str:
 @router.get("/session")
 @limiter.limit("30/minute")
 def get_governance_session(request: Request, username: str):
-    user = _sync_user(username)
+    normalized_username = str(username or "").strip()
+    cached_payload = _governance_session_cache_get(normalized_username)
+    if cached_payload is not None:
+        return cached_payload
+
+    user = _load_user_or_404(normalized_username)
     active_session = _get_active_session()
     latest_closed = governance_sessions.find_one(
         {"status": "closed"},
         sort=[("closed_at", -1), ("started_at", -1)],
     )
-    recent_votes = _serialize_recent_votes(str(user.get("username") or ""))
+    normalized_user_username = str(user.get("username") or "")
+    recent_votes = _serialize_recent_votes(normalized_user_username)
 
-    return {
+    payload = {
         "status": "success",
         "voting_open": active_session is not None,
-        "is_bank_user": _is_bank_user(username),
+        "is_bank_user": _is_bank_user(normalized_username),
         "active_session": _serialize_session(active_session, user=user),
         "latest_closed_session": _serialize_session(latest_closed, user=user),
         "recent_votes": recent_votes,
-        "user": serialize_session_user(user, maps_collection),
+        "user": serialize_session_user(user, maps_collection, include_maps=False),
     }
+    _governance_session_cache_set(normalized_user_username, payload)
+    return payload
 
 
 @router.post("/session/start")
@@ -530,6 +612,7 @@ def start_governance_session(request: Request, payload: GovernanceStartPayload):
         }
     )
 
+    _clear_governance_session_cache()
     active_session = _get_active_session()
     bank_user = _sync_user(username)
     return {
@@ -558,6 +641,7 @@ def close_governance_session(request: Request, payload: GovernanceClosePayload):
         {"_id": active_session["_id"], "status": "active"},
         {"$set": {"status": "closed", "closed_at": now, "updated_at": now}},
     )
+    _clear_governance_session_cache()
 
     closed_session = governance_sessions.find_one({"_id": active_session["_id"]}) or active_session
     bank_user = _sync_user(username)
@@ -763,6 +847,7 @@ def submit_governance_vote(request: Request, payload: GovernanceVotePayload):
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Unable to record governance vote") from exc
 
+    _clear_governance_session_cache()
     refreshed_user = _sync_user(username)
     refreshed_active = _get_active_session()
     latest_closed = governance_sessions.find_one(

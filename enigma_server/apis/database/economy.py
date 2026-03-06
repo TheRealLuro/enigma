@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import threading
+import time
 from typing import Any
 
 from bson.decimal128 import Decimal128
@@ -11,17 +13,18 @@ from main import limiter
 
 from .db import governance_sessions, governance_votes, maps_collection, marketplace_collection, users_collection
 from .map_utils import normalize_int
-from .staking_rules import normalize_staked_map_ids
 from .user_utils import (
     SYSTEM_BANK_USERNAME,
     apply_user_defaults,
-    build_owned_maps_sync_update,
-    build_user_defaults_update,
     is_user_online,
     serialize_session_user,
 )
 
 router = APIRouter(prefix="/database/economy")
+ECONOMY_OVERVIEW_CACHE_TTL_SECONDS = 5.0
+_economy_cache_lock = threading.Lock()
+_economy_cache_expires_at = 0.0
+_economy_cached_overview: dict[str, Any] | None = None
 
 
 def _utc_now() -> datetime:
@@ -52,26 +55,10 @@ def _is_system_account(user: dict[str, Any]) -> bool:
     return bool(user.get("is_system_account")) or username == SYSTEM_BANK_USERNAME
 
 
-def _sync_user(username: str) -> dict[str, Any]:
+def _load_user_or_404(username: str) -> dict[str, Any]:
     user = users_collection.find_one({"username": username})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    update_query: dict[str, Any] = {}
-    set_updates = build_user_defaults_update(user)
-    if set_updates:
-        update_query["$set"] = set_updates
-
-    owned_to_add, owned_to_remove = build_owned_maps_sync_update(user, maps_collection)
-    if owned_to_add:
-        update_query.setdefault("$addToSet", {})["maps_owned"] = {"$each": owned_to_add}
-    if owned_to_remove:
-        update_query.setdefault("$pull", {})["maps_owned"] = {"$in": owned_to_remove}
-
-    if update_query:
-        users_collection.update_one({"_id": user["_id"]}, update_query)
-        user = users_collection.find_one({"_id": user["_id"]}) or user
-
     return user
 
 
@@ -157,12 +144,7 @@ def _get_active_governance_session(now: datetime) -> dict[str, Any] | None:
     return active
 
 
-@router.get("/overview")
-@limiter.limit("30/minute")
-def get_economy_overview(request: Request, username: str):
-    current_user = _sync_user(str(username or "").strip())
-    now = _utc_now()
-
+def _compute_overview_snapshot(now: datetime) -> dict[str, Any]:
     projected_users = users_collection.find(
         {},
         {
@@ -199,10 +181,14 @@ def get_economy_overview(request: Request, username: str):
         if _active_within_window(user, now, timedelta(hours=24)):
             users_active_24h += 1
 
-        normalized_staked_map_ids, _ = normalize_staked_map_ids(user, maps_collection)
-        if normalized_staked_map_ids:
+        raw_staked_ids = {
+            str(map_id).strip()
+            for map_id in list(user.get("staked_map_ids", []) or [])
+            if str(map_id).strip()
+        }
+        if raw_staked_ids:
             stakers_total += 1
-            staked_map_ids.update(normalized_staked_map_ids)
+            staked_map_ids.update(raw_staked_ids)
 
     maps_total = maps_collection.count_documents({})
     maps_listed = marketplace_collection.count_documents({})
@@ -215,26 +201,53 @@ def get_economy_overview(request: Request, username: str):
     maps_listed_pct = round((maps_listed / maps_total) * 100, 2) if maps_total > 0 else 0.0
 
     return {
+        "generated_at": now.isoformat(),
+        "mn_player_wallets_total": player_wallet_mn_total,
+        "mn_bank_reserve_total": bank_reserve_mn_total,
+        "mn_total_known": player_wallet_mn_total + bank_reserve_mn_total,
+        "maps_total": normalize_int(maps_total, 0),
+        "maps_listed": normalize_int(maps_listed, 0),
+        "maps_staked": normalize_int(maps_staked, 0),
+        "maps_staked_percent": maps_staked_pct,
+        "maps_listed_percent": maps_listed_pct,
+        "users_total": normalize_int(users_total, 0),
+        "users_online_now": normalize_int(users_online_now, 0),
+        "users_active_24h": normalize_int(users_active_24h, 0),
+        "stakers_total": normalize_int(stakers_total, 0),
+        "marketplace_listing_value_total": normalize_int(listings_total_value, 0),
+        "marketplace_listing_price_avg": round(average_listing_price, 2),
+        "governance_voting_open": active_governance_session is not None,
+        "governance_active_title": str(active_governance_session.get("title") or "").strip() if active_governance_session else None,
+        "governance_total_mn_spent": normalize_int(governance_mn_spent_total, 0),
+    }
+
+
+def _get_cached_overview_snapshot() -> dict[str, Any]:
+    global _economy_cache_expires_at, _economy_cached_overview
+
+    now_monotonic = time.monotonic()
+    if _economy_cached_overview and now_monotonic < _economy_cache_expires_at:
+        return _economy_cached_overview
+
+    with _economy_cache_lock:
+        now_monotonic = time.monotonic()
+        if _economy_cached_overview and now_monotonic < _economy_cache_expires_at:
+            return _economy_cached_overview
+
+        computed_now = _utc_now()
+        _economy_cached_overview = _compute_overview_snapshot(computed_now)
+        _economy_cache_expires_at = now_monotonic + ECONOMY_OVERVIEW_CACHE_TTL_SECONDS
+        return _economy_cached_overview
+
+
+@router.get("/overview")
+@limiter.limit("30/minute")
+def get_economy_overview(request: Request, username: str):
+    current_user = _load_user_or_404(str(username or "").strip())
+    overview_payload = dict(_get_cached_overview_snapshot())
+
+    return {
         "status": "success",
-        "overview": {
-            "generated_at": now.isoformat(),
-            "mn_player_wallets_total": player_wallet_mn_total,
-            "mn_bank_reserve_total": bank_reserve_mn_total,
-            "mn_total_known": player_wallet_mn_total + bank_reserve_mn_total,
-            "maps_total": normalize_int(maps_total, 0),
-            "maps_listed": normalize_int(maps_listed, 0),
-            "maps_staked": normalize_int(maps_staked, 0),
-            "maps_staked_percent": maps_staked_pct,
-            "maps_listed_percent": maps_listed_pct,
-            "users_total": normalize_int(users_total, 0),
-            "users_online_now": normalize_int(users_online_now, 0),
-            "users_active_24h": normalize_int(users_active_24h, 0),
-            "stakers_total": normalize_int(stakers_total, 0),
-            "marketplace_listing_value_total": normalize_int(listings_total_value, 0),
-            "marketplace_listing_price_avg": round(average_listing_price, 2),
-            "governance_voting_open": active_governance_session is not None,
-            "governance_active_title": str(active_governance_session.get("title") or "").strip() if active_governance_session else None,
-            "governance_total_mn_spent": normalize_int(governance_mn_spent_total, 0),
-        },
-        "user": serialize_session_user(current_user, maps_collection),
+        "overview": overview_payload,
+        "user": serialize_session_user(current_user, maps_collection, include_maps=False),
     }

@@ -8,6 +8,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from urllib.parse import quote_plus
 from typing import Any
 
 import aiohttp
@@ -20,11 +21,18 @@ class LoadProfile:
     method: str = "GET"
 
 
-LOAD_PROFILES: tuple[LoadProfile, ...] = (
+PROXY_LOAD_PROFILES: tuple[LoadProfile, ...] = (
     LoadProfile(path="/api/auth/session/me?lite=true", weight=0.60),
-    LoadProfile(path="/api/auth/economy/overview", weight=0.20),
+    LoadProfile(path="/api/auth/economy/overview", weight=0.08),
     LoadProfile(path="/api/auth/voting/session", weight=0.10),
-    LoadProfile(path="/api/auth/marketplace", weight=0.10),
+    LoadProfile(path="/api/auth/marketplace", weight=0.22),
+)
+
+DIRECT_BACKEND_LOAD_PROFILES: tuple[LoadProfile, ...] = (
+    LoadProfile(path="/database/users/account?username={username}&include_maps=false", weight=0.62),
+    LoadProfile(path="/database/economy/overview?username={username}", weight=0.08),
+    LoadProfile(path="/database/governance/session?username={username}", weight=0.10),
+    LoadProfile(path="/database/marketplace/listings", weight=0.20),
 )
 
 
@@ -104,6 +112,12 @@ def parse_args() -> argparse.Namespace:
         description="Run concurrent authenticated load against Enigma and print live runtime counters."
     )
     parser.add_argument("--base-url", default="http://localhost:5241", help="Base app URL.")
+    parser.add_argument(
+        "--mode",
+        default="proxy",
+        choices=("proxy", "direct"),
+        help="proxy = test via /api/auth routes (frontend+backend path), direct = hit backend /database routes only.",
+    )
     parser.add_argument("--username", required=True, help="Existing login username.")
     parser.add_argument("--password", required=True, help="Existing login password.")
     parser.add_argument("--users", type=int, default=60, help="Concurrent virtual users.")
@@ -129,20 +143,25 @@ async def login(session: aiohttp.ClientSession, base_url: str, username: str, pa
         return False
 
 
-def choose_profile() -> LoadProfile:
-    total_weight = sum(profile.weight for profile in LOAD_PROFILES)
+def choose_profile(profiles: tuple[LoadProfile, ...]) -> LoadProfile:
+    total_weight = sum(profile.weight for profile in profiles)
     pick = random.random() * total_weight
     cumulative = 0.0
-    for profile in LOAD_PROFILES:
+    for profile in profiles:
         cumulative += profile.weight
         if pick <= cumulative:
             return profile
-    return LOAD_PROFILES[-1]
+    return profiles[-1]
+
+
+def resolve_profile_path(path_template: str, username: str) -> str:
+    return str(path_template or "").replace("{username}", quote_plus(str(username or "").strip()))
 
 
 async def worker(
     worker_id: int,
     base_url: str,
+    mode: str,
     username: str,
     password: str,
     stop_at: float,
@@ -153,23 +172,26 @@ async def worker(
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     connector = aiohttp.TCPConnector(limit=0, limit_per_host=0, enable_cleanup_closed=True)
     async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-        if not await login(session, base_url, username, password):
-            await stats.record_login_failure()
-            return
+        if mode == "proxy":
+            if not await login(session, base_url, username, password):
+                await stats.record_login_failure()
+                return
 
         await stats.worker_started()
         try:
+            profiles = PROXY_LOAD_PROFILES if mode == "proxy" else DIRECT_BACKEND_LOAD_PROFILES
             while time.monotonic() < stop_at:
-                profile = choose_profile()
+                profile = choose_profile(profiles)
+                path = resolve_profile_path(profile.path, username)
                 request_started = time.perf_counter()
                 status_code = 0
                 try:
                     if profile.method == "GET":
-                        async with session.get(f"{base_url}{profile.path}") as response:
+                        async with session.get(f"{base_url}{path}") as response:
                             status_code = response.status
                             await response.read()
                     else:
-                        async with session.request(profile.method, f"{base_url}{profile.path}") as response:
+                        async with session.request(profile.method, f"{base_url}{path}") as response:
                             status_code = response.status
                             await response.read()
                 except Exception:
@@ -186,6 +208,7 @@ async def worker(
 
 async def dashboard_loop(
     base_url: str,
+    mode: str,
     username: str,
     password: str,
     stats: AggregateStats,
@@ -195,26 +218,51 @@ async def dashboard_loop(
 ) -> None:
     timeout = aiohttp.ClientTimeout(total=max(3.0, timeout_seconds))
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        dashboard_auth_ok = await login(session, base_url, username, password)
+        dashboard_auth_ok = mode != "proxy" or await login(session, base_url, username, password)
+        perf_path = "/api/auth/system/perf" if mode == "proxy" else "/database/system/perf"
         while time.monotonic() < stop_at:
             await asyncio.sleep(max(0.5, interval_seconds))
             client_snapshot = await stats.snapshot()
 
             backend_runtime = {}
             backend_dependencies = {}
+            backend_perf_ok = False
+            backend_perf_status = "n/a"
             if dashboard_auth_ok:
                 try:
-                    async with session.get(f"{base_url}/api/auth/system/perf") as response:
+                    async with session.get(f"{base_url}{perf_path}") as response:
+                        backend_perf_status = str(response.status)
                         if 200 <= response.status < 300:
                             payload = await response.json(content_type=None)
                             backend_runtime = dict(payload.get("runtime", {}) or {})
                             backend_dependencies = dict(payload.get("dependencies", {}) or {})
+                            backend_perf_ok = True
                 except Exception:
                     pass
 
             redis = dict(backend_dependencies.get("redis", {}) or {})
             mongo = dict(backend_dependencies.get("mongo", {}) or {})
             now_label = datetime.now(timezone.utc).strftime("%H:%M:%S")
+            backend_rate = (
+                f"backend_rps10={float(backend_runtime.get('rps_10s', 0.0)):.2f}"
+                if backend_perf_ok
+                else f"backend=unavailable(status={backend_perf_status})"
+            )
+            inflight = (
+                f"inflight={int(backend_runtime.get('inflight_requests', 0))}"
+                if backend_perf_ok
+                else "inflight=n/a"
+            )
+            redis_label = (
+                f"redis={float(redis.get('latency_ms', 0.0)):.1f}ms"
+                if backend_perf_ok
+                else "redis=n/a"
+            )
+            mongo_label = (
+                f"mongo_wait={float(mongo.get('wait_estimate_ms', 0.0)):.1f}ms"
+                if backend_perf_ok
+                else "mongo_wait=n/a"
+            )
 
             print(
                 f"[{now_label} UTC] "
@@ -223,10 +271,7 @@ async def dashboard_loop(
                 f"ok={client_snapshot['success_requests']} "
                 f"fail={client_snapshot['failed_requests']} "
                 f"workers={client_snapshot['active_workers']} | "
-                f"backend_rps10={float(backend_runtime.get('rps_10s', 0.0)):.2f} "
-                f"inflight={int(backend_runtime.get('inflight_requests', 0))} "
-                f"redis={float(redis.get('latency_ms', 0.0)):.1f}ms "
-                f"mongo_wait={float(mongo.get('wait_estimate_ms', 0.0)):.1f}ms"
+                f"{backend_rate} {inflight} {redis_label} {mongo_label}"
             )
 
 
@@ -234,6 +279,7 @@ async def run() -> int:
     args = parse_args()
     base_url = normalize_base_url(args.base_url)
     duration_seconds = max(10, int(args.duration_seconds))
+    mode = str(args.mode or "proxy").strip().lower()
     users = max(1, int(args.users))
     think_ms = max(0, int(args.think_ms))
     spawn_delay = max(0, int(args.spawn_delay_ms))
@@ -241,7 +287,7 @@ async def run() -> int:
     interval_seconds = max(0.5, float(args.dashboard_interval_seconds))
 
     print(f"Starting load test against {base_url}")
-    print(f"Users={users}, duration={duration_seconds}s, think={think_ms}ms")
+    print(f"Mode={mode}, Users={users}, duration={duration_seconds}s, think={think_ms}ms")
 
     stats = AggregateStats()
     stop_at = time.monotonic() + duration_seconds
@@ -250,6 +296,7 @@ async def run() -> int:
     dashboard_task = asyncio.create_task(
         dashboard_loop(
             base_url=base_url,
+            mode=mode,
             username=args.username,
             password=args.password,
             stats=stats,
@@ -265,6 +312,7 @@ async def run() -> int:
                 worker(
                     worker_id=worker_id,
                     base_url=base_url,
+                    mode=mode,
                     username=args.username,
                     password=args.password,
                     stop_at=stop_at,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -28,6 +30,10 @@ from .user_utils import (
 )
 
 router = APIRouter(prefix="/database/users")
+ACCOUNT_LITE_CACHE_TTL_SECONDS = 0.75
+MAX_ACCOUNT_LITE_CACHE_ENTRIES = 5000
+_account_lite_cache_lock = threading.Lock()
+_account_lite_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
 DEFAULT_AVATAR_CROP = {
     "x": 11.0,
@@ -279,10 +285,70 @@ def _migrate_multiplayer_user_keys(current_username: str, new_username: str) -> 
         pass
 
 
-def _sync_user(username: str, include_map_sync: bool = True) -> dict[str, Any]:
+def _load_user_or_404(username: str) -> dict[str, Any]:
     user = users_collection.find_one({"username": username})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+def _prune_account_lite_cache_locked(now_monotonic: float) -> None:
+    expired_users = [
+        cache_key
+        for cache_key, (expires_at, _) in _account_lite_cache.items()
+        if now_monotonic >= float(expires_at or 0.0)
+    ]
+    for cache_key in expired_users:
+        _account_lite_cache.pop(cache_key, None)
+
+    if len(_account_lite_cache) <= MAX_ACCOUNT_LITE_CACHE_ENTRIES:
+        return
+
+    overflow = len(_account_lite_cache) - MAX_ACCOUNT_LITE_CACHE_ENTRIES
+    oldest_users = sorted(
+        _account_lite_cache.items(),
+        key=lambda entry: float(entry[1][0] or 0.0),
+    )[:overflow]
+    for cache_key, _ in oldest_users:
+        _account_lite_cache.pop(cache_key, None)
+
+
+def _get_cached_lite_account_payload(username: str) -> dict[str, Any] | None:
+    cache_key = str(username or "").strip().casefold()
+    if not cache_key:
+        return None
+
+    now_monotonic = time.monotonic()
+    cached = _account_lite_cache.get(cache_key)
+    if cached and now_monotonic < float(cached[0] or 0.0):
+        return cached[1]
+
+    with _account_lite_cache_lock:
+        now_monotonic = time.monotonic()
+        _prune_account_lite_cache_locked(now_monotonic)
+        cached = _account_lite_cache.get(cache_key)
+        if cached and now_monotonic < float(cached[0] or 0.0):
+            return cached[1]
+
+    return None
+
+
+def _set_cached_lite_account_payload(username: str, payload: dict[str, Any]) -> None:
+    cache_key = str(username or "").strip().casefold()
+    if not cache_key:
+        return
+
+    now_monotonic = time.monotonic()
+    with _account_lite_cache_lock:
+        _prune_account_lite_cache_locked(now_monotonic)
+        _account_lite_cache[cache_key] = (
+            now_monotonic + ACCOUNT_LITE_CACHE_TTL_SECONDS,
+            payload,
+        )
+
+
+def _sync_user(username: str, include_map_sync: bool = True) -> dict[str, Any]:
+    user = _load_user_or_404(username)
 
     set_updates = build_user_defaults_update(user)
     owned_to_add: list[Any] = []
@@ -342,10 +408,22 @@ def _serialize_inventory_items(user: dict[str, Any]) -> list[dict[str, Any]]:
 @router.get("/account")
 @limiter.limit("30/minute")
 def get_account(request: Request, username: str, include_maps: bool = True):
-    touch_user_presence(users_collection, username)
+    normalized_username = str(username or "").strip()
+    touch_user_presence(users_collection, normalized_username)
     include_maps = bool(include_maps)
-    user = _sync_user(username, include_map_sync=include_maps)
-    return {"status": "success", "user": serialize_session_user(user, maps_collection, include_maps=include_maps)}
+    if include_maps:
+        user = _sync_user(normalized_username, include_map_sync=True)
+        return {"status": "success", "user": serialize_session_user(user, maps_collection, include_maps=True)}
+
+    cached_payload = _get_cached_lite_account_payload(normalized_username)
+    if cached_payload is not None:
+        return cached_payload
+
+    # Lightweight polling path: avoid sync writes and map ownership checks.
+    user = _load_user_or_404(normalized_username)
+    payload = {"status": "success", "user": serialize_session_user(user, maps_collection, include_maps=False)}
+    _set_cached_lite_account_payload(normalized_username, payload)
+    return payload
 
 
 @router.put("/update_email")

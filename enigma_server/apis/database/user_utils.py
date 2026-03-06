@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
@@ -11,11 +13,14 @@ TUTORIAL_VERSION = 1
 USERNAME_CHANGE_COOLDOWN_DAYS = 14
 ONLINE_STATUS_WINDOW_SECONDS = 120
 PRESENCE_TOUCH_INTERVAL_SECONDS = 20
+MAX_LOCAL_PRESENCE_TOUCH_USERS = 10000
 DEFAULT_PROFILE_IMAGE_CROP = {
     "x": 11.0,
     "y": 17.0,
     "size": 73.0,
 }
+_presence_touch_lock = threading.Lock()
+_last_presence_touch_monotonic: dict[str, float] = {}
 
 
 def _safe_float(value: Any, default: float) -> float:
@@ -71,8 +76,24 @@ def touch_user_presence(users_collection, username: str, min_interval_seconds: i
     if not normalized_username:
         return
 
-    now = datetime.now(timezone.utc)
     min_interval = max(0, int(min_interval_seconds or 0))
+    now_monotonic = time.monotonic()
+    cache_key = normalized_username.casefold()
+
+    with _presence_touch_lock:
+        previous_touch = float(_last_presence_touch_monotonic.get(cache_key, 0.0) or 0.0)
+        if now_monotonic - previous_touch < min_interval:
+            return
+        _last_presence_touch_monotonic[cache_key] = now_monotonic
+
+        # Keep local cache bounded.
+        if len(_last_presence_touch_monotonic) > MAX_LOCAL_PRESENCE_TOUCH_USERS:
+            overflow = len(_last_presence_touch_monotonic) - MAX_LOCAL_PRESENCE_TOUCH_USERS
+            stale_users = sorted(_last_presence_touch_monotonic.items(), key=lambda entry: entry[1])[:overflow]
+            for stale_user, _ in stale_users:
+                _last_presence_touch_monotonic.pop(stale_user, None)
+
+    now = datetime.now(timezone.utc)
     stale_before = now - timedelta(seconds=min_interval)
 
     users_collection.update_one(
