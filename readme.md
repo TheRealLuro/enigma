@@ -36,7 +36,6 @@
 
 Enigma is moving toward a maze ecosystem instead of a one-off maze generator. The target is not just procedural layouts. The target is generated spaces that feel worth exploring, remembering, and trading.
 
-**No AI just dedication and research**
 
 ---
 
