@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pymongo.errors import PyMongoError, WaitQueueTimeoutError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import asyncio
 import logging
@@ -61,6 +62,18 @@ async def validation_json_handler(request: Request, exc: RequestValidationError)
 @app.exception_handler(StarletteHTTPException)
 async def http_json_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(WaitQueueTimeoutError)
+async def mongo_wait_queue_handler(request: Request, exc: WaitQueueTimeoutError):
+    logger.warning("Mongo pool saturation on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(status_code=503, content={"detail": "Database busy, retry in a moment"})
+
+
+@app.exception_handler(PyMongoError)
+async def mongo_general_handler(request: Request, exc: PyMongoError):
+    logger.warning("Mongo error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(status_code=503, content={"detail": "Database temporarily unavailable"})
 
 
 @app.exception_handler(Exception)
