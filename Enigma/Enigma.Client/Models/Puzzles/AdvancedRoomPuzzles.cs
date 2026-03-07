@@ -1773,6 +1773,236 @@ public sealed class BinaryTransformationPuzzle : RoomPuzzle
     private static string ToBitString(IEnumerable<bool> bits) => string.Concat(bits.Select(bit => bit ? '1' : '0'));
 }
 
+public sealed class ResonanceDialPuzzle : RoomPuzzle
+{
+    private readonly int[] _initialPhases;
+
+    public ResonanceDialPuzzle(int[] currentPhases, int[] targetPhases, int modulus, int moveLimit)
+        : base('r', "Resonance Dial Array", "Rotate coupled dials until every phase matches the target resonance signature.")
+    {
+        if (currentPhases.Length == 0 || currentPhases.Length != targetPhases.Length)
+        {
+            throw new ArgumentException("Resonance dial arrays must be non-empty and equal length.");
+        }
+
+        Modulus = Math.Max(3, modulus);
+        CurrentPhases = currentPhases;
+        TargetPhases = targetPhases;
+        MoveLimit = Math.Max(currentPhases.Length + 4, moveLimit);
+        _initialPhases = currentPhases.ToArray();
+        UpdateStatus();
+    }
+
+    public int[] CurrentPhases { get; }
+    public int[] TargetPhases { get; }
+    public int Modulus { get; }
+    public int MoveLimit { get; }
+    public int MovesUsed { get; private set; }
+    public int MismatchCount => CurrentPhases.Where((phase, index) => phase != TargetPhases[index]).Count();
+
+    public void Rotate(int index, int direction)
+    {
+        if (IsCompleted || index < 0 || index >= CurrentPhases.Length || direction == 0)
+        {
+            return;
+        }
+
+        var normalizedDirection = Math.Sign(direction);
+        ApplyShift(index, normalizedDirection * 2);
+        ApplyShift(index - 1, normalizedDirection);
+        ApplyShift(index + 1, normalizedDirection);
+        MovesUsed++;
+
+        if (CurrentPhases.SequenceEqual(TargetPhases))
+        {
+            Complete("Resonance signature synchronized.");
+            return;
+        }
+
+        if (MovesUsed >= MoveLimit)
+        {
+            Array.Copy(_initialPhases, CurrentPhases, CurrentPhases.Length);
+            MovesUsed = 0;
+            StatusText = "Feedback spike detected. Dials reset to their initial phase.";
+            return;
+        }
+
+        UpdateStatus();
+    }
+
+    private void ApplyShift(int index, int delta)
+    {
+        if (index < 0 || index >= CurrentPhases.Length)
+        {
+            return;
+        }
+
+        var wrapped = (CurrentPhases[index] + delta) % Modulus;
+        if (wrapped < 0)
+        {
+            wrapped += Modulus;
+        }
+
+        CurrentPhases[index] = wrapped;
+    }
+
+    private void UpdateStatus()
+    {
+        StatusText = $"Mismatched dials: {MismatchCount}. Moves {MovesUsed}/{MoveLimit}.";
+    }
+}
+
+public sealed class FluxMatrixPuzzle : RoomPuzzle
+{
+    private readonly bool[] _initialCells;
+
+    public FluxMatrixPuzzle(int size, bool[] cells, bool[] targetCells, int moveLimit)
+        : base('v', "Flux Matrix Lattice", "Pulse intersections to route flux until the live matrix matches the target pattern.")
+    {
+        Size = Math.Clamp(size, 3, 6);
+        var expectedLength = Size * Size;
+        if (cells.Length != expectedLength || targetCells.Length != expectedLength)
+        {
+            throw new ArgumentException("Flux matrix arrays must match size*size.");
+        }
+
+        Cells = cells;
+        TargetCells = targetCells;
+        MoveLimit = Math.Max(expectedLength / 2, moveLimit);
+        _initialCells = cells.ToArray();
+        UpdateStatus();
+    }
+
+    public int Size { get; }
+    public bool[] Cells { get; }
+    public bool[] TargetCells { get; }
+    public int MoveLimit { get; }
+    public int MovesUsed { get; private set; }
+    public int MismatchCount => Cells.Where((value, index) => value != TargetCells[index]).Count();
+
+    public void Pulse(int index)
+    {
+        if (IsCompleted || index < 0 || index >= Cells.Length)
+        {
+            return;
+        }
+
+        var row = index / Size;
+        var column = index % Size;
+        for (var y = 0; y < Size; y++)
+        {
+            for (var x = 0; x < Size; x++)
+            {
+                if (y == row || x == column)
+                {
+                    var cellIndex = (y * Size) + x;
+                    Cells[cellIndex] = !Cells[cellIndex];
+                }
+            }
+        }
+
+        MovesUsed++;
+        if (Cells.SequenceEqual(TargetCells))
+        {
+            Complete("Flux lattice stabilized.");
+            return;
+        }
+
+        if (MovesUsed >= MoveLimit)
+        {
+            Array.Copy(_initialCells, Cells, Cells.Length);
+            MovesUsed = 0;
+            StatusText = "Flux overload detected. Matrix reset to initial state.";
+            return;
+        }
+
+        UpdateStatus();
+    }
+
+    private void UpdateStatus()
+    {
+        StatusText = $"Mismatched cells: {MismatchCount}. Moves {MovesUsed}/{MoveLimit}.";
+    }
+}
+
+public sealed class VectorChannelPuzzle : RoomPuzzle
+{
+    private readonly int[] _initialValues;
+
+    public VectorChannelPuzzle(int[] currentValues, int[] targetValues, int[][] operations, int modulus, int moveLimit)
+        : base('q', "Vector Channel Matrix", "Apply channel pulses to match the live vector with the target vector.")
+    {
+        if (currentValues.Length == 0 || currentValues.Length != targetValues.Length)
+        {
+            throw new ArgumentException("Vector channel arrays must be non-empty and equal length.");
+        }
+
+        if (operations.Length == 0 || operations.Any(operation => operation.Length != currentValues.Length))
+        {
+            throw new ArgumentException("Every vector operation must match channel length.");
+        }
+
+        Modulus = Math.Max(3, modulus);
+        CurrentValues = currentValues;
+        TargetValues = targetValues;
+        Operations = operations;
+        MoveLimit = Math.Max(currentValues.Length + 6, moveLimit);
+        _initialValues = currentValues.ToArray();
+        UpdateStatus();
+    }
+
+    public int[] CurrentValues { get; }
+    public int[] TargetValues { get; }
+    public int[][] Operations { get; }
+    public int Modulus { get; }
+    public int MoveLimit { get; }
+    public int MovesUsed { get; private set; }
+    public int MismatchCount => CurrentValues.Where((value, index) => value != TargetValues[index]).Count();
+
+    public void Pulse(int operationIndex, int direction)
+    {
+        if (IsCompleted || operationIndex < 0 || operationIndex >= Operations.Length || direction == 0)
+        {
+            return;
+        }
+
+        var normalizedDirection = Math.Sign(direction);
+        var delta = Operations[operationIndex];
+        for (var index = 0; index < CurrentValues.Length; index++)
+        {
+            var wrapped = (CurrentValues[index] + (delta[index] * normalizedDirection)) % Modulus;
+            if (wrapped < 0)
+            {
+                wrapped += Modulus;
+            }
+
+            CurrentValues[index] = wrapped;
+        }
+
+        MovesUsed++;
+        if (CurrentValues.SequenceEqual(TargetValues))
+        {
+            Complete("Channel vectors synchronized.");
+            return;
+        }
+
+        if (MovesUsed >= MoveLimit)
+        {
+            Array.Copy(_initialValues, CurrentValues, CurrentValues.Length);
+            MovesUsed = 0;
+            StatusText = "Vector drift exceeded tolerance. Channels reset to baseline.";
+            return;
+        }
+
+        UpdateStatus();
+    }
+
+    private void UpdateStatus()
+    {
+        StatusText = $"Mismatched channels: {MismatchCount}. Moves {MovesUsed}/{MoveLimit}.";
+    }
+}
+
 public sealed class KnotTopologyPuzzle : RoomPuzzle
 {
     private int? _selectedIndex;
@@ -2081,7 +2311,7 @@ public static class AdvancedPuzzleFactory
             0.1d,
             1.05d + ((hash % 7) * 0.08d),
             1.22d + (((hash / 11) % 7) * 0.07d)),
-        'r' => CreateSymbolLogic(hash),
+        'r' => (hash & 1) == 0 ? CreateSymbolLogic(hash) : CreateResonanceDial(hash),
         's' => CreateFadingPath(hash),
         't' => CreateSignalNetwork(hash),
         'u' => CreateDirectionalEcho(hash),
@@ -2101,7 +2331,7 @@ public static class AdvancedPuzzleFactory
         's' => CreateMemoryInterference(hash),
         't' => CreateCipherGrid(hash),
         'u' => CreateDimensionalShift(hash),
-        'v' => CreateConservationNetwork(hash),
+        'v' => (hash & 1) == 0 ? CreateConservationNetwork(hash) : CreateFluxMatrix(hash),
         'w' => CreateWeightedEquilibrium(hash),
         'x' => CreateBinaryTransformation(hash),
         'y' => CreateKnotTopology(hash),
@@ -2124,6 +2354,41 @@ public static class AdvancedPuzzleFactory
         var solution = Shuffle(symbols.ToList(), hash ^ 0x3311).ToArray();
         var statements = BuildUniqueLogicClues(solution, 4);
         return new SymbolLogicPuzzle(symbols, statements, solution);
+    }
+
+    private static ResonanceDialPuzzle CreateResonanceDial(int hash)
+    {
+        var dialCount = 5 + ((hash >> 3) % 2);
+        const int modulus = 12;
+        var target = new int[dialCount];
+        var state = hash;
+        for (var index = 0; index < dialCount; index++)
+        {
+            state = NextState(state + index);
+            target[index] = state % modulus;
+        }
+
+        if (target.All(value => value == target[0]))
+        {
+            target[^1] = (target[^1] + 3) % modulus;
+        }
+
+        var current = target.ToArray();
+        var scrambleSteps = 11 + (hash % 6);
+        for (var step = 0; step < scrambleSteps; step++)
+        {
+            state = NextState(state + step + dialCount);
+            var index = state % dialCount;
+            var direction = (state & 1) == 0 ? 1 : -1;
+            ApplyResonanceScramble(current, index, direction, modulus);
+        }
+
+        if (current.SequenceEqual(target))
+        {
+            ApplyResonanceScramble(current, state % dialCount, 1, modulus);
+        }
+
+        return new ResonanceDialPuzzle(current, target, modulus, scrambleSteps + 8);
     }
 
     private static FadingPathMemoryPuzzle CreateFadingPath(int hash)
@@ -2437,6 +2702,40 @@ public static class AdvancedPuzzleFactory
         }
 
         return new ConservationNetworkPuzzle(outputs, target, valves);
+    }
+
+    private static FluxMatrixPuzzle CreateFluxMatrix(int hash)
+    {
+        const int size = 4;
+        var totalCells = size * size;
+        var target = new bool[totalCells];
+        var state = hash;
+        for (var index = 0; index < target.Length; index++)
+        {
+            state = NextState(state + index);
+            target[index] = ((state >> 1) & 1) == 1;
+        }
+
+        if (target.All(value => value == target[0]))
+        {
+            target[^1] = !target[^1];
+        }
+
+        var cells = target.ToArray();
+        var scrambleSteps = 12 + (hash % 8);
+        for (var step = 0; step < scrambleSteps; step++)
+        {
+            state = NextState(state + step + totalCells);
+            var index = state % totalCells;
+            ApplyFluxPulse(cells, size, index / size, index % size);
+        }
+
+        if (cells.SequenceEqual(target))
+        {
+            ApplyFluxPulse(cells, size, 0, 0);
+        }
+
+        return new FluxMatrixPuzzle(size, cells, target, scrambleSteps + 10);
     }
 
     private static WeightedEquilibriumPuzzle CreateWeightedEquilibrium(int hash)
@@ -2952,6 +3251,44 @@ public static class AdvancedPuzzleFactory
                 }
 
                 break;
+        }
+    }
+
+    private static void ApplyResonanceScramble(int[] phases, int index, int direction, int modulus)
+    {
+        ApplyWrappedDelta(phases, index, direction * 2, modulus);
+        ApplyWrappedDelta(phases, index - 1, direction, modulus);
+        ApplyWrappedDelta(phases, index + 1, direction, modulus);
+    }
+
+    private static void ApplyWrappedDelta(int[] phases, int index, int delta, int modulus)
+    {
+        if (index < 0 || index >= phases.Length)
+        {
+            return;
+        }
+
+        var wrapped = (phases[index] + delta) % modulus;
+        if (wrapped < 0)
+        {
+            wrapped += modulus;
+        }
+
+        phases[index] = wrapped;
+    }
+
+    private static void ApplyFluxPulse(bool[] cells, int size, int row, int column)
+    {
+        for (var y = 0; y < size; y++)
+        {
+            for (var x = 0; x < size; x++)
+            {
+                if (y == row || x == column)
+                {
+                    var cellIndex = (y * size) + x;
+                    cells[cellIndex] = !cells[cellIndex];
+                }
+            }
         }
     }
 

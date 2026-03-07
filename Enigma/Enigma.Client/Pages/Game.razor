@@ -2,8 +2,8 @@
 @using Enigma.Client.Models.Gameplay
 @using Microsoft.AspNetCore.Components.Routing
 
-<SeoHead Title="Enigma Game | Live Maze Run"
-         Description="Play an active Enigma maze run with room-based puzzles, movement, and in-room interaction."
+<SeoHead Title="Enigma Live Expedition | Active Sector Session"
+         Description="Play an active Enigma sector expedition with room-based puzzles, movement, and in-room interaction."
          Robots="noindex,nofollow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -12,9 +12,9 @@
 {
     <div class="content">
         <div class="card enigma-game-message">
-            <h1>Game Unavailable</h1>
+            <h1>Expedition Unavailable</h1>
             <p>@LoadError</p>
-            <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/play"))'>Return to Play</button>
+            <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/play"))'>Return to Expeditions</button>
         </div>
     </div>
 }
@@ -23,7 +23,7 @@ else if (!IsLoaded || !CanShowRoom)
     <div class="content">
         <div class="card enigma-game-message">
             <div class="loader"></div>
-            <p>Loading maze state...</p>
+            <p>Entering anomaly...</p>
         </div>
     </div>
 }
@@ -41,6 +41,8 @@ else
                         {
                             <div class="enigma-wall @segment.CssClass" style="@segment.Style"></div>
                         }
+                        <div class="enigma-radar-darkness @(IsRadarInterferenceVisible ? "interference" : string.Empty)" aria-hidden="true"></div>
+                        <div class="enigma-radar-pulse @(IsRadarInterferenceVisible ? "interference" : string.Empty)" aria-hidden="true"></div>
 
                         @if (IsCoopRun && HasCoopStageElements)
                         {
@@ -185,16 +187,39 @@ else
                                     <div class="enigma-node-anchor right" style="left: @($"{ToPointPercentX(point.X)}%"); top: @($"{ToPercentY(point.Y)}%");">@knotPuzzle.Strands[knotPuzzle.Order[index]]</div>
                                 }
                             }
+
+                            @if (CurrentRoomState.Puzzle is IWorldInteractivePuzzle)
+                            {
+                                @foreach (var interactable in GetWorldInteractablesForRender())
+                                {
+                                    var currentInteractable = interactable;
+                                    var renderLabel = GetWorldInteractableRenderLabel(currentInteractable);
+                                    <button type="button"
+                                            class="@GetWorldInteractableClass(currentInteractable)"
+                                            style="@GetWorldInteractableStyle(currentInteractable)"
+                                            title="@GetWorldInteractableTooltip(currentInteractable)"
+                                            aria-label="@GetWorldInteractableTooltip(currentInteractable)"
+                                            disabled="@(!CanClickWorldInteractable(currentInteractable))"
+                                            @onclick="(() => InteractWithWorldInteractable(currentInteractable.Id))">
+                                        @if (!string.IsNullOrWhiteSpace(renderLabel))
+                                        {
+                                            <span>@renderLabel</span>
+                                        }
+                                    </button>
+                                }
+                            }
                         }
 
                         @if (CurrentRoomState!.RewardPickupVisible)
                         {
-                            <div class="enigma-reward-pickup" style="@GetRectStyle(CurrentRoomState.RewardPickupBounds)"></div>
+                            <div class="enigma-reward-pickup @GetRadarBandClass(CurrentRoomState.RewardPickupBounds, anomalySensitive: true)"
+                                 style="@GetRectStyle(CurrentRoomState.RewardPickupBounds)"></div>
                         }
 
                         @if (CurrentRoomState!.FinishPortalVisible)
                         {
-                            <div class="enigma-black-hole" style="@GetRectStyle(CurrentRoomState.FinishPortalBounds)"></div>
+                            <div class="enigma-black-hole @GetRadarBandClass(CurrentRoomState.FinishPortalBounds, anomalySensitive: true)"
+                                 style="@GetRectStyle(CurrentRoomState.FinishPortalBounds)"></div>
                         }
 
                         <div class="enigma-player @GetPlayerClass()" style="@GetPlayerStyle()"></div>
@@ -218,7 +243,7 @@ else
                                 if (puzzleConsole.IsLocal)
                                 {
                                     <button type="button"
-                                            class="enigma-puzzle-console console-blue @(IsNearPuzzleConsole() ? "nearby" : string.Empty)"
+                                            class="enigma-puzzle-console console-blue @GetRadarBandClass(puzzleConsole.Bounds, anomalySensitive: true) @(IsNearPuzzleConsole() ? "nearby" : string.Empty)"
                                             style="@GetRectStyle(puzzleConsole.Bounds)"
                                             @onclick="OpenPuzzleOverlay">
                                         <span class="enigma-puzzle-console-screen"></span>
@@ -227,7 +252,7 @@ else
                                 }
                                 else
                                 {
-                                    <div class="enigma-puzzle-console console-red partner-console"
+                                    <div class="enigma-puzzle-console console-red partner-console @GetRadarBandClass(puzzleConsole.Bounds, anomalySensitive: true)"
                                          style="@GetRectStyle(puzzleConsole.Bounds)"
                                          aria-hidden="true">
                                         <span class="enigma-puzzle-console-screen"></span>
@@ -242,6 +267,11 @@ else
                             }
                         }
 
+                        @if (ShowWorldActionPrompt)
+                        {
+                            <div class="@GetWorldActionPromptClass()" style="@GetWorldActionPromptStyle()">@GetWorldActionPromptText()</div>
+                        }
+
                         @if (ShowRoomInteractionProgress)
                         {
                             <div class="enigma-room-interaction-progress" style="@GetRoomInteractionProgressStyle()">
@@ -254,7 +284,7 @@ else
 
                     <div class="enigma-stage-run-status">
                         <div class="enigma-stage-run-head">
-                            <span class="enigma-kicker">Run Status</span>
+                            <span class="enigma-kicker">Expedition Status</span>
                             <span class="enigma-stage-goal">@(PortalReady ? "Enter the black hole" : "Solve and move")</span>
                         </div>
                         <div class="enigma-stage-run-grid">
@@ -271,7 +301,7 @@ else
                                 <strong class="mono-numeric">@ElapsedTimeLabel</strong>
                             </div>
                             <div>
-                                <span>Run Total</span>
+                                <span>Expedition Total</span>
                                 <strong class="mono-numeric">@TotalGold.ToString("N0") MN</strong>
                             </div>
                             <div>
@@ -332,7 +362,7 @@ else
                 <div class="enigma-sidebar-summary">
                     <div class="card enigma-sidebar-card enigma-status-card">
                         <div class="enigma-sidebar-card-head">
-                            <span class="enigma-kicker">Run Status</span>
+                            <span class="enigma-kicker">Expedition Status</span>
                             <span class="enigma-status-goal">@(PortalReady ? "Enter the black hole" : "Solve and move")</span>
                         </div>
                         <div class="enigma-status-metrics">
@@ -341,7 +371,7 @@ else
                                 <strong>@SolvedRoomCount / @TotalRoomCount</strong>
                             </div>
                             <div class="enigma-status-metric">
-                                <span>Player</span>
+                                <span>Explorer</span>
                                 <strong>@Username</strong>
                             </div>
                             <div class="enigma-status-metric">
@@ -349,7 +379,7 @@ else
                                 <strong>@((IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState.Puzzle.IsCompleted) ? "Unlocked" : "Locked")</strong>
                             </div>
                             <div class="enigma-status-metric">
-                                <span>Run Total</span>
+                                <span>Expedition Total</span>
                                 <strong>@TotalGold.ToString("N0") MN</strong>
                             </div>
                         </div>
@@ -361,7 +391,7 @@ else
                             }
                             @if (EquippedLoadout.Count == 0)
                             {
-                                <div class="enigma-status-empty">No items equipped for this run.</div>
+                                <div class="enigma-status-empty">No items equipped for this expedition.</div>
                             }
                             else
                             {
@@ -426,25 +456,9 @@ else
                 <div class="card enigma-sidebar-card enigma-puzzle-card">
                     @if (HasCoopPuzzle)
                     {
-                        var coopGuide = GetCurrentCoopPuzzleGuide();
-                        <div class="enigma-puzzle-head">
+                        <div class="enigma-puzzle-head enigma-puzzle-head-clean">
                             <span class="enigma-kicker">Co-op Puzzle</span>
                             <h2>@CurrentCoopPuzzle!.Name</h2>
-                            <p class="enigma-puzzle-copy">@CurrentCoopPuzzle.Instruction</p>
-                        </div>
-                        <div class="enigma-puzzle-guide">
-                            <div class="enigma-puzzle-guide-row">
-                                <span>Goal</span>
-                                <p>@coopGuide.Goal</p>
-                            </div>
-                            <div class="enigma-puzzle-guide-row">
-                                <span>Controls</span>
-                                <p>@coopGuide.Controls</p>
-                            </div>
-                            <div class="enigma-puzzle-guide-row">
-                                <span>Success</span>
-                                <p>@coopGuide.Success</p>
-                            </div>
                         </div>
                         <div class="enigma-puzzle-status">@CurrentCoopPuzzle.Status</div>
 
@@ -456,17 +470,16 @@ else
                         <div class="enigma-puzzle-surface">
                         @if (string.Equals(CurrentCoopPuzzle.ViewType, "pressure_systems", StringComparison.OrdinalIgnoreCase))
                         {
-                            <div class="enigma-mini-stat-grid">
-                                <div class="enigma-mini-stat">
-                                    <span>Phase</span>
-                                    <strong>@(GetCoopViewInt("phase_index", 0) + 1) / @GetCoopViewInt("phase_count", 1)</strong>
+                        <div class="enigma-mini-stat-grid">
+                            <div class="enigma-mini-stat">
+                                <span>Phase</span>
+                                <strong>@(GetCoopViewInt("phase_index", 0) + 1) / @GetCoopViewInt("phase_count", 1)</strong>
                                 </div>
                                 <div class="enigma-mini-stat">
-                                    <span>Hold</span>
-                                    <strong>@($"{GetCoopViewDouble("hold_seconds", 0.8):0.0}s")</strong>
-                                </div>
+                                <span>Hold</span>
+                                <strong>@($"{GetCoopViewDouble("hold_seconds", 0.8):0.0}s")</strong>
                             </div>
-                            <p class="enigma-helper">Stand in the highlighted plate pattern together until it locks.</p>
+                        </div>
                         }
                         else if (string.Equals(CurrentCoopPuzzle.ViewType, "sync_reaction", StringComparison.OrdinalIgnoreCase))
                         {
@@ -548,7 +561,6 @@ else
                                         </button>
                                     }
                                 </div>
-                                <p class="enigma-helper">Blue tiles are yours. Red tiles belong to your partner. Match every tile to its target orientation to complete the shared circuit.</p>
                             </div>
                         }
                         else if (string.Equals(CurrentCoopPuzzle.ViewType, "opposing_pattern_input", StringComparison.OrdinalIgnoreCase))
@@ -717,41 +729,62 @@ else
                                     <strong>@($"{GetCoopViewDouble("hold_seconds", 0.8):0.0}s")</strong>
                                 </div>
                             </div>
-                            <p class="enigma-helper">Move together into the highlighted zones and hold until the sync locks.</p>
                         }
                         </div>
                     }
                     else
                     {
-                    var puzzleGuide = GetCurrentPuzzleGuide();
-                    <div class="enigma-puzzle-head">
+                    <div class="enigma-puzzle-head enigma-puzzle-head-clean">
                         <span class="enigma-kicker">Current Puzzle</span>
                         <h2>@CurrentRoomState.Puzzle.Title</h2>
-                        <p class="enigma-puzzle-copy">@CurrentRoomState.Puzzle.Instruction</p>
                     </div>
-                    <div class="enigma-puzzle-guide">
-                        <div class="enigma-puzzle-guide-row">
-                            <span>Goal</span>
-                            <p>@puzzleGuide.Goal</p>
+                    @if (CurrentRoomState.Puzzle is IWorldInteractivePuzzle)
+                    {
+                        <div class="enigma-puzzle-status enigma-world-puzzle-status">
+                            <strong>@GetWorldPuzzlePressEInstruction()</strong>
+                            <span>@CurrentRoomState.Puzzle.StatusText</span>
                         </div>
-                        <div class="enigma-puzzle-guide-row">
-                            <span>Controls</span>
-                            <p>@puzzleGuide.Controls</p>
-                        </div>
-                        <div class="enigma-puzzle-guide-row">
-                            <span>Success</span>
-                            <p>@puzzleGuide.Success</p>
-                        </div>
-                    </div>
-                    <div class="enigma-puzzle-status">@CurrentRoomState.Puzzle.StatusText</div>
+                    }
+                    else
+                    {
+                        <div class="enigma-puzzle-status">@CurrentRoomState.Puzzle.StatusText</div>
+                    }
 
                     <div class="enigma-puzzle-surface">
-                    @if (CurrentRoomState.Puzzle is PressurePlatePuzzle pressure)
+                    @if (CurrentRoomState.Puzzle is IWorldInteractivePuzzle)
+                    {
+                        <div class="enigma-world-puzzle-surface">
+                            <div class="enigma-puzzle-guide enigma-world-puzzle-guide">
+                                <div class="enigma-puzzle-guide-row">
+                                    <span>Objective</span>
+                                    <p>@CurrentRoomState.Puzzle.Instruction</p>
+                                </div>
+                                <div class="enigma-puzzle-guide-row">
+                                    <span>Controls</span>
+                                    <p>@GetWorldPuzzlePressEInstruction()</p>
+                                </div>
+                                <div class="enigma-puzzle-guide-row">
+                                    <span>Lifecycle</span>
+                                    <p><strong class="enigma-world-puzzle-state @GetWorldPuzzleStatusCssClass()">@GetWorldPuzzleStatusLabel()</strong></p>
+                                </div>
+                            </div>
+                            @if (TryGetWorldPuzzleCardProgress(out var worldProgress, out var worldProgressLabel))
+                            {
+                                <div class="enigma-world-puzzle-progress-head">
+                                    <span>@worldProgressLabel</span>
+                                    <strong>@($"{Math.Round(worldProgress * 100d):0}%")</strong>
+                                </div>
+                                <div class="enigma-progress-shell">
+                                    <div class="enigma-progress-bar" style="width: @(Math.Round(worldProgress * 100d, 2))%;"></div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (CurrentRoomState.Puzzle is PressurePlatePuzzle pressure)
                     {
                         <div class="enigma-progress-shell">
                             <div class="enigma-progress-bar" style="width: @(Math.Round(pressure.Progress * 100d, 2))%;"></div>
                         </div>
-                        <p class="enigma-helper">Stand on the glowing plate inside the room.</p>
                     }
                     else if (CurrentRoomState.Puzzle is PhaseRelayPuzzle phaseRelayCard)
                     {
@@ -764,7 +797,6 @@ else
                                 <span>@label</span>
                             }
                         </div>
-                        <p class="enigma-helper">Move through the room and step on the nodes in the remembered order.</p>
                     }
                     else if (CurrentRoomState.Puzzle is HarmonicPhasePuzzle harmonicPhaseCard)
                     {
@@ -777,7 +809,6 @@ else
                                 </div>
                             }
                         </div>
-                        <p class="enigma-helper">Each step plays the struck plate tone, adds +2 to that plate, and adds +1 to its adjacent plates.</p>
                     }
                     else if (CurrentRoomState.Puzzle is QuickTimePuzzle quickTime)
                     {
@@ -884,7 +915,6 @@ else
                                 <span>@(index < symbolLogic.Entered.Count ? symbolLogic.Entered[index] : "\u2014")</span>
                             }
                         </div>
-                        <p class="enigma-helper">Build the order left to right. Clear Order restarts the arrangement.</p>
                         <div class="enigma-option-grid compact enigma-symbol-grid">
                             @foreach (var symbol in symbolLogic.Symbols)
                             {
@@ -942,7 +972,6 @@ else
                                 <strong>@fadingPathCard.ProgressIndex / @fadingPathCard.Path.Count</strong>
                             </div>
                         </div>
-                        <p class="enigma-helper">The path appears on the floor only briefly. Watch the bright cells, then walk the same route after they vanish.</p>
                     }
                     else if (CurrentRoomState.Puzzle is MemoryInterferencePuzzle interference)
                     {
@@ -1039,13 +1068,9 @@ else
                                 </span>
                             }
                         </div>
-                        @if (unlockPattern.IsPatternVisible)
+                        @if (!unlockPattern.IsPatternVisible)
                         {
-                            <p class="enigma-helper">Watch the sequence. All input is locked until it disappears.</p>
-                        }
-                        else
-                        {
-                            <p class="enigma-helper">Use the keyboard arrow keys now. Entered: @(unlockPattern.Entered.Count == 0 ? "none" : string.Join(" ", unlockPattern.Entered.Select(GetDirectionArrow)))</p>
+                            <p class="enigma-helper">Entered: @(unlockPattern.Entered.Count == 0 ? "none" : string.Join(" ", unlockPattern.Entered.Select(GetDirectionArrow)))</p>
                         }
                         <div class="enigma-direction-grid">
                             <button class="btn btn-secondary enigma-arrow-button" disabled="@unlockPattern.IsPatternVisible" @onclick="(() => PressPatternDirection(PlayerDirection.Up))">@GetDirectionArrow(PlayerDirection.Up)</button>
@@ -1063,10 +1088,6 @@ else
                                 <span class="enigma-direction-token @(directionalEcho.IsPatternVisible ? "visible" : "hidden")">@(directionalEcho.IsPatternVisible ? GetDirectionArrow(direction) : "\u2022")</span>
                             }
                         </div>
-                        @if (directionalEcho.IsPatternVisible)
-                        {
-                            <p class="enigma-helper">Watch the pattern. Input unlocks once it fades.</p>
-                        }
                         <div class="enigma-direction-grid">
                             <button class="btn btn-secondary enigma-arrow-button" disabled="@directionalEcho.IsPatternVisible" @onclick="(() => PressEchoDirection(PlayerDirection.Up))">@GetDirectionArrow(PlayerDirection.Up)</button>
                             <button class="btn btn-secondary enigma-arrow-button" disabled="@directionalEcho.IsPatternVisible" @onclick="(() => PressEchoDirection(PlayerDirection.Right))">@GetDirectionArrow(PlayerDirection.Right)</button>
@@ -1083,10 +1104,6 @@ else
                                 <span class="enigma-direction-token @(dimensionalShift.IsPatternVisible ? "visible" : "hidden")">@(dimensionalShift.IsPatternVisible ? GetDirectionArrow(direction) : "\u2022")</span>
                             }
                         </div>
-                        @if (dimensionalShift.IsPatternVisible)
-                        {
-                            <p class="enigma-helper">Study the pattern first. Input unlocks after the sequence fades.</p>
-                        }
                         <div class="enigma-direction-grid">
                             <button class="btn btn-secondary enigma-arrow-button" disabled="@dimensionalShift.IsPatternVisible" @onclick="(() => PressEchoDirection(PlayerDirection.Up))">@GetDirectionArrow(PlayerDirection.Up)</button>
                             <button class="btn btn-secondary enigma-arrow-button" disabled="@dimensionalShift.IsPatternVisible" @onclick="(() => PressEchoDirection(PlayerDirection.Right))">@GetDirectionArrow(PlayerDirection.Right)</button>
@@ -1170,7 +1187,6 @@ else
                                 </button>
                             }
                         </div>
-                        <p class="enigma-helper">Each valve steals pressure from one output and feeds another. The total never changes.</p>
                     }
                     else if (CurrentRoomState.Puzzle is WeightBalancePuzzle weightBalance)
                     {
@@ -1211,7 +1227,6 @@ else
                                 <strong>@weightedTrigger.CurrentTotal</strong>
                             </div>
                         </div>
-                        <p class="enigma-helper">Push the weight blocks in the room until the weighted pad total matches the target.</p>
                     }
                     else if (CurrentRoomState.Puzzle is WeightedEquilibriumPuzzle equilibrium)
                     {
@@ -1229,7 +1244,6 @@ else
                                 <strong>@equilibrium.MinimumOccupiedPads</strong>
                             </div>
                         </div>
-                        <p class="enigma-helper">Positive and negative pads must cancel exactly. Zero only counts if enough pads are occupied, so trivial single-pad solutions fail.</p>
                     }
                     else if (CurrentRoomState.Puzzle is XorLogicPuzzle xor)
                     {
@@ -1258,7 +1272,6 @@ else
                                 </button>
                             }
                         </div>
-                        <p class="enigma-helper">The circuit flips output on every active bit. Match both the parity and the exact number of live bits.</p>
                     }
                     else if (CurrentRoomState.Puzzle is BinaryShiftPuzzle binaryShift)
                     {
@@ -1280,7 +1293,6 @@ else
                     }
                     else if (CurrentRoomState.Puzzle is BinaryTransformationPuzzle binaryTransformation)
                     {
-                        <p class="enigma-helper">@binaryTransformation.Hint</p>
                         <div class="enigma-mini-stat-grid">
                             <div class="enigma-mini-stat">
                                 <span>Current</span>
@@ -1343,7 +1355,6 @@ else
                                 </button>
                             }
                         </div>
-                        <p class="enigma-helper">Select two right-side endpoint tags to swap their strand destinations until every path runs cleanly.</p>
                     }
                     else if (CurrentRoomState.Puzzle is CrossingPathPuzzle crossing)
                     {
@@ -1357,7 +1368,6 @@ else
                                 <strong>@(crossing.ActiveWordIndex is int activeWord ? crossing.Words[activeWord] : "None")</strong>
                             </div>
                         </div>
-                        <p class="enigma-helper">Step on a word tile in the room, then walk to the descriptor tile that matches it. Wrong descriptor clears the active word.</p>
                     }
                     else if (CurrentRoomState.Puzzle is KnotTopologyPuzzle knot)
                     {
@@ -1371,7 +1381,6 @@ else
                                 <strong>@knot.IllusionPairs.Count</strong>
                             </div>
                         </div>
-                        <p class="enigma-helper">Swap strand endpoints until only the dotted illusion crossings remain. Solid crossings still count.</p>
                         <div class="enigma-yarn-grid">
                             @for (var index = 0; index < knot.Order.Length; index++)
                             {
@@ -1388,14 +1397,12 @@ else
                         <div class="enigma-progress-shell">
                             <div class="enigma-progress-bar" style="width: @(Math.Round(zoneActivation.HoldProgress * 100d, 2))%;"></div>
                         </div>
-                        <p class="enigma-helper">Walk into beacon @(zoneActivation.CurrentZoneIndex + 1) inside the room.</p>
                     }
                     else if (CurrentRoomState.Puzzle is DelayedActivationSequencePuzzle delayedSequence)
                     {
                         <div class="enigma-progress-shell">
                             <div class="enigma-progress-bar" style="width: @(Math.Round(delayedSequence.HoldProgress * 100d, 2))%;"></div>
                         </div>
-                        <p class="enigma-helper">Hold the live zone until it locks, then stay planted on the locked zone until the next one wakes.</p>
                     }
                     else if (CurrentRoomState.Puzzle is RecursiveActivationSequencePuzzle recursiveSequence)
                     {
@@ -1419,7 +1426,7 @@ else
                     }
                     @if (CurrentRoomState.Definition.Kind == MazeRoomKind.Finish)
                     {
-                        <p class="enigma-helper reward-copy">Once this puzzle is solved, touch the black hole to finish the run.</p>
+                        <p class="enigma-helper reward-copy">Once this puzzle is solved, touch the black hole to finish the expedition.</p>
                     }
                     </div>
                     }
@@ -1430,7 +1437,3 @@ else
         </section>
     </div>
 }
-
-
-
-

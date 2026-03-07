@@ -15,6 +15,17 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private sealed record PuzzleGuide(string Goal, string Controls, string Success);
     private sealed record RoomInteractionProgressState(PlayAreaRect AnchorRect, double Progress, string Label);
     private sealed record ActivePuzzleConsole(PlayAreaRect Bounds, bool IsLocal);
+    private sealed record WorldInteractableCandidate(PuzzleWorldInteractable Interactable, double Distance, double FacingAlignment);
+    private sealed record WorldActionPromptState(PlayAreaRect AnchorRect, string Text, bool InRange);
+    protected sealed record WorldPuzzleStat(string Label, string Value);
+    private sealed class BehaviorProfileSnapshot
+    {
+        public int LeftInteractions { get; set; }
+        public int RightInteractions { get; set; }
+        public int DoorRushAttempts { get; set; }
+        public int InteractionSamples { get; set; }
+    }
+
     private const double RoomSize = 1080d;
     private const double StageAspectRatio = 16d / 9d;
     private const double RenderWidth = RoomSize * StageAspectRatio;
@@ -22,7 +33,19 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private const double PlayerSpeed = 380d;
     private const double DoorWidth = 240d;
     private const double WallThickness = 42d;
+    private const double HorizontalWallCollisionInset = WallThickness * ((RoomSize - PlayerSize) / (RenderWidth - PlayerSize));
     private const double PuzzleConsoleSize = 116d;
+    private const double RadarCoreRadius = 60d;
+    private const double RadarDetailRadius = 138d;
+    private const double RadarOuterRadius = 220d;
+    private const double RadarPulseCycleSeconds = 5.6d;
+    private const int RadarPulseEventsPerCycle = 2;
+    private const double RadarPingLeadFraction = 0.04d;
+    private const double RadarInterferenceDistance = 248d;
+    private const double RadarWallCollisionPadding = 8d;
+    private const double WorldInteractableMinimumSize = 56d;
+    private const double BehaviorAdaptationCap = 0.35d;
+    private const string BehaviorStoragePrefix = "enigma.behavior";
     private static readonly PlayAreaRect[] PuzzleConsoleCandidates =
     [
         new(72d, 882d, PuzzleConsoleSize, PuzzleConsoleSize),
@@ -64,11 +87,18 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private bool _playerStateDirty = true;
     private bool _roomInteractionWasActive;
     private bool _loadoutConsumptionPrimed;
+    private int _lastRadarPulsePhaseIndex = -1;
     private DateTime _timerPauseUntilUtc = DateTime.MinValue;
     private DateTime _visionBoostUntilUtc = DateTime.MinValue;
     private DateTime _pathRevealUntilUtc = DateTime.MinValue;
     private GridPoint? _tutorialStartRoomCoordinates;
     private bool _tutorialRoomTransitionReported;
+    private string? _nearestWorldInteractableId;
+    private bool _behaviorProfileLoaded;
+    private bool _behaviorProfileDirty;
+    private DateTime _lastBehaviorProfilePersistUtc = DateTime.MinValue;
+    private BehaviorProfileSnapshot _globalBehaviorProfile = new();
+    private BehaviorProfileSnapshot _seedBehaviorProfile = new();
 
     [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
@@ -148,16 +178,21 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected string NormalizedSource => string.Equals(Source, "load", StringComparison.OrdinalIgnoreCase) ? "load" : "new";
     protected string ElapsedTimeLabel => FormatElapsed(_sessionStopwatch.Elapsed);
     protected bool CanShowRoom => ParsedSeed is not null && CurrentRoom is not null && CurrentRoomState is not null;
-    protected bool HasPuzzleOverlayContent => IsCoopRun ? HasCoopPuzzle : CurrentRoomState?.Puzzle is not null;
+    protected bool HasPuzzleOverlayContent => IsCoopRun
+        ? HasCoopPuzzle
+        : CurrentRoomState?.Puzzle is not null && CurrentRoomState.Puzzle is not IWorldInteractivePuzzle;
     protected bool IsCurrentPuzzleSolved => IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState?.Puzzle.IsCompleted == true;
-    protected bool UsesRoomNativePuzzleInteraction => !IsCoopRun && CurrentRoomState?.Puzzle is PressurePlatePuzzle
-        or PhaseRelayPuzzle
-        or HarmonicPhasePuzzle
-        or WeightGridPuzzleBase
-        or ZoneActivationPuzzle
-        or DelayedActivationSequencePuzzle
-        or RecursiveActivationSequencePuzzle
-        or CrossingPathPuzzle;
+    protected bool UsesRoomNativePuzzleInteraction => !IsCoopRun &&
+        CurrentRoomState?.Puzzle is
+            (IWorldInteractivePuzzle
+            or PressurePlatePuzzle
+            or PhaseRelayPuzzle
+            or HarmonicPhasePuzzle
+            or WeightGridPuzzleBase
+            or ZoneActivationPuzzle
+            or DelayedActivationSequencePuzzle
+            or RecursiveActivationSequencePuzzle
+            or CrossingPathPuzzle);
     protected bool CanInteractWithPuzzleConsole => CanShowRoom && HasPuzzleOverlayContent && !IsCurrentPuzzleSolved && !UsesRoomNativePuzzleInteraction;
     protected bool HasHotkeyUsableItems => GetActiveLoadoutItems().Count > 0;
     protected bool PortalReady => IsCoopRun
@@ -217,8 +252,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
             IsLoaded = true;
             LoadError = null;
             _loadedSeed = Seed;
-            StatusBanner = "Every room is locked until its puzzle is solved.";
+            ShowBanner("Every room is locked until its puzzle is solved.", 2.8d);
             _playerStateDirty = true;
+            ApplyBehaviorProfileToEasyPuzzles();
         }
         catch (Exception exception)
         {
@@ -253,6 +289,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 Username = session!.Username;
             }
 
+            await LoadBehaviorProfilesAsync();
+            ApplyBehaviorProfileToEasyPuzzles();
+
             var storedLoadout = await JS.InvokeAsync<List<RunLoadoutSelection>?>("enigmaGame.getRunLoadout");
             EquippedLoadout = (storedLoadout ?? [])
                 .Where(item => !string.IsNullOrWhiteSpace(item.ItemId) && item.Quantity > 0)
@@ -271,6 +310,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 return;
             }
             _jsReady = true;
+            await JS.InvokeVoidAsync("enigmaGame.startRunAmbiance", _runNonce);
             await ConnectCoopSocketAsync();
             if (!IsTutorialRun && !IsCoopRun)
             {
@@ -307,6 +347,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         if (string.Equals(keyCode, "KeyE", StringComparison.OrdinalIgnoreCase))
         {
+            if (isPressed && TryInteractNearestWorldInteractable(PuzzleInteractionSource.Keyboard))
+            {
+                return Task.CompletedTask;
+            }
+
             if (isPressed && IsNearPuzzleConsole())
             {
                 TogglePuzzleOverlay();
@@ -406,6 +451,409 @@ public partial class Game : ComponentBase, IAsyncDisposable
         return distance <= interactionDistance;
     }
 
+    protected IEnumerable<PuzzleWorldInteractable> GetWorldInteractablesForRender()
+    {
+        if (IsCoopRun || CurrentRoomState?.Puzzle is not IWorldInteractivePuzzle worldPuzzle || worldPuzzle.IsSolved)
+        {
+            _nearestWorldInteractableId = null;
+            return [];
+        }
+
+        var interactables = worldPuzzle.GetWorldInteractables()
+            .Where(interactable => interactable.Clickable)
+            .ToList();
+        _nearestWorldInteractableId = TryFindNearestWorldInteractableCandidate(worldPuzzle, null)?.Interactable.Id;
+        return interactables;
+    }
+
+    protected string GetWorldInteractableStyle(PuzzleWorldInteractable interactable)
+    {
+        var expandedBounds = ExpandWorldInteractableBounds(interactable.Bounds);
+        return GetRectStyle(expandedBounds);
+    }
+
+    protected string GetWorldInteractableClass(PuzzleWorldInteractable interactable)
+    {
+        var classes = $"enigma-world-interactable {interactable.CssClass}";
+        if (!interactable.Enabled)
+        {
+            classes += " disabled";
+        }
+        else if (CurrentRoomState?.Puzzle is IWorldInteractivePuzzle worldPuzzle)
+        {
+            classes += worldPuzzle.Status switch
+            {
+                PuzzleStatus.Active => " state-active",
+                PuzzleStatus.FailedTemporary => " state-failed",
+                PuzzleStatus.Resetting => " state-resetting",
+                PuzzleStatus.Cooldown => " state-cooldown",
+                _ => string.Empty,
+            };
+        }
+
+        if (!string.IsNullOrWhiteSpace(_nearestWorldInteractableId) &&
+            string.Equals(_nearestWorldInteractableId, interactable.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            classes += " nearest";
+        }
+
+        return classes;
+    }
+
+    protected string GetWorldInteractableTooltip(PuzzleWorldInteractable interactable)
+    {
+        var action = GetWorldInteractableActionVerb(interactable);
+        var prompt = RequiresFullStepForInteraction(interactable)
+            ? $"Step onto node, then press E to {action}"
+            : $"Press E to {action}";
+
+        if (!interactable.Enabled)
+        {
+            return $"{prompt} (unavailable)";
+        }
+
+        return IsWithinWorldInteractionRange(interactable)
+            ? prompt
+            : $"Move closer to {prompt.ToLowerInvariant()}";
+    }
+
+    protected string GetWorldInteractableRenderLabel(PuzzleWorldInteractable interactable)
+    {
+        if (!string.IsNullOrWhiteSpace(interactable.Label))
+        {
+            return interactable.Label;
+        }
+
+        if (TryParseInteractableIndex(interactable.Id, "behavior-", out var behaviorIndex))
+        {
+            return behaviorIndex switch
+            {
+                0 => "L",
+                1 => "C",
+                2 => "R",
+                _ => $"T{behaviorIndex + 1}",
+            };
+        }
+
+        if (TryParseInteractableIndex(interactable.Id, "false-", out var falseIndex))
+        {
+            return (falseIndex + 1).ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (TryParseInteractableIndex(interactable.Id, "grid-", out var gridIndex))
+        {
+            return string.Empty;
+        }
+
+        if (TryParseInteractableIndex(interactable.Id, "hidden-", out _))
+        {
+            return string.Empty;
+        }
+
+        return "\u2022";
+    }
+
+    protected string GetWorldPuzzlePressEInstruction()
+    {
+        if (!TryGetWorldActionPromptState(out var promptState))
+        {
+            return "Press E near an active node.";
+        }
+
+        return promptState.Text;
+    }
+
+    protected bool ShowWorldActionPrompt => TryGetWorldActionPromptState(out _);
+
+    protected string GetWorldActionPromptText() =>
+        TryGetWorldActionPromptState(out var promptState) ? promptState.Text : "Press E to interact.";
+
+    protected string GetWorldActionPromptStyle()
+    {
+        if (!TryGetWorldActionPromptState(out var promptState))
+        {
+            return string.Empty;
+        }
+
+        var prompt = promptState.Text;
+        var width = Math.Clamp(186d + (prompt.Length * 3.4d), 196d, 388d);
+        var height = 42d;
+        var left = Math.Clamp(promptState.AnchorRect.CenterX - (width / 2d), 18d, RoomSize - width - 18d);
+        var top = promptState.AnchorRect.Y >= RoomSize / 2d
+            ? promptState.AnchorRect.Y - height - 14d
+            : promptState.AnchorRect.Bottom + 14d;
+        top = Math.Clamp(top, 18d, RoomSize - height - 18d);
+        return $"left: {ToPositionPercentX(left, width)}%; top: {ToPercentY(top)}%; width: {ToLengthPercentX(width)}%;";
+    }
+
+    protected string GetWorldActionPromptClass() =>
+        TryGetWorldActionPromptState(out var promptState) && !promptState.InRange
+            ? "enigma-world-action-prompt out-of-range"
+            : "enigma-world-action-prompt";
+
+    protected bool CanClickWorldInteractable(PuzzleWorldInteractable interactable) =>
+        interactable.Clickable &&
+        interactable.Enabled &&
+        !IsCoopRun &&
+        CurrentRoomState?.Puzzle is IWorldInteractivePuzzle &&
+        IsWithinWorldInteractionRange(interactable);
+
+    protected void InteractWithWorldInteractable(string interactableId)
+    {
+        _ = TryInteractWorldInteractableById(interactableId, PuzzleInteractionSource.Click);
+    }
+
+    private bool TryInteractNearestWorldInteractable(PuzzleInteractionSource source)
+    {
+        if (IsCoopRun || CurrentRoomState?.Puzzle is not IWorldInteractivePuzzle worldPuzzle || worldPuzzle.IsSolved)
+        {
+            return false;
+        }
+
+        var candidate = TryFindNearestWorldInteractableCandidate(worldPuzzle, null);
+        if (candidate is null)
+        {
+            return false;
+        }
+
+        return TryInteractWorldInteractable(worldPuzzle, candidate.Interactable, source);
+    }
+
+    private bool TryInteractWorldInteractableById(string interactableId, PuzzleInteractionSource source)
+    {
+        if (IsCoopRun || CurrentRoomState?.Puzzle is not IWorldInteractivePuzzle worldPuzzle || worldPuzzle.IsSolved)
+        {
+            return false;
+        }
+
+        var candidate = TryFindNearestWorldInteractableCandidate(worldPuzzle, interactableId);
+        if (candidate is null)
+        {
+            return false;
+        }
+
+        return TryInteractWorldInteractable(worldPuzzle, candidate.Interactable, source);
+    }
+
+    private bool TryInteractWorldInteractable(IWorldInteractivePuzzle worldPuzzle, PuzzleWorldInteractable interactable, PuzzleInteractionSource source)
+    {
+        if (!interactable.Enabled || !IsWithinWorldInteractionRange(interactable))
+        {
+            ShowBanner(
+                RequiresFullStepForInteraction(interactable)
+                    ? "Step fully onto the node to interact."
+                    : "Move closer to interact.",
+                0.65d);
+            return false;
+        }
+
+        var interacted = worldPuzzle.TryInteract(
+            interactable.Id,
+            source,
+            new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize),
+            PlayerFacing,
+            _sessionStopwatch.Elapsed.TotalSeconds);
+
+        if (!interacted)
+        {
+            return false;
+        }
+
+        RecordBehaviorInteraction(interactable.Bounds);
+        _playerStateDirty = true;
+        return true;
+    }
+
+    private WorldInteractableCandidate? TryFindNearestWorldInteractableCandidate(IWorldInteractivePuzzle worldPuzzle, string? forcedId, bool requireInRange = true)
+    {
+        var playerCenterX = PlayerX + (PlayerSize / 2d);
+        var playerCenterY = PlayerY + (PlayerSize / 2d);
+        var candidates = new List<WorldInteractableCandidate>();
+        foreach (var interactable in worldPuzzle.GetWorldInteractables())
+        {
+            if (!interactable.Clickable || !interactable.Enabled)
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(forcedId) &&
+                !string.Equals(interactable.Id, forcedId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var distance = GetWorldInteractableDistance(interactable);
+            if (requireInRange && !IsWithinWorldInteractionRange(interactable, distance))
+            {
+                continue;
+            }
+
+            var facingAlignment = GetFacingAlignmentForPoint(playerCenterX, playerCenterY, interactable.Bounds.CenterX, interactable.Bounds.CenterY);
+            candidates.Add(new WorldInteractableCandidate(interactable, distance, facingAlignment));
+        }
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        return candidates
+            .OrderBy(candidate => candidate.Distance)
+            .ThenByDescending(candidate => candidate.FacingAlignment)
+            .ThenByDescending(candidate => candidate.Interactable.Priority)
+            .ThenBy(candidate => candidate.Interactable.Id, StringComparer.Ordinal)
+            .First();
+    }
+
+    private bool TryGetWorldActionPromptState(out WorldActionPromptState promptState)
+    {
+        promptState = default!;
+        if (IsCoopRun || CurrentRoomState?.Puzzle is not IWorldInteractivePuzzle worldPuzzle || worldPuzzle.IsSolved)
+        {
+            return false;
+        }
+
+        var nearest = TryFindNearestWorldInteractableCandidate(worldPuzzle, null, requireInRange: false);
+        if (nearest is null)
+        {
+            return false;
+        }
+
+        var radarSignal = GetRadarSignalForPoint(nearest.Interactable.Bounds.CenterX, nearest.Interactable.Bounds.CenterY);
+        if (radarSignal <= 0.11d)
+        {
+            return false;
+        }
+
+        var action = GetWorldInteractableActionVerb(nearest.Interactable);
+        var inRange = IsWithinWorldInteractionRange(nearest.Interactable, nearest.Distance);
+        if (RequiresFullStepForInteraction(nearest.Interactable) && !inRange)
+        {
+            return false;
+        }
+
+        var text = inRange
+            ? $"Press E to {action}."
+            : $"Move closer. Press E to {action}.";
+
+        promptState = new WorldActionPromptState(nearest.Interactable.Bounds, text, inRange);
+        return true;
+    }
+
+    private static string GetWorldInteractableActionVerb(PuzzleWorldInteractable interactable)
+    {
+        var id = interactable.Id;
+        if (string.Equals(id, "layer-toggle", StringComparison.OrdinalIgnoreCase))
+        {
+            return "shift layers";
+        }
+
+        if (string.Equals(id, "echo-replay", StringComparison.OrdinalIgnoreCase))
+        {
+            return "replay the echo";
+        }
+
+        if (string.Equals(id, "heat-up", StringComparison.OrdinalIgnoreCase))
+        {
+            return "increase heat";
+        }
+
+        if (string.Equals(id, "heat-down", StringComparison.OrdinalIgnoreCase))
+        {
+            return "decrease heat";
+        }
+
+        if (string.Equals(id, "pressure-up", StringComparison.OrdinalIgnoreCase))
+        {
+            return "increase pressure";
+        }
+
+        if (string.Equals(id, "pressure-down", StringComparison.OrdinalIgnoreCase))
+        {
+            return "decrease pressure";
+        }
+
+        return id switch
+        {
+            var value when value.StartsWith("relay-", StringComparison.OrdinalIgnoreCase) => "toggle relay",
+            var value when value.StartsWith("echo-pad-", StringComparison.OrdinalIgnoreCase) => "imprint this pad",
+            var value when value.StartsWith("alpha-", StringComparison.OrdinalIgnoreCase) => "lock alpha node",
+            var value when value.StartsWith("beta-", StringComparison.OrdinalIgnoreCase) => "lock beta node",
+            var value when value.StartsWith("behavior-", StringComparison.OrdinalIgnoreCase) => "commit terminal",
+            var value when value.StartsWith("recursive-", StringComparison.OrdinalIgnoreCase) => "confirm anchor",
+            var value when value.StartsWith("grid-", StringComparison.OrdinalIgnoreCase) => "pulse cell",
+            var value when value.StartsWith("symbol-", StringComparison.OrdinalIgnoreCase) => "invoke symbol",
+            var value when value.StartsWith("time-gate-", StringComparison.OrdinalIgnoreCase) => "capture gate window",
+            var value when value.StartsWith("false-", StringComparison.OrdinalIgnoreCase) => "probe terminal",
+            var value when value.StartsWith("hidden-", StringComparison.OrdinalIgnoreCase) => "test tile",
+            _ => "interact",
+        };
+    }
+
+    private PlayAreaRect ExpandWorldInteractableBounds(PlayAreaRect bounds)
+    {
+        var width = Math.Max(bounds.Width, WorldInteractableMinimumSize);
+        var height = Math.Max(bounds.Height, WorldInteractableMinimumSize);
+        var x = bounds.CenterX - (width / 2d);
+        var y = bounds.CenterY - (height / 2d);
+        return new PlayAreaRect(x, y, width, height);
+    }
+
+    private bool IsWithinWorldInteractionRange(PuzzleWorldInteractable interactable) =>
+        IsWithinWorldInteractionRange(interactable, GetWorldInteractableDistance(interactable));
+
+    private bool IsWithinWorldInteractionRange(PuzzleWorldInteractable interactable, double distance)
+    {
+        if (RequiresFullStepForInteraction(interactable))
+        {
+            return IsPlayerFullyOnInteractable(interactable);
+        }
+
+        var rangeBoost = DateTime.UtcNow < _visionBoostUntilUtc ? 1.25d : 1d;
+        var range = Math.Max(64d, interactable.InteractionRange * rangeBoost);
+        return distance <= range;
+    }
+
+    private double GetFacingAlignmentForPoint(double playerX, double playerY, double targetX, double targetY)
+    {
+        var deltaX = targetX - playerX;
+        var deltaY = targetY - playerY;
+        var magnitude = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+        if (magnitude <= 0.001d || !TryGetFacingUnitVector(PlayerFacing, out var facingX, out var facingY))
+        {
+            return 0d;
+        }
+
+        var normalizedX = deltaX / magnitude;
+        var normalizedY = deltaY / magnitude;
+        return (normalizedX * facingX) + (normalizedY * facingY);
+    }
+
+    private static bool TryGetFacingUnitVector(PlayerDirection facing, out double x, out double y)
+    {
+        (x, y) = facing switch
+        {
+            PlayerDirection.Up => (0d, -1d),
+            PlayerDirection.Right => (1d, 0d),
+            PlayerDirection.Down => (0d, 1d),
+            PlayerDirection.Left => (-1d, 0d),
+            _ => (0d, 0d),
+        };
+
+        return !(Math.Abs(x) < 0.001d && Math.Abs(y) < 0.001d);
+    }
+
+    private static bool TryParseInteractableIndex(string interactableId, string prefix, out int index)
+    {
+        index = -1;
+        if (!interactableId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return int.TryParse(interactableId[prefix.Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out index);
+    }
+
     protected bool ShowRoomInteractionProgress => TryGetRoomInteractionProgressState(out _);
 
     protected string GetRoomInteractionProgressStyle()
@@ -415,14 +863,10 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return string.Empty;
         }
 
-        var width = Math.Clamp(Math.Max(progressState.AnchorRect.Width + 48d, 180d), 180d, 260d);
-        var left = Math.Clamp(progressState.AnchorRect.CenterX - (width / 2d), 22d, RoomSize - width - 22d);
-        var height = 56d;
-        var top = progressState.AnchorRect.Y >= RoomSize / 2d
-            ? progressState.AnchorRect.Y - height - 18d
-            : progressState.AnchorRect.Bottom + 18d;
-        top = Math.Clamp(top, 22d, RoomSize - height - 22d);
-        return $"left: {ToPositionPercentX(left, width)}%; top: {ToPercentY(top)}%; width: {ToLengthPercentX(width)}%;";
+        var labelLength = Math.Max(10, progressState.Label.Length);
+        var width = Math.Clamp(220d + (labelLength * 3.2d), 250d, 380d);
+        var left = Math.Clamp((RoomSize - width) / 2d, 18d, RoomSize - width - 18d);
+        return $"left: {ToPositionPercentX(left, width)}%; bottom: 2.4%; width: {ToLengthPercentX(width)}%;";
     }
 
     protected string GetRoomInteractionProgressFillStyle()
@@ -438,14 +882,132 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected string GetRoomInteractionProgressLabel() =>
         TryGetRoomInteractionProgressState(out var progressState) ? progressState.Label : string.Empty;
 
+    protected string GetWorldPuzzleStatusLabel()
+    {
+        if (CurrentRoomState?.Puzzle is not IWorldInteractivePuzzle worldPuzzle)
+        {
+            return "Unknown";
+        }
+
+        return worldPuzzle.Status switch
+        {
+            PuzzleStatus.NotStarted => "Idle",
+            PuzzleStatus.Active => "Active",
+            PuzzleStatus.Solved => "Solved",
+            PuzzleStatus.FailedTemporary => "Rejected",
+            PuzzleStatus.Resetting => "Resetting",
+            PuzzleStatus.Cooldown => "Cooldown",
+            PuzzleStatus.HintAvailable => "Hint Ready",
+            PuzzleStatus.HintConsumed => "Hint Used",
+            _ => worldPuzzle.Status.ToString(),
+        };
+    }
+
+    protected string GetWorldPuzzleStatusCssClass()
+    {
+        if (CurrentRoomState?.Puzzle is not IWorldInteractivePuzzle worldPuzzle)
+        {
+            return "state-idle";
+        }
+
+        return worldPuzzle.Status switch
+        {
+            PuzzleStatus.Active => "state-active",
+            PuzzleStatus.Solved => "state-solved",
+            PuzzleStatus.FailedTemporary => "state-failed",
+            PuzzleStatus.Resetting => "state-resetting",
+            PuzzleStatus.Cooldown => "state-cooldown",
+            PuzzleStatus.HintAvailable => "state-hint",
+            PuzzleStatus.HintConsumed => "state-hint",
+            _ => "state-idle",
+        };
+    }
+
+    protected bool TryGetWorldPuzzleCardProgress(out double progress, out string label)
+    {
+        progress = 0d;
+        label = string.Empty;
+
+        if (CurrentRoomState?.Puzzle is not IWorldInteractivePuzzle worldPuzzle ||
+            !worldPuzzle.TryGetProgressState(out var progressState))
+        {
+            return false;
+        }
+
+        progress = Math.Clamp(progressState.Progress, 0d, 1d);
+        label = progressState.Label;
+        return true;
+    }
+
+    protected IReadOnlyList<WorldPuzzleStat> GetWorldPuzzleStats()
+    {
+        if (CurrentRoomState?.Puzzle is null)
+        {
+            return [];
+        }
+
+        return CurrentRoomState.Puzzle switch
+        {
+            SignalRoutingChamberPuzzle signal => [
+                new WorldPuzzleStat("Stable", $"{signal.MatchedRelayCount}/{Math.Max(1, signal.RequiredRelayCount)}"),
+                new WorldPuzzleStat("Active", signal.ActiveRelayCount.ToString(CultureInfo.InvariantCulture)),
+                new WorldPuzzleStat("Overload", signal.OverloadRelayCount.ToString(CultureInfo.InvariantCulture)),
+            ],
+            EchoMemoryChamberPuzzle echo => [
+                new WorldPuzzleStat("Sequence", $"{echo.EnteredCount}/{echo.SequenceLength}"),
+                new WorldPuzzleStat("Replay", echo.ReplayChargesRemaining.ToString(CultureInfo.InvariantCulture)),
+            ],
+            DualLayerRealityPuzzle dualLayer => [
+                new WorldPuzzleStat("Sync", $"{dualLayer.PairStep}/{Math.Max(1, dualLayer.PairCount)}"),
+                new WorldPuzzleStat("Layer", dualLayer.IsAlphaLayerActive ? "A" : "B"),
+            ],
+            BehaviorAdaptivePuzzle behavior => [
+                new WorldPuzzleStat("Depth", $"{behavior.SequenceStep}/{Math.Max(1, behavior.SequenceLength)}"),
+                new WorldPuzzleStat("Bias", $"{behavior.AdaptedHorizontalBias:+0.00;-0.00;0.00}"),
+            ],
+            RecursiveRoomMutationPuzzle recursive => [
+                new WorldPuzzleStat("Loop", $"{recursive.LoopIndex}/{Math.Max(1, recursive.LoopCount)}"),
+                new WorldPuzzleStat("Signal", recursive.IsRevealVisible ? "Visible" : "Hidden"),
+            ],
+            LivingGridPuzzle grid => [
+                new WorldPuzzleStat("Aligned", $"{grid.MatchedCells}/{Math.Max(1, grid.CellCount)}"),
+                new WorldPuzzleStat("Moves", grid.MoveCount.ToString(CultureInfo.InvariantCulture)),
+            ],
+            SymbolDecoderPuzzle symbol => [
+                new WorldPuzzleStat("Phase", symbol.CurrentValue.ToString("00", CultureInfo.InvariantCulture)),
+                new WorldPuzzleStat("Target", symbol.TargetValue.ToString("00", CultureInfo.InvariantCulture)),
+                new WorldPuzzleStat("Coherence", symbol.Coherence.ToString(CultureInfo.InvariantCulture)),
+            ],
+            TimeWindowPuzzle timeWindow => [
+                new WorldPuzzleStat("Window", $"{timeWindow.Step}/{Math.Max(1, timeWindow.StepCount)}"),
+                new WorldPuzzleStat("Gate", (timeWindow.OpenGateIndex + 1).ToString(CultureInfo.InvariantCulture)),
+            ],
+            FalseSolutionPuzzle falseRoute => [
+                new WorldPuzzleStat("Trusted", $"{falseRoute.RealStep}/{Math.Max(1, falseRoute.SequenceLength)}"),
+                new WorldPuzzleStat("Decoy", falseRoute.DecoyPressure.ToString(CultureInfo.InvariantCulture)),
+            ],
+            HeatPressureBalancePuzzle heatPressure => [
+                new WorldPuzzleStat("Heat", Math.Round(heatPressure.Heat).ToString("0", CultureInfo.InvariantCulture)),
+                new WorldPuzzleStat("Pressure", Math.Round(heatPressure.Pressure).ToString("0", CultureInfo.InvariantCulture)),
+                new WorldPuzzleStat("Band", heatPressure.IsInStableBand ? "Stable" : "Adjust"),
+            ],
+            HiddenRulePrimePuzzle hiddenRule => [
+                new WorldPuzzleStat("Confirmed", $"{hiddenRule.Progress}/{Math.Max(1, hiddenRule.RequiredCount)}"),
+            ],
+            _ => [],
+        };
+    }
+
     protected string MovementHintText => CanInteractWithPuzzleConsole
         ? IsCoopRun
             ? "Move with WASD or the arrow keys. Walk to your blue console and press E to work the room puzzle."
             : "Move with WASD or the arrow keys. Walk to the console and press E to work the room puzzle."
+        : CurrentRoomState?.Puzzle is IWorldInteractivePuzzle
+            ? "Move with WASD or the arrow keys. Press E to interact with nearby puzzle nodes."
         : UsesRoomNativePuzzleInteraction
             ? "Move with WASD or the arrow keys. Solve this room by stepping onto or moving the active room elements."
             : IsCoopRun
-                ? "Move with WASD or the arrow keys. Both players must vote the same doorway to change rooms."
+                ? "Move with WASD or the arrow keys. Both explorers must vote the same doorway to change rooms."
                 : "Move with WASD or the arrow keys.";
     protected string PuzzleConsolePromptText => IsCoopRun
         ? "Press E at your blue console to access the puzzle interface."
@@ -499,7 +1061,287 @@ public partial class Game : ComponentBase, IAsyncDisposable
             ? style
             : "linear-gradient(145deg, #293140 0%, #151b26 100%)";
 
-        return $"background: {background};";
+        var playerCenterX = PlayerX + (PlayerSize / 2d);
+        var playerCenterY = PlayerY + (PlayerSize / 2d);
+        var radarCoreRadius = GetCurrentRadarCoreRadius();
+        var radarDetailRadius = GetCurrentRadarDetailRadius();
+        var radarOuterRadius = GetCurrentRadarOuterRadius();
+        var radarPulseStrength = GetRadarPulseStrength();
+        var radarWallProximity = GetRadarWallProximityScale(playerCenterX, playerCenterY);
+        var proximityCoreScale = 0.7d + (radarWallProximity * 0.3d);
+        var proximityDetailScale = 0.62d + (radarWallProximity * 0.38d);
+        var proximityOuterScale = 0.56d + (radarWallProximity * 0.44d);
+        var proximityPulseScale = 0.54d + (radarWallProximity * 0.46d);
+
+        radarCoreRadius *= proximityCoreScale;
+        radarDetailRadius *= proximityDetailScale;
+        radarOuterRadius *= proximityOuterScale;
+        radarPulseStrength *= proximityPulseScale;
+
+        radarDetailRadius = Math.Max(radarCoreRadius + 8d, radarDetailRadius);
+        radarOuterRadius = Math.Max(radarDetailRadius + 20d, radarOuterRadius);
+        var radarPulseScale = Math.Clamp((radarOuterRadius / 176d), 2.1d, 4.4d);
+        var radarInterference = IsRadarInterferenceActive() ? 1d : 0d;
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"background: {background}; " +
+            $"--radar-x: {ToPositionPercentX(playerCenterX, 0d):0.###}%; " +
+            $"--radar-y: {ToPercentY(playerCenterY):0.###}%; " +
+            $"--radar-core-radius: {ToPercentY(radarCoreRadius):0.###}%; " +
+            $"--radar-detail-radius: {ToPercentY(radarDetailRadius):0.###}%; " +
+            $"--radar-outer-radius: {ToPercentY(radarOuterRadius):0.###}%; " +
+            $"--radar-pulse-scale: {radarPulseScale:0.###}; " +
+            $"--radar-pulse-strength: {radarPulseStrength:0.###}; " +
+            $"--radar-wall-proximity: {radarWallProximity:0.###}; " +
+            $"--radar-interference: {radarInterference:0.###};");
+    }
+
+    protected bool IsRadarInterferenceVisible => IsRadarInterferenceActive();
+
+    protected string GetRadarBandClass(PlayAreaRect rect, bool anomalySensitive = false)
+    {
+        var signal = GetRadarSignalForPoint(rect.CenterX, rect.CenterY, anomalySensitive);
+        return signal switch
+        {
+            >= 0.86d => "radar-core",
+            >= 0.42d => "radar-reconstructed",
+            _ => "radar-silhouette",
+        };
+    }
+
+    private string GetRadarSignalStyleForRect(PlayAreaRect rect, bool anomalySensitive = false)
+    {
+        var signal = GetRadarSignalForPoint(rect.CenterX, rect.CenterY, anomalySensitive);
+        return string.Create(CultureInfo.InvariantCulture, $"--radar-signal: {signal:0.###};");
+    }
+
+    private string AppendRadarSignalStyle(string style, PlayAreaRect rect, bool anomalySensitive = false)
+    {
+        var normalizedStyle = style.EndsWith(';') ? style : $"{style};";
+        return $"{normalizedStyle} {GetRadarSignalStyleForRect(rect, anomalySensitive)}";
+    }
+
+    private double GetCurrentRadarRangeMultiplier()
+    {
+        var now = DateTime.UtcNow;
+        return now < _visionBoostUntilUtc ? 1.2d : 1d;
+    }
+
+    private double GetCurrentRadarCoreRadius() => RadarCoreRadius * GetCurrentRadarRangeMultiplier();
+
+    private double GetCurrentRadarDetailRadius()
+    {
+        var pulseExpansion = GetRadarPulseStrength() * 20d;
+        return (RadarDetailRadius * GetCurrentRadarRangeMultiplier()) + pulseExpansion;
+    }
+
+    private double GetCurrentRadarOuterRadius()
+    {
+        var pulseExpansion = GetRadarPulseStrength() * 32d;
+        return (RadarOuterRadius * GetCurrentRadarRangeMultiplier()) + pulseExpansion;
+    }
+
+    private static double GetRadarWallProximityScale(double playerCenterX, double playerCenterY)
+    {
+        var distanceToLeftWall = playerCenterX - HorizontalWallCollisionInset;
+        var distanceToRightWall = (RoomSize - HorizontalWallCollisionInset) - playerCenterX;
+        var distanceToTopWall = playerCenterY - WallThickness;
+        var distanceToBottomWall = (RoomSize - WallThickness) - playerCenterY;
+        var nearestWallDistance = Math.Min(
+            Math.Min(distanceToLeftWall, distanceToRightWall),
+            Math.Min(distanceToTopWall, distanceToBottomWall));
+        var safeDistance = Math.Max(0d, nearestWallDistance);
+        return Math.Clamp(safeDistance / Math.Max(1d, RadarOuterRadius), 0d, 1d);
+    }
+
+    private static double GetRadarPulseCycleProgress()
+    {
+        var nowSeconds = DateTime.UtcNow.TimeOfDay.TotalSeconds;
+        return (nowSeconds % RadarPulseCycleSeconds) / RadarPulseCycleSeconds;
+    }
+
+    private double GetRadarPulseStrength()
+    {
+        var cycleProgress = GetRadarPulseCycleProgress();
+        var pulsePeak = Math.Exp(-Math.Pow((cycleProgress - 0.16d) / 0.13d, 2d));
+        return Math.Clamp(pulsePeak, 0d, 1d);
+    }
+
+    private double GetRadarSignalForPoint(double x, double y, bool anomalySensitive = false)
+    {
+        var playerCenterX = PlayerX + (PlayerSize / 2d);
+        var playerCenterY = PlayerY + (PlayerSize / 2d);
+        var deltaX = x - playerCenterX;
+        var deltaY = y - playerCenterY;
+        var distance = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+        if (distance <= 0.0001d)
+        {
+            return 1d;
+        }
+
+        var directionX = deltaX / distance;
+        var directionY = deltaY / distance;
+        var collisionDistance = GetRadarCollisionDistance(playerCenterX, playerCenterY, directionX, directionY);
+
+        var coreRadius = GetCurrentRadarCoreRadius();
+        var detailRadius = GetCurrentRadarDetailRadius();
+        var outerRadius = Math.Min(GetCurrentRadarOuterRadius(), collisionDistance);
+        if (outerRadius <= 0.01d)
+        {
+            return 0.06d;
+        }
+
+        detailRadius = Math.Min(detailRadius, Math.Max(coreRadius + 1d, outerRadius * 0.72d));
+        coreRadius = Math.Min(coreRadius, Math.Max(20d, detailRadius * 0.62d));
+
+        var wallCollisionDampen = collisionDistance < GetCurrentRadarOuterRadius()
+            ? Math.Clamp(collisionDistance / Math.Max(1d, GetCurrentRadarOuterRadius()), 0.58d, 1d)
+            : 1d;
+
+        double signal;
+        if (distance <= coreRadius)
+        {
+            signal = 1d;
+        }
+        else if (distance <= detailRadius)
+        {
+            var t = (distance - coreRadius) / Math.Max(1d, detailRadius - coreRadius);
+            signal = 1d - (0.3d * t);
+        }
+        else if (distance <= outerRadius)
+        {
+            var t = (distance - detailRadius) / Math.Max(1d, outerRadius - detailRadius);
+            signal = 0.7d - (0.54d * t);
+        }
+        else
+        {
+            signal = 0.08d;
+        }
+
+        signal *= wallCollisionDampen;
+
+        if (anomalySensitive && IsRadarInterferenceActive())
+        {
+            var flicker = (Math.Sin(DateTime.UtcNow.TimeOfDay.TotalMilliseconds / 140d) + 1d) * 0.07d;
+            signal = Math.Max(0.06d, signal - flicker);
+        }
+
+        return Math.Clamp(signal, 0.06d, 1d);
+    }
+
+    private double GetRadarCollisionDistance(double originX, double originY, double directionX, double directionY)
+    {
+        const double epsilon = 0.0001d;
+        var clampedOriginX = Math.Clamp(originX, HorizontalWallCollisionInset + 1d, RoomSize - HorizontalWallCollisionInset - 1d);
+        var clampedOriginY = Math.Clamp(originY, WallThickness + 1d, RoomSize - WallThickness - 1d);
+
+        var tX = double.PositiveInfinity;
+        if (directionX > epsilon)
+        {
+            tX = ((RoomSize - HorizontalWallCollisionInset) - clampedOriginX) / directionX;
+        }
+        else if (directionX < -epsilon)
+        {
+            tX = (HorizontalWallCollisionInset - clampedOriginX) / directionX;
+        }
+
+        var tY = double.PositiveInfinity;
+        if (directionY > epsilon)
+        {
+            tY = ((RoomSize - WallThickness) - clampedOriginY) / directionY;
+        }
+        else if (directionY < -epsilon)
+        {
+            tY = (WallThickness - clampedOriginY) / directionY;
+        }
+
+        if (tX <= 0d)
+        {
+            tX = double.PositiveInfinity;
+        }
+
+        if (tY <= 0d)
+        {
+            tY = double.PositiveInfinity;
+        }
+
+        var hitDistance = Math.Min(tX, tY);
+        if (double.IsInfinity(hitDistance))
+        {
+            return GetCurrentRadarOuterRadius();
+        }
+
+        return Math.Max(16d, hitDistance - RadarWallCollisionPadding);
+    }
+
+    private double GetDistanceToRectCenter(PlayAreaRect rect)
+    {
+        var playerCenterX = PlayerX + (PlayerSize / 2d);
+        var playerCenterY = PlayerY + (PlayerSize / 2d);
+        var deltaX = rect.CenterX - playerCenterX;
+        var deltaY = rect.CenterY - playerCenterY;
+        return Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+    }
+
+    private double GetWorldInteractableDistance(PuzzleWorldInteractable interactable)
+    {
+        if (UsesSurfaceDistance(interactable))
+        {
+            return GetDistanceToRectSurface(interactable.Bounds);
+        }
+
+        return GetDistanceToRectCenter(interactable.Bounds);
+    }
+
+    private bool UsesSurfaceDistance(PuzzleWorldInteractable interactable) =>
+        interactable.CssClass.Contains("living-grid-cell", StringComparison.OrdinalIgnoreCase) ||
+        interactable.CssClass.Contains("hidden-rule-tile", StringComparison.OrdinalIgnoreCase);
+
+    private bool RequiresFullStepForInteraction(PuzzleWorldInteractable interactable) =>
+        interactable.CssClass.Contains("echo-pad", StringComparison.OrdinalIgnoreCase) ||
+        interactable.CssClass.Contains("living-grid-cell", StringComparison.OrdinalIgnoreCase) ||
+        interactable.CssClass.Contains("hidden-rule-tile", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsPlayerFullyOnInteractable(PuzzleWorldInteractable interactable)
+    {
+        var playerBounds = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
+        return playerBounds.Left >= interactable.Bounds.Left &&
+               playerBounds.Right <= interactable.Bounds.Right &&
+               playerBounds.Top >= interactable.Bounds.Top &&
+               playerBounds.Bottom <= interactable.Bounds.Bottom;
+    }
+
+    private double GetDistanceToRectSurface(PlayAreaRect rect)
+    {
+        var playerCenterX = PlayerX + (PlayerSize / 2d);
+        var playerCenterY = PlayerY + (PlayerSize / 2d);
+
+        var dx = Math.Max(Math.Abs(playerCenterX - rect.CenterX) - (rect.Width / 2d), 0d);
+        var dy = Math.Max(Math.Abs(playerCenterY - rect.CenterY) - (rect.Height / 2d), 0d);
+        return Math.Sqrt((dx * dx) + (dy * dy));
+    }
+
+    private bool IsRadarInterferenceActive()
+    {
+        if (CurrentRoomState?.Puzzle is null || IsCurrentPuzzleSolved)
+        {
+            return false;
+        }
+
+        if (CanInteractWithPuzzleConsole &&
+            GetDistanceToRectCenter(GetLocalPuzzleConsoleBounds()) <= RadarInterferenceDistance)
+        {
+            return true;
+        }
+
+        if (TryGetRoomInteractionProgressState(out var progressState) &&
+            GetDistanceToRectCenter(progressState.AnchorRect) <= RadarInterferenceDistance)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     protected string GetPlayerStyle() =>
@@ -509,7 +1351,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
         $"facing-{PlayerAnimationDirections[PlayerFacing]} {PlayerSpriteStates[PlayerFacing]} {(IsMoving ? "is-moving" : string.Empty)}";
 
     protected string GetRectStyle(PlayAreaRect rect) =>
-        $"left: {ToPositionPercentX(rect.X, rect.Width)}%; top: {ToPercentY(rect.Y)}%; width: {ToLengthPercentX(rect.Width)}%; height: {ToPercentY(rect.Height)}%;";
+        AppendRadarSignalStyle(
+            $"left: {ToPositionPercentX(rect.X, rect.Width)}%; top: {ToPercentY(rect.Y)}%; width: {ToLengthPercentX(rect.Width)}%; height: {ToPercentY(rect.Height)}%;",
+            rect);
 
     protected IEnumerable<(double X1, double Y1, double X2, double Y2)> GetYarnLineSegments(YarnUntanglePuzzle puzzle)
     {
@@ -909,6 +1753,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         {
             try
             {
+                await PersistBehaviorProfilesAsync(force: true);
                 await JS.InvokeVoidAsync("enigmaGame.disposeInput");
                 await JS.InvokeVoidAsync("enigmaGame.disposeCoopSocket");
                 await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
@@ -956,6 +1801,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return;
         }
 
+        if (_jsReady)
+        {
+            await TryPlayRadarPingAsync();
+        }
+
         UpdateTimedItemEffects();
 
         if (_bannerExpiresAtUtc != DateTime.MinValue && DateTime.UtcNow >= _bannerExpiresAtUtc)
@@ -973,6 +1823,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
             {
                 PlayerBounds = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize),
                 DeltaTimeSeconds = deltaTime,
+                NowSeconds = _sessionStopwatch.Elapsed.TotalSeconds,
+                PlayerFacing = PlayerFacing,
             });
 
             if (_jsReady && CurrentRoomState.Puzzle is HarmonicPhasePuzzle harmonicPhase)
@@ -1061,7 +1913,33 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         await PumpCoopAsync();
         await SyncLivePlayerStateAsync();
+        await PersistBehaviorProfilesAsync();
         StateHasChanged();
+    }
+
+    private async ValueTask TryPlayRadarPingAsync()
+    {
+        var cycleProgress = GetRadarPulseCycleProgress();
+        var shiftedProgress = cycleProgress + RadarPingLeadFraction;
+        if (shiftedProgress >= 1d)
+        {
+            shiftedProgress -= 1d;
+        }
+
+        var phaseIndex = Math.Clamp((int)Math.Floor(shiftedProgress * RadarPulseEventsPerCycle), 0, RadarPulseEventsPerCycle - 1);
+        if (_lastRadarPulsePhaseIndex < 0)
+        {
+            _lastRadarPulsePhaseIndex = phaseIndex;
+            return;
+        }
+
+        if (phaseIndex == _lastRadarPulsePhaseIndex)
+        {
+            return;
+        }
+
+        _lastRadarPulsePhaseIndex = phaseIndex;
+        await JS.InvokeVoidAsync("enigmaGame.playRadarPing");
     }
 
     private async Task CompleteRunAsync()
@@ -1084,6 +1962,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
             UsedItems = BuildSelectedItemIds(),
         };
 
+        await PersistBehaviorProfilesAsync(force: true);
         await JS.InvokeVoidAsync("enigmaGame.clearActiveGameSession");
         await JS.InvokeVoidAsync("enigmaGame.clearLivePlayerState");
         await JS.InvokeVoidAsync("enigmaGame.disposeInput");
@@ -1161,7 +2040,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
             }
         }
 
-        if (CanInteractWithPuzzleConsole && IntersectsAnyPuzzleConsoleBase(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize)))
+        if (CanInteractWithPuzzleConsole &&
+            IntersectsAnyPuzzleConsoleBase(GetPuzzleConsoleCollisionBounds(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize))))
         {
             PlayerX = previousX;
             PlayerY = previousY;
@@ -1213,6 +2093,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         if (!roomSolvedForExit)
         {
             ClampToBoundary(direction);
+            RecordDoorRushAttempt();
             ShowBanner(IsCoopRun ? "This room stays sealed until the shared solve syncs." : "Solve the room puzzle before leaving.", 1.0d);
             return true;
         }
@@ -1242,6 +2123,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         CurrentRoom = nextRoom;
         CurrentRoomState = _roomStates[nextRoom.Coordinates];
         _roomInteractionWasActive = false;
+        _nearestWorldInteractableId = null;
         ClosePuzzleOverlay();
         switch (direction)
         {
@@ -1299,15 +2181,32 @@ public partial class Game : ComponentBase, IAsyncDisposable
         var doorEnd = doorStart + DoorWidth;
         yield return CreateWallSegment(isHorizontal, fixedAxisValue, 0d, doorStart, side);
         yield return CreateWallSegment(isHorizontal, fixedAxisValue, doorEnd, RoomSize - doorEnd, side);
-        yield return new WallSegment($"door-glow {side}", isHorizontal
+        var doorRect = isHorizontal
+            ? new PlayAreaRect(doorStart, edge, DoorWidth, WallThickness)
+            : new PlayAreaRect(edge, doorStart, WallThickness, DoorWidth);
+        var doorStyle = isHorizontal
             ? $"left: {ToMappedPercentX(doorStart)}%; top: {ToPercentY(edge)}%; width: {ToMappedSpanPercentX(DoorWidth)}%; height: {ToPercentY(WallThickness)}%;"
-            : $"left: {ToPositionPercentX(edge, WallThickness)}%; top: {ToPercentY(doorStart)}%; width: {ToLengthPercentX(WallThickness)}%; height: {ToPercentY(DoorWidth)}%;");
+            : $"left: {ToPositionPercentX(edge, WallThickness)}%; top: {ToPercentY(doorStart)}%; width: {ToLengthPercentX(WallThickness)}%; height: {ToPercentY(DoorWidth)}%;";
+        yield return new WallSegment(
+            $"door-glow {side} {GetRadarBandClass(doorRect, anomalySensitive: true)}",
+            AppendRadarSignalStyle(doorStyle, doorRect, anomalySensitive: true),
+            doorRect);
     }
 
-    private static WallSegment CreateWallSegment(bool isHorizontal, double fixedAxisValue, double start, double length, string side) =>
-        isHorizontal
-            ? new WallSegment(side, $"left: {ToMappedPercentX(start)}%; top: {ToPercentY(fixedAxisValue)}%; width: {ToMappedSpanPercentX(length)}%; height: {ToPercentY(WallThickness)}%;")
-            : new WallSegment(side, $"left: {ToPositionPercentX(fixedAxisValue, WallThickness)}%; top: {ToPercentY(start)}%; width: {ToLengthPercentX(WallThickness)}%; height: {ToPercentY(length)}%;");
+    private WallSegment CreateWallSegment(bool isHorizontal, double fixedAxisValue, double start, double length, string side)
+    {
+        var segmentRect = isHorizontal
+            ? new PlayAreaRect(start, fixedAxisValue, length, WallThickness)
+            : new PlayAreaRect(fixedAxisValue, start, WallThickness, length);
+        var segmentStyle = isHorizontal
+            ? $"left: {ToMappedPercentX(start)}%; top: {ToPercentY(fixedAxisValue)}%; width: {ToMappedSpanPercentX(length)}%; height: {ToPercentY(WallThickness)}%;"
+            : $"left: {ToPositionPercentX(fixedAxisValue, WallThickness)}%; top: {ToPercentY(start)}%; width: {ToLengthPercentX(WallThickness)}%; height: {ToPercentY(length)}%;";
+
+        return new WallSegment(
+            $"{side} {GetRadarBandClass(segmentRect)}",
+            AppendRadarSignalStyle(segmentStyle, segmentRect),
+            segmentRect);
+    }
 
     private bool IsWithinDoorway(PlayerDirection direction)
     {
@@ -1329,10 +2228,10 @@ public partial class Game : ComponentBase, IAsyncDisposable
         switch (direction)
         {
             case PlayerDirection.Left:
-                PlayerX = WallThickness;
+                PlayerX = HorizontalWallCollisionInset;
                 break;
             case PlayerDirection.Right:
-                PlayerX = RoomSize - PlayerSize - WallThickness;
+                PlayerX = RoomSize - PlayerSize - HorizontalWallCollisionInset;
                 break;
             case PlayerDirection.Up:
                 PlayerY = WallThickness;
@@ -1345,8 +2244,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     private void ClampInsideRoomWalls()
     {
-        var minX = CanUseDoorBand(PlayerDirection.Left) ? 0d : WallThickness;
-        var maxX = CanUseDoorBand(PlayerDirection.Right) ? RoomSize - PlayerSize : RoomSize - PlayerSize - WallThickness;
+        var minX = CanUseDoorBand(PlayerDirection.Left) ? 0d : HorizontalWallCollisionInset;
+        var maxX = CanUseDoorBand(PlayerDirection.Right) ? RoomSize - PlayerSize : RoomSize - PlayerSize - HorizontalWallCollisionInset;
         var minY = CanUseDoorBand(PlayerDirection.Up) ? 0d : WallThickness;
         var maxY = CanUseDoorBand(PlayerDirection.Down) ? RoomSize - PlayerSize : RoomSize - PlayerSize - WallThickness;
 
@@ -1357,7 +2256,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private bool CanUseDoorBand(PlayerDirection direction) =>
         CurrentRoom is not null &&
         CurrentRoom.Connections.HasDoor(direction) &&
-        IsWithinDoorway(direction);
+        IsWithinDoorway(direction) &&
+        (IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState?.Puzzle.IsCompleted == true);
 
     private void CenterPlayer()
     {
@@ -1395,9 +2295,16 @@ public partial class Game : ComponentBase, IAsyncDisposable
         _timerPauseUntilUtc = DateTime.MinValue;
         _visionBoostUntilUtc = DateTime.MinValue;
         _pathRevealUntilUtc = DateTime.MinValue;
+        _lastRadarPulsePhaseIndex = -1;
         _lastPlayerStateSyncUtc = DateTime.MinValue;
         _playerStateDirty = true;
         _roomInteractionWasActive = false;
+        _nearestWorldInteractableId = null;
+        _behaviorProfileLoaded = false;
+        _behaviorProfileDirty = false;
+        _lastBehaviorProfilePersistUtc = DateTime.MinValue;
+        _globalBehaviorProfile = new BehaviorProfileSnapshot();
+        _seedBehaviorProfile = new BehaviorProfileSnapshot();
     }
 
     private static string FormatElapsed(TimeSpan elapsed) =>
@@ -1439,29 +2346,65 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private bool TryGetRoomInteractionProgressState(out RoomInteractionProgressState progressState)
     {
         progressState = default!;
-        if (CurrentRoomState?.Puzzle is null)
+        if (CurrentRoomState?.Puzzle is null || CurrentRoomState.Puzzle.IsCompleted)
         {
             return false;
+        }
+
+        if (CurrentRoomState.Puzzle is IWorldInteractivePuzzle worldPuzzle &&
+            worldPuzzle.TryGetProgressState(out var worldProgress))
+        {
+            var normalizedProgress = Math.Clamp(worldProgress.Progress, 0d, 1d);
+            if (normalizedProgress >= 0.999d)
+            {
+                return false;
+            }
+
+            progressState = new RoomInteractionProgressState(
+                worldProgress.AnchorRect,
+                normalizedProgress,
+                worldProgress.Label);
+            return true;
         }
 
         switch (CurrentRoomState.Puzzle)
         {
             case PressurePlatePuzzle pressurePlate when pressurePlate.Progress > 0d:
+                if (pressurePlate.Progress >= 0.999d)
+                {
+                    return false;
+                }
+
                 progressState = new(pressurePlate.PlateBounds, pressurePlate.Progress, "Plate Charge");
                 return true;
             case ZoneActivationPuzzle zoneActivation when zoneActivation.CurrentZoneIndex < zoneActivation.Zones.Count && zoneActivation.HoldProgress > 0d:
+                if (zoneActivation.HoldProgress >= 0.999d)
+                {
+                    return false;
+                }
+
                 progressState = new(
                     zoneActivation.Zones[zoneActivation.CurrentZoneIndex],
                     zoneActivation.HoldProgress,
                     $"Beacon {zoneActivation.CurrentZoneIndex + 1}/{zoneActivation.Zones.Count}");
                 return true;
             case DelayedActivationSequencePuzzle delayed when !delayed.IsWaitingForNextZone && delayed.HoldProgress > 0d:
+                if (delayed.HoldProgress >= 0.999d)
+                {
+                    return false;
+                }
+
                 progressState = new(
                     delayed.Zones[delayed.ActiveZoneIndex],
                     delayed.HoldProgress,
                     $"Zone {delayed.CurrentStepIndex + 1}/{delayed.Order.Count}");
                 return true;
             case RecursiveActivationSequencePuzzle recursive when recursive.CurrentZoneIndex >= 0 && recursive.HoldProgress > 0d:
+                if (recursive.HoldProgress >= 0.999d)
+                {
+                    return false;
+                }
+
                 progressState = new(
                     recursive.Zones[recursive.CurrentZoneIndex],
                     recursive.HoldProgress,
@@ -1477,6 +2420,16 @@ public partial class Game : ComponentBase, IAsyncDisposable
         if (CurrentRoomState?.Puzzle is null)
         {
             return false;
+        }
+
+        if (CurrentRoomState.Puzzle is IWorldInteractivePuzzle worldPuzzle)
+        {
+            if (TryFindNearestWorldInteractableCandidate(worldPuzzle, null) is not null)
+            {
+                return true;
+            }
+
+            return worldPuzzle.TryGetProgressState(out var worldProgress) && worldProgress.Progress > 0.001d;
         }
 
         var playerBounds = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
@@ -1616,20 +2569,40 @@ public partial class Game : ComponentBase, IAsyncDisposable
         return Math.Sqrt((dx * dx) + (dy * dy));
     }
 
-    private static PlayAreaRect GetPuzzleConsoleBaseBounds(PlayAreaRect consoleBounds) =>
+    private static IEnumerable<PlayAreaRect> GetPuzzleConsoleBarrierBounds(PlayAreaRect consoleBounds)
+    {
+        // Keep side blocking tight so players can approach close to the console edges.
+        yield return new PlayAreaRect(
+            consoleBounds.X + (consoleBounds.Width * 0.29d),
+            consoleBounds.Y + (consoleBounds.Height * 0.74d),
+            consoleBounds.Width * 0.42d,
+            consoleBounds.Height * 0.16d);
+
+        // Add a lower lip barrier so the console base blocks from underneath.
+        yield return new PlayAreaRect(
+            consoleBounds.X + (consoleBounds.Width * 0.33d),
+            consoleBounds.Y + (consoleBounds.Height * 0.88d),
+            consoleBounds.Width * 0.34d,
+            consoleBounds.Height * 0.16d);
+    }
+
+    private static PlayAreaRect GetPuzzleConsoleCollisionBounds(PlayAreaRect playerBounds) =>
         new(
-            consoleBounds.X + (consoleBounds.Width * 0.2d),
-            consoleBounds.Y + (consoleBounds.Height * 0.72d),
-            consoleBounds.Width * 0.6d,
-            consoleBounds.Height * 0.2d);
+            playerBounds.X + (playerBounds.Width * 0.22d),
+            playerBounds.Y + (playerBounds.Height * 0.5d),
+            playerBounds.Width * 0.56d,
+            playerBounds.Height * 0.46d);
 
     private bool IntersectsAnyPuzzleConsoleBase(PlayAreaRect playerBounds)
     {
         foreach (var puzzleConsole in GetActivePuzzleConsoles())
         {
-            if (GetPuzzleConsoleBaseBounds(puzzleConsole.Bounds).Intersects(playerBounds))
+            foreach (var barrierBounds in GetPuzzleConsoleBarrierBounds(puzzleConsole.Bounds))
             {
-                return true;
+                if (barrierBounds.Intersects(playerBounds))
+                {
+                    return true;
+                }
             }
         }
 
@@ -1711,7 +2684,14 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
         var deltaY = end.Y - start.Y;
         var length = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
         var angle = Math.Atan2(deltaY, deltaX) * (180d / Math.PI);
-        return $"left: {Math.Round((scaledStartX / RenderWidth) * 100d, 4)}%; top: {ToPercentY(start.Y)}%; width: {ToLengthPercentX(length)}%; transform: rotate({Math.Round(angle, 2)}deg);";
+        var midpoint = new PlayAreaRect(
+            (start.X + end.X) / 2d,
+            (start.Y + end.Y) / 2d,
+            1d,
+            1d);
+        return AppendRadarSignalStyle(
+            $"left: {Math.Round((scaledStartX / RenderWidth) * 100d, 4)}%; top: {ToPercentY(start.Y)}%; width: {ToLengthPercentX(length)}%; transform: rotate({Math.Round(angle, 2)}deg);",
+            midpoint);
     }
 
     protected static string GetModifierLabel(RecursiveZoneModifier modifier) => modifier switch
@@ -1725,6 +2705,50 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
 
     private PuzzleGuide GetCurrentPuzzleGuide() => CurrentRoomState?.Puzzle switch
     {
+        SignalRoutingChamberPuzzle => new(
+            "Route power through stable relays.",
+            "Use E or click on relay nodes. Overload relays vent and briefly lock input.",
+            "Only the correct stable relay set remains active."),
+        EchoMemoryChamberPuzzle => new(
+            "Rebuild the echo sequence.",
+            "Watch the pad reveal, then repeat the pad order by stepping or interacting in sequence.",
+            "The full sequence is repeated without errors."),
+        DualLayerRealityPuzzle => new(
+            "Synchronize both room layers.",
+            "Use the layer toggle, then activate the correct node in each layer pair.",
+            "Every alpha/beta pair is matched."),
+        BehaviorAdaptivePuzzle => new(
+            "Break your habitual route.",
+            "The chamber adapts to your tendencies. Choose deliberately instead of repeating instincts.",
+            "All behavior phases are cleared."),
+        RecursiveRoomMutationPuzzle => new(
+            "Identify the meaningful mutation each loop.",
+            "Interact with the single meaningful anchor each loop. Wrong picks roll one loop back.",
+            "All loops resolve."),
+        LivingGridPuzzle => new(
+            "Stabilize the living grid.",
+            "Stepping or interacting with a tile flips nearby states. Plan ahead and align the board.",
+            "Current grid matches target state."),
+        SymbolDecoderPuzzle => new(
+            "Decode with fixed symbol semantics.",
+            "A, B, C, and D always apply the same operations every run.",
+            "Decoder value matches target."),
+        TimeWindowPuzzle => new(
+            "Capture the cycle windows.",
+            "Interact only when the expected gate is open in the active cycle.",
+            "All cycle locks complete."),
+        FalseSolutionPuzzle => new(
+            "Ignore deceptive progress.",
+            "Decoy terminals can look correct briefly. Confirm the true route chain.",
+            "True route is fully confirmed."),
+        HeatPressureBalancePuzzle => new(
+            "Hold both systems in equilibrium.",
+            "Use heat/pressure controls and account for delayed effects to keep both systems centered.",
+            "Equilibrium stays stable long enough to lock."),
+        HiddenRulePrimePuzzle => new(
+            "Infer the hidden acceptance rule.",
+            "Test tiles and observe accepted order. There is no explicit rule text.",
+            "The full hidden order is entered."),
         PressurePlatePuzzle => new(
             "Charge the plate until it fully locks.",
             "Stand on the glowing plate inside the room. Leaving early drains its progress.",
@@ -1867,6 +2891,149 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
 
     protected static string FormatAdjustmentSummary(IEnumerable<int> adjustments) =>
         string.Join(" / ", adjustments.Select(FormatSignedDelta));
+
+    private async Task LoadBehaviorProfilesAsync()
+    {
+        if (ParsedSeed is null)
+        {
+            return;
+        }
+
+        var globalKey = GetBehaviorStorageKey(seedSpecific: false);
+        var seedKey = GetBehaviorStorageKey(seedSpecific: true);
+        try
+        {
+            _globalBehaviorProfile = await JS.InvokeAsync<BehaviorProfileSnapshot?>("enigmaGame.localGetJson", globalKey) ?? new BehaviorProfileSnapshot();
+            _seedBehaviorProfile = await JS.InvokeAsync<BehaviorProfileSnapshot?>("enigmaGame.localGetJson", seedKey) ?? new BehaviorProfileSnapshot();
+        }
+        catch
+        {
+            _globalBehaviorProfile = new BehaviorProfileSnapshot();
+            _seedBehaviorProfile = new BehaviorProfileSnapshot();
+        }
+
+        _behaviorProfileLoaded = true;
+    }
+
+    private async Task PersistBehaviorProfilesAsync(bool force = false)
+    {
+        if (!_jsReady || ParsedSeed is null || !_behaviorProfileLoaded || !_behaviorProfileDirty)
+        {
+            return;
+        }
+
+        if (!force && DateTime.UtcNow - _lastBehaviorProfilePersistUtc < TimeSpan.FromMilliseconds(550))
+        {
+            return;
+        }
+
+        var globalKey = GetBehaviorStorageKey(seedSpecific: false);
+        var seedKey = GetBehaviorStorageKey(seedSpecific: true);
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.localSetJson", globalKey, _globalBehaviorProfile);
+            await JS.InvokeVoidAsync("enigmaGame.localSetJson", seedKey, _seedBehaviorProfile);
+            _behaviorProfileDirty = false;
+            _lastBehaviorProfilePersistUtc = DateTime.UtcNow;
+        }
+        catch
+        {
+        }
+    }
+
+    private string GetBehaviorStorageKey(bool seedSpecific)
+    {
+        var normalizedUser = string.IsNullOrWhiteSpace(Username)
+            ? "guest"
+            : Username.Trim().ToLowerInvariant();
+
+        if (!seedSpecific || ParsedSeed is null)
+        {
+            return $"{BehaviorStoragePrefix}.{normalizedUser}.global";
+        }
+
+        return $"{BehaviorStoragePrefix}.{normalizedUser}.{ParsedSeed.RawSeed}";
+    }
+
+    private void RecordBehaviorInteraction(PlayAreaRect interactableBounds)
+    {
+        if (!_behaviorProfileLoaded)
+        {
+            return;
+        }
+
+        var playerCenterX = PlayerX + (PlayerSize / 2d);
+        if (interactableBounds.CenterX < playerCenterX)
+        {
+            _globalBehaviorProfile.LeftInteractions++;
+            _seedBehaviorProfile.LeftInteractions++;
+        }
+        else
+        {
+            _globalBehaviorProfile.RightInteractions++;
+            _seedBehaviorProfile.RightInteractions++;
+        }
+
+        _globalBehaviorProfile.InteractionSamples++;
+        _seedBehaviorProfile.InteractionSamples++;
+        _behaviorProfileDirty = true;
+        ApplyBehaviorProfileToEasyPuzzles();
+    }
+
+    private void RecordDoorRushAttempt()
+    {
+        if (!_behaviorProfileLoaded)
+        {
+            return;
+        }
+
+        _globalBehaviorProfile.DoorRushAttempts++;
+        _seedBehaviorProfile.DoorRushAttempts++;
+        _behaviorProfileDirty = true;
+        ApplyBehaviorProfileToEasyPuzzles();
+    }
+
+    private void ApplyBehaviorProfileToEasyPuzzles()
+    {
+        var (horizontalBias, rushBias) = GetBehaviorBias();
+        foreach (var roomState in _roomStates.Values)
+        {
+            if (roomState.Puzzle is IBehaviorAdaptiveWorldPuzzle adaptivePuzzle)
+            {
+                adaptivePuzzle.ApplyBehaviorProfile(horizontalBias, rushBias);
+            }
+        }
+    }
+
+    private (double HorizontalBias, double RushBias) GetBehaviorBias()
+    {
+        var globalHorizontal = ComputeHorizontalBias(_globalBehaviorProfile);
+        var seedHorizontal = ComputeHorizontalBias(_seedBehaviorProfile);
+        var horizontal = Math.Clamp((globalHorizontal * 0.65d) + (seedHorizontal * 0.35d), -BehaviorAdaptationCap, BehaviorAdaptationCap);
+
+        var globalRush = ComputeRushBias(_globalBehaviorProfile);
+        var seedRush = ComputeRushBias(_seedBehaviorProfile);
+        var rush = Math.Clamp((globalRush * 0.55d) + (seedRush * 0.45d), 0d, BehaviorAdaptationCap);
+
+        return (horizontal, rush);
+    }
+
+    private static double ComputeHorizontalBias(BehaviorProfileSnapshot profile)
+    {
+        var total = profile.LeftInteractions + profile.RightInteractions;
+        if (total <= 0)
+        {
+            return 0d;
+        }
+
+        return (profile.LeftInteractions - profile.RightInteractions) / (double)total;
+    }
+
+    private static double ComputeRushBias(BehaviorProfileSnapshot profile)
+    {
+        var denominator = Math.Max(1, profile.InteractionSamples + profile.DoorRushAttempts);
+        return profile.DoorRushAttempts / (double)denominator;
+    }
 
     private async Task SyncLivePlayerStateAsync(bool force = false)
     {
@@ -2289,7 +3456,7 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
         var now = DateTime.UtcNow;
         var boostStart = _visionBoostUntilUtc > now ? _visionBoostUntilUtc : now;
         _visionBoostUntilUtc = boostStart.AddSeconds(duration);
-        ShowBanner($"{item.Name} active for {duration:0.#}s. Console interaction range increased.", 2.2d);
+        ShowBanner($"{item.Name} active for {duration:0.#}s. Interaction range increased.", 2.2d);
         return true;
     }
 
@@ -2338,6 +3505,28 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
 
         return CurrentRoomState.Puzzle switch
         {
+            SignalRoutingChamberPuzzle routing =>
+                $"Set relays to the exact stable configuration. Current match {Math.Round((routing.TryGetProgressState(out var progress) ? progress.Progress : 0d) * 100d)}%.",
+            EchoMemoryChamberPuzzle =>
+                "Wait for the echo to finish, then reproduce the pad order without repeating the wrong pad.",
+            DualLayerRealityPuzzle =>
+                "Toggle layers and match the linked node in each pair before moving to the next pair.",
+            BehaviorAdaptivePuzzle =>
+                "Break your instinct. If you always choose the same side first, choose differently.",
+            RecursiveRoomMutationPuzzle =>
+                "Across each loop, choose only the meaningful change. Wrong picks roll back one loop.",
+            LivingGridPuzzle =>
+                "Each activation toggles neighbors. Think several moves ahead and match the grid state.",
+            SymbolDecoderPuzzle =>
+                $"Symbol language is fixed: A={SymbolDecoderPuzzle.DescribeSymbol("A")}, B={SymbolDecoderPuzzle.DescribeSymbol("B")}, C={SymbolDecoderPuzzle.DescribeSymbol("C")}, D={SymbolDecoderPuzzle.DescribeSymbol("D")}.",
+            TimeWindowPuzzle =>
+                "Act only while the correct gate is open. Wrong timing drops your progress.",
+            FalseSolutionPuzzle =>
+                "Some routes pretend to progress. Confirm the quiet route twice to finish.",
+            HeatPressureBalancePuzzle heatPressure =>
+                $"{heatPressure.BuildTelemetry()} - keep both in the center band long enough to lock equilibrium.",
+            HiddenRulePrimePuzzle =>
+                "The rule is never stated. Test tiles, watch what the room accepts, and infer the sequence.",
             QuickTimePuzzle quickTime =>
                 $"Stop the pulse inside the bright window. Clean hits: {quickTime.SuccessfulHits}/{quickTime.RequiredHits}.",
             SequenceMemoryPuzzle sequenceMemory =>
@@ -2654,6 +3843,7 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
         _allowRouteExit = true;
         _sessionStopwatch.Stop();
 
+        await PersistBehaviorProfilesAsync(force: true);
         var summary = BuildPendingLossSummary(reason);
         await JS.InvokeVoidAsync("enigmaGame.setPendingLossSummary", summary);
         await JS.InvokeVoidAsync("enigmaGame.clearPendingLossDraft");
@@ -2742,6 +3932,6 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
         }
     }
 
-    protected sealed record WallSegment(string CssClass, string Style);
+    protected sealed record WallSegment(string CssClass, string Style, PlayAreaRect Bounds);
 }
 

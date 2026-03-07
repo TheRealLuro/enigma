@@ -281,7 +281,20 @@ html.enigma-global-zoom-fallback body {
 }
 
 .form-control::placeholder {
-    color: var(--epic-text-dim);
+    color: rgba(160, 178, 203, 0.56);
+    -webkit-text-fill-color: rgba(160, 178, 203, 0.56);
+    opacity: 1;
+}
+
+.form-control::-webkit-input-placeholder {
+    color: rgba(160, 178, 203, 0.56);
+    -webkit-text-fill-color: rgba(160, 178, 203, 0.56);
+    opacity: 1;
+}
+
+.form-control:-ms-input-placeholder,
+.form-control::-ms-input-placeholder {
+    color: rgba(160, 178, 203, 0.56);
 }
 
 input.form-control,
@@ -543,7 +556,8 @@ input[type="number"].form-select:hover::-webkit-outer-spin-button {
 }
 
 .enigma-stepper-input::placeholder {
-    color: var(--epic-text-dim);
+    color: rgba(160, 178, 203, 0.56);
+    -webkit-text-fill-color: rgba(160, 178, 203, 0.56);
 }
 
 .form-label, label {
@@ -586,6 +600,39 @@ input[type="number"].form-select:hover::-webkit-outer-spin-button {
     border-color: rgba(143, 183, 255, 0.4);
     background: linear-gradient(180deg, rgba(31, 45, 71, 0.98), rgba(17, 24, 38, 0.98));
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.password-issue-list {
+    display: grid;
+    gap: 7px;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 169, 169, 0.24);
+    background: rgba(231, 76, 60, 0.08);
+}
+
+.password-issue-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 210, 210, 0.96);
+    font-size: 0.86rem;
+    line-height: 1.3;
+}
+
+.password-issue-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border: 1px solid rgba(255, 165, 165, 0.36);
+    background: rgba(193, 65, 65, 0.22);
+    color: rgba(255, 219, 219, 0.96);
 }
 
 
@@ -1034,8 +1081,8 @@ tbody tr:last-child td {
 }
 
 .valid.modified:not([type=checkbox]) {
-    border-color: var(--epic-success);
-    box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.2);
+    border-color: rgba(116, 176, 255, 0.72);
+    box-shadow: 0 0 0 3px rgba(0, 120, 242, 0.2);
 }
 
 .invalid {
@@ -1426,20 +1473,163 @@ h1:focus {
     pointer-events: none;
 }
 
+.enigma-radar-darkness,
+.enigma-radar-pulse {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.enigma-radar-darkness {
+    z-index: 7;
+    opacity: 0.999;
+    background:
+        radial-gradient(
+            circle at var(--radar-x, 50%) var(--radar-y, 50%),
+            rgba(96, 154, 226, calc((0.006 + (var(--radar-pulse-strength, 0) * 0.14)) * (0.55 + (var(--radar-wall-proximity, 1) * 0.45)))) 0%,
+            rgba(40, 78, 141, calc((0.012 + (var(--radar-pulse-strength, 0) * 0.09)) * (0.58 + (var(--radar-wall-proximity, 1) * 0.42)))) var(--radar-core-radius, 14%),
+            rgba(8, 15, 26, 0.9) calc(var(--radar-detail-radius, 32%) * 0.95),
+            rgba(2, 6, 12, 0.98) var(--radar-outer-radius, 56%),
+            rgba(1, 2, 5, 0.998) 100%);
+    transition: background 90ms linear, opacity 180ms ease;
+}
+
+.enigma-radar-darkness::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: calc(0.03 + (var(--radar-interference, 0) * 0.08));
+    background:
+        repeating-linear-gradient(
+            180deg,
+            rgba(126, 186, 255, 0.08) 0px,
+            rgba(126, 186, 255, 0.08) 1px,
+            rgba(0, 0, 0, 0) 2px,
+            rgba(0, 0, 0, 0) 4px);
+    mix-blend-mode: screen;
+}
+
+.enigma-radar-darkness.interference {
+    animation: enigmaRadarInterference 1.9s steps(2, end) infinite;
+}
+
+.enigma-radar-pulse {
+    z-index: 7;
+    overflow: hidden;
+}
+
+.enigma-radar-pulse::before,
+.enigma-radar-pulse::after {
+    content: "";
+    position: absolute;
+    left: var(--radar-x, 50%);
+    top: var(--radar-y, 50%);
+    width: 10%;
+    aspect-ratio: 1 / 1;
+    border-radius: 999px;
+    border: 1px solid rgba(147, 209, 255, 0.24);
+    background: radial-gradient(circle, rgba(136, 203, 255, 0.12), rgba(0, 0, 0, 0));
+    transform: translate(-50%, -50%) scale(0.25);
+    opacity: 0;
+    box-shadow: 0 0 14px rgba(95, 177, 255, 0.18);
+    animation: enigmaRadarPulseExpand 5.6s cubic-bezier(0.18, 0.45, 0.19, 1) infinite;
+}
+
+.enigma-radar-pulse::after {
+    animation-delay: 2.8s;
+}
+
+.enigma-radar-pulse.interference::before,
+.enigma-radar-pulse.interference::after {
+    border-color: rgba(255, 151, 166, 0.34);
+    box-shadow: 0 0 20px rgba(241, 113, 130, 0.26);
+}
+
+@keyframes enigmaRadarPulseExpand {
+    0% {
+        transform: translate(-50%, -50%) scale(0.22);
+        opacity: 0;
+    }
+    16% {
+        opacity: calc(0.12 + (var(--radar-pulse-strength, 0) * 0.09));
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(var(--radar-pulse-scale, 4.4));
+        opacity: 0;
+    }
+}
+
+@keyframes enigmaRadarInterference {
+    0%,
+    100% {
+        filter: saturate(1) contrast(1);
+        opacity: 0.96;
+    }
+    40% {
+        filter: saturate(1.18) contrast(1.08);
+        opacity: 0.99;
+    }
+    62% {
+        filter: saturate(0.94) contrast(0.96);
+        opacity: 0.92;
+    }
+}
+
 .enigma-wall,
 .enigma-wall.door-glow {
     position: absolute;
-    z-index: 2;
+    z-index: 6;
 }
 
 .enigma-wall {
-    background: linear-gradient(180deg, rgba(10, 16, 24, 0.95), rgba(22, 31, 45, 0.95));
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+    background: linear-gradient(180deg, rgba(6, 12, 20, 1), rgba(18, 30, 46, 1));
+    box-shadow:
+        inset 0 0 0 1px rgba(196, 220, 255, 0.08),
+        0 0 0 1px rgba(22, 37, 58, 0.58);
 }
 
 .enigma-wall.door-glow {
     background: rgba(87, 195, 255, 0.16);
     box-shadow: 0 0 18px rgba(87, 195, 255, 0.22);
+}
+
+.enigma-room-stage .enigma-wall,
+.enigma-room-stage .enigma-plate,
+.enigma-room-stage .enigma-zone,
+.enigma-room-stage .enigma-reward-pickup,
+.enigma-room-stage .enigma-black-hole,
+.enigma-room-stage .enigma-phase-node,
+.enigma-room-stage .enigma-harmonic-node,
+.enigma-room-stage .enigma-path-cell,
+.enigma-room-stage .enigma-weight-pad,
+.enigma-room-stage .enigma-weight-block,
+.enigma-room-stage .enigma-word-tile,
+.enigma-room-stage .enigma-descriptor-tile,
+.enigma-room-stage .enigma-coop-stage-target,
+.enigma-room-stage .enigma-knot-line,
+.enigma-room-stage .enigma-world-interactable {
+    --radar-signal-safe: clamp(0.06, var(--radar-signal, 1), 1);
+    opacity: calc(0.05 + (var(--radar-signal-safe) * 0.95));
+    filter: brightness(calc(0.3 + (var(--radar-signal-safe) * 0.8))) saturate(calc(0.14 + (var(--radar-signal-safe) * 0.9)));
+    transition: opacity 120ms linear, filter 140ms linear, box-shadow 140ms linear, border-color 140ms linear;
+}
+
+.enigma-room-stage .radar-silhouette {
+    text-shadow: none;
+}
+
+.enigma-room-stage .radar-core {
+    filter: brightness(1.08) saturate(1.06);
+}
+
+.enigma-room-stage .enigma-wall {
+    opacity: calc(0.9 + (var(--radar-signal-safe) * 0.1));
+    filter: brightness(calc(0.46 + (var(--radar-signal-safe) * 0.86))) saturate(calc(0.3 + (var(--radar-signal-safe) * 0.78)));
+}
+
+.enigma-room-stage .enigma-wall.door-glow {
+    opacity: calc(0.5 + (var(--radar-signal-safe) * 0.42));
+    filter: brightness(calc(0.48 + (var(--radar-signal-safe) * 0.82))) saturate(calc(0.36 + (var(--radar-signal-safe) * 0.84)));
 }
 
 .enigma-plate,
@@ -1484,6 +1674,432 @@ h1:focus {
     box-shadow: 0 0 18px rgba(74, 201, 125, 0.16);
 }
 
+.enigma-world-interactable {
+    position: absolute;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    border-radius: 16px;
+    border: 1px solid rgba(188, 224, 255, 0.36);
+    background:
+        radial-gradient(circle at 26% 20%, rgba(126, 188, 255, 0.22), rgba(16, 28, 44, 0.62) 58%),
+        linear-gradient(165deg, rgba(12, 21, 34, 0.84), rgba(7, 12, 21, 0.82));
+    color: rgba(236, 244, 255, 0.95);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow:
+        inset 0 0 0 1px rgba(210, 231, 255, 0.08),
+        0 12px 30px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+    isolation: isolate;
+    transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, background 0.14s ease, filter 0.14s ease;
+}
+
+.enigma-world-interactable::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), transparent 56%);
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.enigma-world-interactable::after {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: calc(16px - 2px);
+    border: 1px solid rgba(191, 224, 255, 0.1);
+    opacity: 0.9;
+    pointer-events: none;
+}
+
+.enigma-world-interactable span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: rgba(2, 10, 20, 0.56);
+    border: 1px solid rgba(191, 220, 255, 0.3);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.44);
+    line-height: 1;
+    z-index: 1;
+}
+
+.enigma-world-interactable:hover,
+.enigma-world-interactable:focus-visible {
+    transform: translateY(-1px) scale(1.02);
+    border-color: rgba(158, 216, 255, 0.82);
+    box-shadow:
+        inset 0 0 0 1px rgba(193, 230, 255, 0.2),
+        0 16px 34px rgba(0, 0, 0, 0.45),
+        0 0 26px rgba(108, 186, 255, 0.3);
+    outline: none;
+}
+
+.enigma-world-interactable.nearest {
+    border-color: rgba(169, 228, 255, 0.95);
+    box-shadow:
+        inset 0 0 0 1px rgba(199, 238, 255, 0.24),
+        0 0 0 1px rgba(188, 234, 255, 0.72),
+        0 0 36px rgba(98, 186, 255, 0.42);
+    animation: enigmaInteractablePulse 1.2s ease-in-out infinite;
+}
+
+.enigma-world-interactable.disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: saturate(0.45);
+    pointer-events: none;
+}
+
+.enigma-world-interactable.state-active {
+    box-shadow: 0 0 0 1px rgba(123, 194, 255, 0.42), 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.enigma-world-interactable.state-failed {
+    border-color: rgba(255, 126, 126, 0.7);
+    box-shadow: 0 0 0 1px rgba(255, 126, 126, 0.5), 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.enigma-world-interactable.state-resetting,
+.enigma-world-interactable.state-cooldown {
+    filter: saturate(0.35) brightness(0.8);
+}
+
+@keyframes enigmaInteractablePulse {
+    0% {
+        box-shadow:
+            inset 0 0 0 1px rgba(199, 238, 255, 0.24),
+            0 0 0 1px rgba(188, 234, 255, 0.65),
+            0 0 28px rgba(98, 186, 255, 0.3);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 0 1px rgba(211, 244, 255, 0.3),
+            0 0 0 1px rgba(203, 242, 255, 0.84),
+            0 0 42px rgba(116, 200, 255, 0.5);
+    }
+    100% {
+        box-shadow:
+            inset 0 0 0 1px rgba(199, 238, 255, 0.24),
+            0 0 0 1px rgba(188, 234, 255, 0.65),
+            0 0 28px rgba(98, 186, 255, 0.3);
+    }
+}
+
+.enigma-world-interactable.signal-relay {
+    border-radius: 18px;
+    background: rgba(20, 40, 62, 0.62);
+}
+
+.enigma-world-interactable.signal-relay.required {
+    border-color: rgba(113, 195, 255, 0.6);
+}
+
+.enigma-world-interactable.signal-relay.active {
+    background: radial-gradient(circle, rgba(74, 176, 255, 0.45), rgba(22, 58, 97, 0.74));
+}
+
+.enigma-world-interactable.signal-relay.overload {
+    box-shadow: 0 0 0 1px rgba(255, 134, 147, 0.46), 0 14px 26px rgba(0, 0, 0, 0.36);
+}
+
+.enigma-world-interactable.signal-relay.linked::before {
+    content: "";
+    width: 18px;
+    height: 3px;
+    border-radius: 999px;
+    background: rgba(180, 220, 255, 0.4);
+}
+
+.enigma-world-interactable.echo-pad {
+    border-radius: 22px;
+    background: rgba(23, 35, 52, 0.6);
+}
+
+.enigma-world-interactable.echo-pad.reveal {
+    background: radial-gradient(circle, rgba(104, 236, 192, 0.5), rgba(14, 72, 57, 0.8));
+    border-color: rgba(139, 255, 221, 0.8);
+}
+
+.enigma-world-interactable.echo-pad.locked {
+    background: rgba(67, 136, 204, 0.42);
+}
+
+.enigma-world-interactable.echo-pad.echo-core {
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(120, 198, 255, 0.54), rgba(16, 52, 80, 0.78));
+    border-color: rgba(172, 230, 255, 0.82);
+}
+
+.enigma-world-interactable.duallayer-toggle {
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(94, 117, 255, 0.54), rgba(155, 79, 255, 0.48));
+}
+
+.enigma-world-interactable.duallayer-node.alpha {
+    background: rgba(58, 116, 196, 0.56);
+}
+
+.enigma-world-interactable.duallayer-node.beta {
+    background: rgba(110, 72, 195, 0.56);
+}
+
+.enigma-world-interactable.duallayer-node.target {
+    box-shadow: 0 0 0 1px rgba(171, 230, 255, 0.72), 0 0 20px rgba(110, 191, 255, 0.3);
+}
+
+.enigma-world-interactable.behavior-terminal {
+    border-radius: 999px;
+    min-height: 52px;
+    background: rgba(18, 25, 37, 0.7);
+}
+
+.enigma-world-interactable.behavior-terminal.left::after,
+.enigma-world-interactable.behavior-terminal.center::after,
+.enigma-world-interactable.behavior-terminal.right::after {
+    content: "";
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(213, 229, 255, 0.85);
+}
+
+.enigma-world-interactable.recursive-anchor {
+    border-radius: 18px;
+    background: rgba(53, 70, 94, 0.6);
+}
+
+.enigma-world-interactable.recursive-anchor.locked {
+    background: rgba(68, 143, 110, 0.48);
+}
+
+.enigma-world-interactable.recursive-anchor.target {
+    border-color: rgba(255, 215, 137, 0.82);
+    box-shadow: 0 0 0 1px rgba(255, 219, 161, 0.5), 0 0 18px rgba(255, 198, 111, 0.2);
+}
+
+.enigma-world-interactable.living-grid-cell {
+    border-radius: 10px;
+    background:
+        linear-gradient(165deg, rgba(11, 18, 30, 0.9), rgba(6, 11, 20, 0.86)),
+        repeating-linear-gradient(90deg, rgba(137, 177, 230, 0.08) 0 2px, transparent 2px 9px);
+    border-color: rgba(155, 198, 255, 0.28);
+}
+
+.enigma-world-interactable.living-grid-cell.target {
+    box-shadow:
+        inset 0 0 0 1px rgba(146, 202, 255, 0.26),
+        0 8px 22px rgba(0, 0, 0, 0.34);
+    background-image:
+        linear-gradient(165deg, rgba(11, 18, 30, 0.9), rgba(6, 11, 20, 0.86)),
+        repeating-linear-gradient(90deg, rgba(137, 177, 230, 0.1) 0 2px, transparent 2px 9px),
+        repeating-linear-gradient(0deg, rgba(137, 177, 230, 0.07) 0 2px, transparent 2px 9px);
+}
+
+.enigma-world-interactable.living-grid-cell.needed {
+    border-color: rgba(255, 212, 138, 0.72);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 232, 179, 0.32),
+        0 0 26px rgba(255, 195, 96, 0.26),
+        0 10px 24px rgba(0, 0, 0, 0.4);
+    animation: enigmaGridNeededPulse 1.05s ease-in-out infinite;
+}
+
+.enigma-world-interactable.living-grid-cell.active {
+    background:
+        radial-gradient(circle at 50% 46%, rgba(108, 210, 255, 0.54), rgba(22, 72, 120, 0.72)),
+        linear-gradient(165deg, rgba(16, 33, 52, 0.86), rgba(8, 16, 28, 0.84));
+}
+
+.enigma-world-interactable.living-grid-cell.excess {
+    border-color: rgba(255, 138, 138, 0.66);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 187, 187, 0.2),
+        0 0 20px rgba(255, 109, 109, 0.2),
+        0 10px 24px rgba(0, 0, 0, 0.4);
+    background-image:
+        linear-gradient(165deg, rgba(30, 13, 13, 0.88), rgba(16, 8, 9, 0.84)),
+        repeating-linear-gradient(45deg, rgba(255, 138, 138, 0.16) 0 4px, rgba(0, 0, 0, 0) 4px 10px);
+}
+
+.enigma-world-interactable.living-grid-cell.matched {
+    border-color: rgba(121, 235, 188, 0.78);
+    box-shadow:
+        inset 0 0 0 1px rgba(189, 255, 228, 0.24),
+        0 0 22px rgba(119, 238, 188, 0.26),
+        0 10px 24px rgba(0, 0, 0, 0.36);
+    background-image:
+        radial-gradient(circle at 50% 50%, rgba(125, 244, 201, 0.24), rgba(35, 77, 61, 0.2)),
+        linear-gradient(165deg, rgba(10, 26, 21, 0.88), rgba(7, 17, 14, 0.84));
+}
+
+.enigma-room-stage .enigma-world-interactable.living-grid-cell.target {
+    --radar-signal: 0.78 !important;
+    opacity: 0.92 !important;
+    filter: brightness(1.02) saturate(1.08) !important;
+}
+
+.enigma-room-stage .enigma-world-interactable.living-grid-cell.needed {
+    --radar-signal: 0.94 !important;
+    opacity: 0.98 !important;
+    filter: brightness(1.14) saturate(1.2) !important;
+}
+
+.enigma-room-stage .enigma-world-interactable.living-grid-cell.excess {
+    --radar-signal: 0.84 !important;
+    opacity: 0.96 !important;
+    filter: brightness(1.08) saturate(1.14) !important;
+}
+
+@keyframes enigmaGridNeededPulse {
+    0% {
+        box-shadow:
+            inset 0 0 0 1px rgba(255, 232, 179, 0.26),
+            0 0 18px rgba(255, 195, 96, 0.2),
+            0 10px 24px rgba(0, 0, 0, 0.38);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 0 1px rgba(255, 238, 194, 0.36),
+            0 0 32px rgba(255, 208, 126, 0.34),
+            0 12px 28px rgba(0, 0, 0, 0.42);
+    }
+    100% {
+        box-shadow:
+            inset 0 0 0 1px rgba(255, 232, 179, 0.26),
+            0 0 18px rgba(255, 195, 96, 0.2),
+            0 10px 24px rgba(0, 0, 0, 0.38);
+    }
+}
+
+.enigma-world-interactable.symbol-node {
+    border-radius: 999px;
+    font-size: 0.92rem;
+}
+
+.enigma-world-interactable.symbol-node.sigma {
+    background: rgba(70, 125, 212, 0.62);
+}
+
+.enigma-world-interactable.symbol-node.delta {
+    background: rgba(112, 91, 212, 0.62);
+}
+
+.enigma-world-interactable.symbol-node.lambda {
+    background: rgba(67, 172, 191, 0.62);
+}
+
+.enigma-world-interactable.symbol-node.omega {
+    background: rgba(176, 100, 194, 0.62);
+}
+
+.enigma-world-interactable.time-gate {
+    border-radius: 14px;
+    background: rgba(30, 44, 63, 0.68);
+}
+
+.enigma-world-interactable.time-gate.open {
+    background: rgba(101, 190, 255, 0.5);
+}
+
+.enigma-world-interactable.time-gate.locked {
+    border-color: rgba(131, 243, 194, 0.72);
+}
+
+.enigma-world-interactable.false-terminal {
+    border-radius: 16px;
+    background: rgba(35, 39, 53, 0.72);
+}
+
+.enigma-world-interactable.false-terminal.primed {
+    box-shadow: 0 0 0 1px rgba(255, 212, 152, 0.6), 0 0 22px rgba(255, 198, 116, 0.24);
+}
+
+.enigma-world-interactable.false-terminal.decoy {
+    border-color: rgba(172, 136, 255, 0.64);
+}
+
+.enigma-world-interactable.heat-control,
+.enigma-world-interactable.pressure-control {
+    border-radius: 999px;
+    font-size: 0.88rem;
+}
+
+.enigma-world-interactable.heat-control {
+    background: rgba(189, 99, 74, 0.62);
+}
+
+.enigma-world-interactable.pressure-control {
+    background: rgba(84, 124, 196, 0.62);
+}
+
+.enigma-world-interactable.hidden-rule-tile {
+    border-radius: 10px;
+    background: rgba(17, 25, 38, 0.76);
+    font-size: 0.68rem;
+}
+
+.enigma-world-interactable.hidden-rule-tile.confirmed {
+    border-color: rgba(122, 224, 181, 0.72);
+}
+
+.enigma-room-stage .enigma-world-interactable.signal-relay.active,
+.enigma-room-stage .enigma-world-interactable.echo-pad.reveal,
+.enigma-room-stage .enigma-world-interactable.echo-pad.locked,
+.enigma-room-stage .enigma-world-interactable.duallayer-node.target,
+.enigma-room-stage .enigma-world-interactable.duallayer-node.solved,
+.enigma-room-stage .enigma-world-interactable.behavior-terminal.solved,
+.enigma-room-stage .enigma-world-interactable.recursive-anchor.locked,
+.enigma-room-stage .enigma-world-interactable.recursive-anchor.target,
+.enigma-room-stage .enigma-world-interactable.living-grid-cell.matched,
+.enigma-room-stage .enigma-world-interactable.time-gate.open,
+.enigma-room-stage .enigma-world-interactable.time-gate.locked,
+.enigma-room-stage .enigma-world-interactable.false-terminal.primed,
+.enigma-room-stage .enigma-world-interactable.hidden-rule-tile.confirmed {
+    --radar-signal: 1 !important;
+    opacity: 1 !important;
+    filter: brightness(1.2) saturate(1.38) !important;
+    border-color: rgba(166, 232, 255, 0.86);
+    box-shadow:
+        inset 0 0 0 1px rgba(225, 244, 255, 0.24),
+        0 0 0 1px rgba(166, 232, 255, 0.62),
+        0 0 36px rgba(90, 196, 255, 0.4),
+        0 14px 32px rgba(0, 0, 0, 0.44);
+    animation: enigmaGoodInteractableGlow 1.5s ease-in-out infinite;
+}
+
+@keyframes enigmaGoodInteractableGlow {
+    0% {
+        box-shadow:
+            inset 0 0 0 1px rgba(225, 244, 255, 0.22),
+            0 0 0 1px rgba(166, 232, 255, 0.54),
+            0 0 28px rgba(90, 196, 255, 0.32),
+            0 14px 30px rgba(0, 0, 0, 0.44);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 0 1px rgba(233, 248, 255, 0.28),
+            0 0 0 1px rgba(186, 239, 255, 0.74),
+            0 0 44px rgba(126, 209, 255, 0.5),
+            0 16px 34px rgba(0, 0, 0, 0.46);
+    }
+    100% {
+        box-shadow:
+            inset 0 0 0 1px rgba(225, 244, 255, 0.22),
+            0 0 0 1px rgba(166, 232, 255, 0.54),
+            0 0 28px rgba(90, 196, 255, 0.32),
+            0 14px 30px rgba(0, 0, 0, 0.44);
+    }
+}
+
 .enigma-reward-pickup {
     z-index: 4;
     border-radius: 50%;
@@ -1507,7 +2123,8 @@ h1:focus {
 }
 
 .enigma-player {
-    z-index: 5;
+    z-index: 3;
+    pointer-events: none;
     border-radius: 12px;
     background: linear-gradient(180deg, #ffffff, #d4e0f0);
     border: 1px solid rgba(255, 255, 255, 0.62);
@@ -1554,7 +2171,7 @@ h1:focus {
 .enigma-room-hud,
 .enigma-room-banner {
     position: absolute;
-    z-index: 6;
+    z-index: 11;
     padding: 8px 12px;
     border-radius: 999px;
     -webkit-backdrop-filter: blur(10px);
@@ -1579,7 +2196,8 @@ h1:focus {
 
 .enigma-room-banner {
     left: 50%;
-    bottom: 14px;
+    top: 64px;
+    bottom: auto;
     transform: translateX(-50%);
     min-width: min(70%, 460px);
     min-height: 42px;
@@ -1776,6 +2394,11 @@ h1:focus {
     letter-spacing: -0.04em;
 }
 
+.enigma-puzzle-head-clean {
+    gap: 6px;
+    padding-bottom: 12px;
+}
+
 .enigma-puzzle-head .enigma-puzzle-copy {
     margin: 0;
     line-height: 1.65;
@@ -1785,6 +2408,127 @@ h1:focus {
     display: grid;
     gap: 16px;
     padding-top: 6px;
+}
+
+.enigma-world-puzzle-surface {
+    display: grid;
+    gap: 14px;
+}
+
+.enigma-world-puzzle-guide {
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.enigma-world-puzzle-state-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.enigma-world-puzzle-state-label {
+    color: var(--epic-text-dim);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.enigma-world-puzzle-state {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--epic-text);
+}
+
+.enigma-world-puzzle-guide .enigma-puzzle-guide-row p {
+    display: flex;
+    align-items: center;
+}
+
+.enigma-world-puzzle-state.state-active {
+    border-color: rgba(123, 194, 255, 0.5);
+    background: rgba(83, 148, 242, 0.2);
+}
+
+.enigma-world-puzzle-state.state-solved {
+    border-color: rgba(122, 224, 181, 0.58);
+    background: rgba(61, 153, 109, 0.24);
+}
+
+.enigma-world-puzzle-state.state-failed {
+    border-color: rgba(255, 143, 143, 0.56);
+    background: rgba(150, 66, 66, 0.28);
+}
+
+.enigma-world-puzzle-state.state-resetting,
+.enigma-world-puzzle-state.state-cooldown {
+    border-color: rgba(197, 214, 255, 0.34);
+    background: rgba(101, 122, 170, 0.2);
+}
+
+.enigma-world-puzzle-state.state-hint {
+    border-color: rgba(255, 220, 150, 0.54);
+    background: rgba(166, 124, 58, 0.24);
+}
+
+.enigma-world-puzzle-state.state-idle {
+    border-color: rgba(184, 207, 245, 0.34);
+    background: rgba(95, 111, 153, 0.2);
+}
+
+.enigma-world-puzzle-progress-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--epic-text-secondary);
+    font-size: 0.82rem;
+}
+
+.enigma-world-puzzle-progress-head strong {
+    color: var(--epic-text);
+    font-size: 0.88rem;
+}
+
+.enigma-world-puzzle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.enigma-world-puzzle-cell {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.enigma-world-puzzle-cell span {
+    color: var(--epic-text-dim);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.enigma-world-puzzle-cell strong {
+    color: var(--epic-text);
+    font-size: 0.95rem;
+    letter-spacing: 0.01em;
+}
+
+.enigma-world-puzzle-helper {
+    margin: 0;
+    font-size: 0.82rem;
 }
 
 .enigma-loadout-list {
@@ -1924,6 +2668,22 @@ h1:focus {
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.enigma-world-puzzle-status {
+    display: grid;
+    gap: 6px;
+}
+
+.enigma-world-puzzle-status strong {
+    color: #e8f3ff;
+    font-size: 0.92rem;
+    font-weight: 800;
+}
+
+.enigma-world-puzzle-status span {
+    color: var(--epic-text-secondary);
+    font-size: 0.84rem;
 }
 
 .enigma-progress-shell,
@@ -3209,6 +3969,7 @@ h1:focus {
 
     .enigma-room-banner {
         min-width: calc(100% - 24px);
+        top: 56px;
     }
 }
 
@@ -3782,8 +4543,8 @@ h1:focus {
 }
 
 .marketplace-banner-metrics {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
-    min-width: min(100%, 320px);
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+    min-width: min(100%, 640px);
 }
 
 .marketplace-banner-metrics div {
@@ -4364,6 +5125,89 @@ h1:focus {
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
 }
 
+.marketplace-sell-panel-priority {
+    display: grid;
+    gap: 14px;
+    border: 1px solid rgba(128, 178, 255, 0.2);
+    background:
+        radial-gradient(circle at top right, rgba(92, 150, 255, 0.12), transparent 45%),
+        linear-gradient(180deg, rgba(18, 24, 38, 0.92), rgba(12, 17, 27, 0.95));
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.2);
+}
+
+.marketplace-seller-copy {
+    margin: 6px 0 0;
+    color: rgba(204, 220, 243, 0.84);
+    font-size: 0.92rem;
+}
+
+.marketplace-seller-status-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.marketplace-seller-note {
+    margin: 0;
+}
+
+.marketplace-protocol-panel {
+    display: grid;
+    gap: 16px;
+}
+
+.marketplace-protocol-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.marketplace-protocol-card {
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(130, 178, 255, 0.16);
+    background:
+        radial-gradient(circle at top right, rgba(82, 141, 242, 0.14), transparent 42%),
+        rgba(255, 255, 255, 0.03);
+}
+
+.marketplace-protocol-kicker {
+    display: inline-flex;
+    width: fit-content;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(56, 111, 203, 0.24);
+    border: 1px solid rgba(114, 170, 255, 0.28);
+    color: rgba(208, 226, 251, 0.9);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.1;
+}
+
+.marketplace-protocol-card h3 {
+    margin: 0;
+    font-size: 1.04rem;
+}
+
+.marketplace-protocol-card p {
+    margin: 0;
+    color: rgba(214, 226, 244, 0.84);
+    line-height: 1.45;
+}
+
+.marketplace-results-copy {
+    margin: 0;
+    color: rgba(209, 224, 245, 0.85);
+    font-size: 0.94rem;
+}
+
 .marketplace-sell-form {
     display: grid;
     gap: 16px;
@@ -4398,8 +5242,127 @@ h1:focus {
     gap: 14px;
 }
 
+.marketplace-filter-grid-map .marketplace-filter-search {
+    grid-column: span 2;
+}
+
 .marketplace-filter-grid .form-label {
     margin-bottom: 6px;
+}
+
+.marketplace-filter-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.marketplace-active-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.marketplace-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(126, 178, 255, 0.24);
+    background: rgba(73, 122, 209, 0.16);
+    color: rgba(220, 236, 255, 0.92);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.1;
+}
+
+.marketplace-filter-pill.muted {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(200, 217, 239, 0.78);
+}
+
+.marketplace-grid-featured {
+    grid-template-columns: minmax(0, 760px);
+    justify-content: center;
+}
+
+.marketplace-grid-expanded {
+    grid-template-columns: repeat(2, minmax(260px, 420px));
+}
+
+.marketplace-card-featured {
+    max-width: 760px;
+    padding: 18px;
+}
+
+.marketplace-card-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.marketplace-listed-at-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: rgba(200, 219, 244, 0.9);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    text-align: center;
+    line-height: 1.1;
+}
+
+.marketplace-listing-chip-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.marketplace-listing-chip-row .catalog-card-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 12px;
+    text-align: center;
+    line-height: 1.1;
+}
+
+.marketplace-listing-chip-row .difficulty-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.1;
+}
+
+.marketplace-price-hero {
+    margin-top: 2px;
+    font-size: clamp(1.4rem, 2vw, 1.75rem);
+}
+
+.marketplace-card-warning {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 184, 76, 0.35);
+    background: rgba(186, 123, 28, 0.18);
+    color: rgba(255, 215, 161, 0.95);
+    font-size: 0.85rem;
+    line-height: 1.4;
 }
 
 .marketplace-last-sale {
@@ -4747,8 +5710,21 @@ h1:focus {
         grid-template-columns: 1fr;
     }
 
+    .marketplace-protocol-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .marketplace-filter-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .marketplace-filter-grid-map .marketplace-filter-search {
+        grid-column: 1 / -1;
+    }
+
+    .marketplace-banner-metrics {
+        grid-template-columns: repeat(2, minmax(140px, 1fr));
+        min-width: 0;
     }
 
     .leaderboard-controls-grid {
@@ -4928,6 +5904,22 @@ h1:focus {
 
 .profile-tabbar {
     grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
+}
+
+.profile-map-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 260px);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.profile-map-section-nav {
+    margin: 0 0 14px;
+    padding: 12px 14px;
+}
+
+.profile-map-section-nav .leaderboard-pagination {
+    justify-content: flex-start;
 }
 
 .marketplace-tabbar {
@@ -5160,10 +6152,14 @@ h1:focus {
     gap: 10px;
 }
 
-.profile-map-actions,
-.profile-settings-actions-row {
-    grid-template-columns: repeat(auto-fit, minmax(160px, max-content));
-}
+    .profile-map-actions,
+    .profile-settings-actions-row {
+        grid-template-columns: repeat(auto-fit, minmax(160px, max-content));
+    }
+
+    .profile-map-tools {
+        grid-template-columns: 1fr;
+    }
 
 .section-count-small {
     min-width: 36px;
@@ -5343,61 +6339,89 @@ h1:focus {
     color: #ffe3a9;
 }
 
-.marketplace-faq-card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 16px;
-    padding: 16px 18px;
+.marketplace-faq-collapsible {
     border-radius: 18px;
-    border: 1px solid rgba(143, 183, 255, 0.16);
-    background: linear-gradient(180deg, rgba(18, 24, 38, 0.9), rgba(13, 18, 28, 0.92));
+    border: 1px solid rgba(132, 178, 255, 0.2);
+    background:
+        radial-gradient(circle at top right, rgba(88, 145, 255, 0.12), transparent 44%),
+        linear-gradient(180deg, rgba(16, 23, 36, 0.9), rgba(10, 15, 26, 0.92));
+    overflow: hidden;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.marketplace-faq-collapsible summary {
     cursor: pointer;
+    list-style: none;
+    padding: 15px 18px;
+    font-weight: 700;
+    color: rgba(227, 239, 255, 0.96);
+    letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
-.marketplace-faq-card:hover {
-    border-color: rgba(143, 183, 255, 0.3);
+.marketplace-faq-collapsible summary::-webkit-details-marker {
+    display: none;
 }
 
-.marketplace-faq-card:focus-visible {
-    outline: 0;
-    border-color: rgba(111, 169, 255, 0.52);
-    box-shadow: 0 0 0 2px rgba(94, 181, 255, 0.24);
+.marketplace-faq-collapsible summary::before {
+    content: ">";
+    color: rgba(154, 194, 255, 0.95);
+    transition: transform 0.18s ease;
 }
 
-.marketplace-faq-card h3 {
-    margin: 4px 0 0;
-    font-size: 1.02rem;
-}
-
-.marketplace-faq-card p {
-    margin: 6px 0 0;
-    color: var(--epic-text);
-}
-
-.marketplace-faq-open-button {
-    min-width: 120px;
-}
-
-.marketplace-faq-overlay-backdrop {
-    z-index: 2250;
-}
-
-.marketplace-faq-overlay-card {
-    position: relative;
-    width: min(680px, calc(100vw - 28px));
-    display: grid;
-    gap: 18px;
-    padding-top: 70px;
+.marketplace-faq-collapsible[open] summary::before {
+    transform: rotate(90deg);
 }
 
 .marketplace-faq-list {
     margin: 0;
-    padding-left: 22px;
+    padding: 0 16px 16px;
     display: grid;
     gap: 10px;
-    color: var(--epic-text);
-    line-height: 1.55;
+    list-style: none;
+    counter-reset: marketplace-faq;
+}
+
+.marketplace-faq-list li {
+    counter-increment: marketplace-faq;
+    position: relative;
+    padding: 13px 14px 13px 54px;
+    border-radius: 14px;
+    border: 1px solid rgba(123, 171, 255, 0.14);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.marketplace-faq-list li::before {
+    content: counter(marketplace-faq);
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    border: 1px solid rgba(117, 169, 255, 0.34);
+    background: rgba(66, 119, 211, 0.28);
+    color: rgba(220, 236, 255, 0.95);
+    font-weight: 700;
+    font-size: 0.83rem;
+    display: grid;
+    place-items: center;
+}
+
+.marketplace-faq-list li strong {
+    display: block;
+    color: rgba(239, 245, 255, 0.96);
+    font-size: 0.94rem;
+    line-height: 1.3;
+}
+
+.marketplace-faq-list li p {
+    margin: 6px 0 0;
+    color: rgba(208, 222, 242, 0.86);
+    font-size: 0.9rem;
+    line-height: 1.46;
 }
 
 @media (max-width: 760px) {
@@ -5405,17 +6429,32 @@ h1:focus {
         width: min(100%, calc(100vw - 20px));
     }
 
+    .marketplace-protocol-grid,
+    .marketplace-grid-expanded,
+    .marketplace-grid-featured {
+        grid-template-columns: 1fr;
+    }
+
+    .marketplace-card-featured {
+        max-width: 100%;
+    }
+
     .marketplace-item-overlay-meta,
     .marketplace-item-effect-grid {
         grid-template-columns: 1fr;
     }
 
-    .marketplace-faq-card {
-        grid-template-columns: 1fr;
+    .marketplace-faq-collapsible summary {
+        padding: 13px 14px;
+        font-size: 0.92rem;
     }
 
-    .marketplace-faq-open-button {
-        width: 100%;
+    .marketplace-faq-list {
+        padding: 0 12px 12px;
+    }
+
+    .marketplace-faq-list li {
+        padding: 12px 12px 12px 48px;
     }
 }
 
@@ -6484,7 +7523,7 @@ h1:focus {
     position: absolute;
     right: 14px;
     bottom: 14px;
-    z-index: 7;
+    z-index: 12;
     width: min(300px, calc(100% - 28px));
     padding: 12px;
     border-radius: 18px;
@@ -6705,7 +7744,7 @@ h1:focus {
 
 .enigma-puzzle-console {
     position: absolute;
-    z-index: 6;
+    z-index: 4;
     display: grid;
     place-items: center;
     border: 0;
@@ -6719,15 +7758,16 @@ h1:focus {
     height: 54%;
     border-radius: 14px;
     background:
-        linear-gradient(180deg, rgba(98, 162, 255, 0.92), rgba(38, 77, 155, 0.94)),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)),
+        linear-gradient(180deg, rgb(98, 162, 255), rgb(38, 77, 155));
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 0 24px rgba(66, 135, 255, 0.2);
+    transition: box-shadow 130ms linear;
 }
 
 .enigma-puzzle-console.console-red .enigma-puzzle-console-screen {
     background:
-        linear-gradient(180deg, rgba(245, 124, 133, 0.94), rgba(153, 42, 51, 0.96)),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0));
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0)),
+        linear-gradient(180deg, rgb(245, 124, 133), rgb(153, 42, 51));
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 0 24px rgba(237, 82, 92, 0.24);
 }
 
@@ -6774,6 +7814,39 @@ h1:focus {
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
+}
+
+.enigma-world-action-prompt {
+    position: absolute;
+    z-index: 8;
+    min-height: 42px;
+    padding: 0 16px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(170deg, rgba(9, 16, 27, 0.92), rgba(5, 10, 18, 0.86));
+    border: 1px solid rgba(144, 210, 255, 0.34);
+    color: #edf6ff;
+    font-size: 0.86rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1.15;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+    box-shadow:
+        inset 0 0 0 1px rgba(214, 236, 255, 0.08),
+        0 14px 34px rgba(0, 0, 0, 0.36),
+        0 0 24px rgba(88, 173, 255, 0.18);
+    -webkit-backdrop-filter: blur(9px);
+    backdrop-filter: blur(9px);
+}
+
+.enigma-world-action-prompt.out-of-range {
+    border-color: rgba(181, 203, 242, 0.28);
+    color: rgba(229, 237, 250, 0.9);
+    box-shadow:
+        inset 0 0 0 1px rgba(217, 229, 248, 0.06),
+        0 12px 28px rgba(0, 0, 0, 0.34);
 }
 
 .enigma-room-interaction-progress {
@@ -6859,7 +7932,7 @@ h1:focus {
 
 .enigma-puzzle-overlay-shell {
     position: relative;
-    width: min(840px, calc(100vw - 64px));
+    width: min(820px, calc(100vw - 64px));
     margin: 0;
     display: block;
 }
@@ -6870,24 +7943,29 @@ h1:focus {
 
 .enigma-puzzle-overlay-shell .enigma-puzzle-card {
     margin: 0;
-    padding: 26px;
-    padding-top: 70px;
+    padding: 22px 24px 24px;
+    padding-top: 64px;
     max-height: min(86vh, 1120px);
     overflow: auto;
-    border-radius: 24px;
-    background:
-        radial-gradient(circle at top left, rgba(60, 118, 255, 0.12), transparent 34%),
-        linear-gradient(180deg, rgba(20, 26, 38, 0.78), rgba(12, 16, 24, 0.68));
-    border: 1px solid rgba(122, 181, 255, 0.18);
-    box-shadow: 0 34px 90px rgba(0, 0, 0, 0.4);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(14, 18, 27, 0.96), rgba(10, 14, 22, 0.97));
+    border: 1px solid rgba(188, 210, 246, 0.16);
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.46);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
 }
 
-.enigma-puzzle-overlay-shell .enigma-puzzle-guide,
 .enigma-puzzle-overlay-shell .enigma-puzzle-status {
-    background: rgba(255, 255, 255, 0.024);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.enigma-puzzle-overlay-shell .enigma-puzzle-head {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.enigma-puzzle-overlay-shell .enigma-puzzle-surface {
+    gap: 14px;
 }
 
 .enigma-overlay-close {
@@ -6895,17 +7973,20 @@ h1:focus {
     top: 16px;
     right: 16px;
     z-index: 3;
-    min-height: 40px;
-    padding: 0 16px;
+    min-height: 36px;
+    padding: 0 14px;
     border: 0;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--epic-text);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(232, 242, 255, 0.92);
+    font-size: 0.8rem;
     font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .enigma-overlay-close:hover {
-    background: rgba(77, 131, 255, 0.22);
+    background: rgba(94, 144, 232, 0.22);
 }
 
 @media (max-width: 1280px) {
@@ -6951,9 +8032,10 @@ h1:focus {
     }
 
     .enigma-puzzle-overlay-shell .enigma-puzzle-card {
-        padding: 20px;
-        padding-top: 64px;
+        padding: 18px 18px 20px;
+        padding-top: 58px;
         max-height: calc(100vh - 36px);
+        border-radius: 16px;
     }
 }
 
@@ -8108,6 +9190,107 @@ h1:focus {
     line-height: 1.2;
 }
 
+.staking-map-card-collapsible {
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+}
+
+.staking-map-compact-trigger {
+    border: 0;
+    width: 100%;
+    background: transparent;
+    color: inherit;
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.18s ease;
+}
+
+.staking-map-compact-trigger:hover {
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.staking-map-card-collapsible.expanded .staking-map-compact-trigger {
+    border-bottom: 1px solid rgba(130, 175, 241, 0.2);
+}
+
+.staking-map-head-meta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.staking-expand-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(130, 175, 241, 0.28);
+    background: rgba(92, 147, 230, 0.14);
+    color: rgba(220, 234, 252, 0.94);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.staking-map-compact-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+}
+
+.staking-map-compact-grid > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(220, 231, 246, 0.9);
+    font-size: 0.84rem;
+}
+
+.staking-map-compact-grid > div > span {
+    color: rgba(175, 197, 226, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.staking-map-compact-progress {
+    margin-top: 2px;
+}
+
+.staking-map-expanded-body {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px 14px;
+    animation: staking-map-expand 180ms ease-out;
+}
+
+@keyframes staking-map-expand {
+    from {
+        opacity: 0.45;
+        transform: translateY(-2px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .staking-map-rows {
     display: grid;
     gap: 6px;
@@ -8248,6 +9431,15 @@ h1:focus {
     max-width: 100%;
 }
 
+.staking-map-section-nav {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+}
+
+.staking-map-section-nav .leaderboard-pagination {
+    justify-content: flex-start;
+}
+
 .staking-faq-collapsible {
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -8331,6 +9523,10 @@ h1:focus {
 
 @media (max-width: 720px) {
     .staking-forecast-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .staking-map-compact-grid {
         grid-template-columns: 1fr;
     }
 

@@ -9,8 +9,8 @@
 
 @if (!Embedded)
 {
-    <SeoHead Title="Enigma Research | Anomaly Map Analysis"
-             Description="Submit recovered maps for anomaly research, containment, and long-form analysis while earning daily MN credits."
+    <SeoHead Title="Enigma Research | Anomaly Sector Analysis"
+             Description="Submit recovered sectors for anomaly research, containment, and long-form analysis while earning daily MN credits."
              Robots="noindex,follow"
              OpenGraphType="website"
              SchemaType="WebPage" />
@@ -40,8 +40,8 @@ else
         <section class="staking-banner" data-tour-id="staking-banner">
             <div>
                 <span class="profile-eyebrow">Anomaly Research Assignment</span>
-                <h1>Map Analysis Console</h1>
-                <p>Submit recovered maps for containment, then continuous research. Research output generates daily MN and council influence.</p>
+                <h1>Sector Analysis Console</h1>
+                <p>Submit recovered sectors for containment, then continuous research. Research output generates daily MN and council influence.</p>
             </div>
             <div class="staking-banner-meta">
                 @if (!string.IsNullOrWhiteSpace(Overview.NextClaimAt) && !Overview.CanClaimToday)
@@ -61,7 +61,7 @@ else
 
         <section class="staking-kpi-grid">
             <article class="staking-kpi-card">
-                <span class="staking-kpi-label">Maps Under Analysis</span>
+                <span class="staking-kpi-label">Sectors Under Analysis</span>
                 <strong class="staking-kpi-value" @key="Overview.StakedMapsCount">@Overview.StakedMapsCount</strong>
             </article>
             <article class="staking-kpi-card">
@@ -98,11 +98,11 @@ else
             <article class="panel profile-release-panel staking-research-card">
                 <span class="profile-eyebrow">Global Research Objective</span>
                 <h2>@(Overview.CollectiveResearch?.Title ?? "Decode Labyrinth Type IV")</h2>
-                <p>@(Overview.CollectiveResearch?.Description ?? "Contribute maps to expand Enigma anomaly knowledge.")</p>
+                <p>@(Overview.CollectiveResearch?.Description ?? "Contribute sectors to expand Enigma anomaly knowledge.")</p>
                 <div class="staking-map-rows">
                     <div><span>Progress</span><strong>@CollectiveKnowledgePercent.ToString("0.##")%</strong></div>
                     <div><span>Contributors</span><strong>@(Overview.CollectiveResearch?.ContributorCount ?? 0)</strong></div>
-                    <div><span>Submitted maps</span><strong>@(Overview.CollectiveResearch?.ContributedMaps ?? 0) / @(Overview.CollectiveResearch?.TargetMaps ?? 500)</strong></div>
+                    <div><span>Submitted sectors</span><strong>@(Overview.CollectiveResearch?.ContributedMaps ?? 0) / @(Overview.CollectiveResearch?.TargetMaps ?? 500)</strong></div>
                 </div>
                 <div class="economy-progress-bar">
                     <span style="@GetLinearProgressStyle(CollectiveKnowledgePercent)"></span>
@@ -114,7 +114,7 @@ else
                 <div class="staking-map-rows">
                     <div><span>Anomaly Stability</span><strong>@AnomalyStabilityPercent.ToString("0.##")% (@AnomalyStabilityStatus)</strong></div>
                     <div><span>Research Influence</span><strong>@($"x{ResearchInfluenceMultiplier:0.00}")</strong></div>
-                    <div><span>Stake Component</span><strong>@($"x{ResearchStakeComponent:0.00}")</strong></div>
+                    <div><span>Analysis Component</span><strong>@($"x{ResearchStakeComponent:0.00}")</strong></div>
                 </div>
                 <div class="economy-progress-bar">
                     <span style="@GetLinearProgressStyle(AnomalyStabilityPercent)"></span>
@@ -136,7 +136,7 @@ else
                     }
                     else
                     {
-                        <span>Submit maps for analysis to unlock daily payouts.</span>
+                        <span>Submit sectors for analysis to unlock daily payouts.</span>
                     }
                 </p>
             </div>
@@ -199,68 +199,118 @@ else
                 <div class="panel-heading">
                     <div>
                         <span class="profile-eyebrow">Active Analysis</span>
-                        <h2>Maps Under Analysis</h2>
+                        <h2>Sectors Under Analysis</h2>
                     </div>
                     <span class="section-count">@Overview.StakedMapsCount</span>
                 </div>
                 @if (Overview.StakedMaps.Count == 0)
                 {
-                    <div class="empty-state-inline">No maps are currently assigned to research.</div>
+                    <div class="empty-state-inline">No sectors are currently assigned to research.</div>
                 }
                 else
                 {
-                    <div class="staking-map-stack">
-                        @foreach (var map in Overview.StakedMaps.OrderBy(static item => item.MapName, StringComparer.OrdinalIgnoreCase))
-                        {
-                            <article class="staking-map-card">
-                                <div class="staking-map-card-head">
-                                    <h3>@map.MapName</h3>
-                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@FormatDifficultyLabel(map.Difficulty)</span>
-                                </div>
-                                <div class="staking-map-rows">
-                                    <div><span>Difficulty</span><strong>@FormatDifficultyLabel(map.Difficulty)</strong></div>
-                                    <div><span>Size</span><strong>@map.Size x @map.Size</strong></div>
-                                    <div><span>Classification</span><strong>@map.AnomalyClassification</strong></div>
-                                    <div><span>Containment</span><strong>@GetContainmentLabel(map)</strong></div>
-                                    <div><span>Research Phase</span><strong>@GetResearchPhaseLabel(map)</strong></div>
-                                    <div><span>Research Depth</span><strong>@GetResearchDepthLabel(map)</strong></div>
-                                    <div><span>Data Collected</span><strong>@GetResearchDataPercent(map).ToString("0.##")%</strong></div>
-                                    <div><span>Puzzle Structures</span><strong>@map.PuzzleStructuresIdentified</strong></div>
-                                    <div><span>Spatial Layers</span><strong>@map.SpatialLayersDetected</strong></div>
-                                </div>
-                                <p class="staking-ai-note">@map.AnalysisAiMessage</p>
-                                <div class="economy-progress-bar">
-                                    <span style="@GetLinearProgressStyle(GetResearchDataPercent(map))"></span>
-                                </div>
-                                <div class="staking-map-footer">
-                                    <div>
-                                        <span class="staking-yield-label">Daily Credits</span>
-                                        <strong class="staking-yield-value">@map.DailyReward.ToString("N0") MN/day</strong>
-                                    </div>
-                                    <button class="btn btn-secondary"
+                    var orderedStakedMaps = GetOrderedStakedMaps();
+                    var visibleStakedMaps = GetVisibleStakedMaps(orderedStakedMaps);
+
+                    @if (orderedStakedMaps.Count > StakedMapsPerSection)
+                    {
+                        <section class="panel leaderboard-pagination-panel staking-map-section-nav">
+                            <p class="leaderboard-pagination-summary">@GetStakedMapSectionSummary(orderedStakedMaps.Count)</p>
+                            <div class="leaderboard-pagination">
+                                <button class="btn btn-secondary"
+                                        type="button"
+                                        disabled="@(!CanGoToPreviousStakedMapSection(orderedStakedMaps.Count))"
+                                        @onclick="() => GoToPreviousStakedMapSection(orderedStakedMaps.Count)">
+                                    Previous
+                                </button>
+                                @foreach (var sectionIndex in GetVisibleStakedMapSectionIndexes(orderedStakedMaps.Count))
+                                {
+                                    <button class="@GetStakedMapSectionButtonClass(sectionIndex)"
                                             type="button"
-                                            title="@GetStakeLockTooltip(map)"
-                                            disabled="@(IsBusy || IsStakeLocked(map))"
-                                            @onclick="() => UnstakeMapAsync(map.MapId)">
-                                        @(IsStakeLocked(map) ? "Containment Lock" : "Withdraw")
+                                            disabled="@IsLoading"
+                                            @onclick="() => GoToStakedMapSection(sectionIndex, orderedStakedMaps.Count)">
+                                        @(sectionIndex + 1)
                                     </button>
-                                </div>
-                                @if (!string.IsNullOrWhiteSpace(GetNextMilestoneLabel(map)))
-                                {
-                                    <div class="staking-milestone-note">@GetNextMilestoneLabel(map)</div>
                                 }
-                                @if (map.AnalysisReport is not null)
-                                {
-                                    <details class="staking-report-card">
-                                        <summary>Expedition Analysis Report @map.AnalysisReport.ReportId</summary>
-                                        <div class="staking-map-rows">
-                                            <div><span>Anomaly Type</span><strong>@map.AnalysisReport.AnomalyType</strong></div>
-                                            <div><span>Puzzle Structure</span><strong>@map.AnalysisReport.PuzzleStructure</strong></div>
-                                            <div><span>Stability Rating</span><strong>@map.AnalysisReport.StabilityRating%</strong></div>
-                                            <div><span>Status</span><strong>@map.AnalysisReport.Status</strong></div>
+                                <button class="btn btn-secondary"
+                                        type="button"
+                                        disabled="@(!CanGoToNextStakedMapSection(orderedStakedMaps.Count))"
+                                        @onclick="() => GoToNextStakedMapSection(orderedStakedMaps.Count)">
+                                    Next
+                                </button>
+                            </div>
+                        </section>
+                    }
+
+                    <div class="staking-map-stack">
+                        @foreach (var map in visibleStakedMaps)
+                        {
+                            var isExpanded = IsStakedMapExpanded(map.MapId);
+                            <article class="staking-map-card staking-map-card-collapsible @(isExpanded ? "expanded" : "collapsed")">
+                                <button class="staking-map-compact-trigger"
+                                        type="button"
+                                        aria-expanded="@isExpanded"
+                                        @onclick="() => ToggleStakedMapExpanded(map.MapId)">
+                                    <div class="staking-map-card-head">
+                                        <h3>@map.MapName</h3>
+                                        <div class="staking-map-head-meta">
+                                            <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@FormatDifficultyLabel(map.Difficulty)</span>
+                                            <span class="staking-expand-chip">@(isExpanded ? "Hide details" : "View details")</span>
                                         </div>
-                                        <p class="staking-ai-note">@map.AnalysisReport.Conclusion</p>
-                                    </details>
+                                    </div>
+                                    <div class="staking-map-compact-grid">
+                                        <div><span>Credits</span><strong>@map.DailyReward.ToString("N0") MN/day</strong></div>
+                                        <div><span>Phase</span><strong>@GetResearchPhaseLabel(map)</strong></div>
+                                        <div><span>Containment</span><strong>@GetContainmentLabel(map)</strong></div>
+                                        <div><span>Data</span><strong>@GetResearchDataPercent(map).ToString("0.##")%</strong></div>
+                                    </div>
+                                    <div class="economy-progress-bar staking-map-compact-progress">
+                                        <span style="@GetLinearProgressStyle(GetResearchDataPercent(map))"></span>
+                                    </div>
+                                </button>
+                                @if (isExpanded)
+                                {
+                                    <div class="staking-map-expanded-body">
+                                        <div class="staking-map-rows">
+                                            <div><span>Difficulty</span><strong>@FormatDifficultyLabel(map.Difficulty)</strong></div>
+                                            <div><span>Size</span><strong>@map.Size x @map.Size</strong></div>
+                                            <div><span>Classification</span><strong>@map.AnomalyClassification</strong></div>
+                                            <div><span>Research Depth</span><strong>@GetResearchDepthLabel(map)</strong></div>
+                                            <div><span>Puzzle Structures</span><strong>@map.PuzzleStructuresIdentified</strong></div>
+                                            <div><span>Spatial Layers</span><strong>@map.SpatialLayersDetected</strong></div>
+                                        </div>
+                                        <p class="staking-ai-note">@map.AnalysisAiMessage</p>
+                                        <div class="staking-map-footer">
+                                            <div>
+                                                <span class="staking-yield-label">Daily Credits</span>
+                                                <strong class="staking-yield-value">@map.DailyReward.ToString("N0") MN/day</strong>
+                                            </div>
+                                            <button class="btn btn-secondary"
+                                                    type="button"
+                                                    title="@GetStakeLockTooltip(map)"
+                                                    disabled="@(IsBusy || IsStakeLocked(map))"
+                                                    @onclick="() => UnstakeMapAsync(map.MapId)">
+                                                @(IsStakeLocked(map) ? "Containment Lock" : "Withdraw")
+                                            </button>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(GetNextMilestoneLabel(map)))
+                                        {
+                                            <div class="staking-milestone-note">@GetNextMilestoneLabel(map)</div>
+                                        }
+                                        @if (map.AnalysisReport is not null)
+                                        {
+                                            <details class="staking-report-card">
+                                                <summary>Expedition Analysis Report @map.AnalysisReport.ReportId</summary>
+                                                <div class="staking-map-rows">
+                                                    <div><span>Anomaly Type</span><strong>@map.AnalysisReport.AnomalyType</strong></div>
+                                                    <div><span>Puzzle Structure</span><strong>@map.AnalysisReport.PuzzleStructure</strong></div>
+                                                    <div><span>Stability Rating</span><strong>@map.AnalysisReport.StabilityRating%</strong></div>
+                                                    <div><span>Status</span><strong>@map.AnalysisReport.Status</strong></div>
+                                                </div>
+                                                <p class="staking-ai-note">@map.AnalysisReport.Conclusion</p>
+                                            </details>
+                                        }
+                                    </div>
                                 }
                             </article>
                         }
@@ -281,9 +331,9 @@ else
                     <div class="staking-empty-state">
                         <div class="staking-empty-header">
                             <span class="staking-empty-icon" aria-hidden="true">ALL ASSIGNED</span>
-                            <strong>No maps available for new research assignments.</strong>
+                            <strong>No sectors available for new research assignments.</strong>
                         </div>
-                        <p>All owned maps are already in containment or research. Withdraw one after lock expiry, or recover more sectors.</p>
+                        <p>All owned sectors are already in containment or research. Withdraw one after lock expiry, or recover more sectors.</p>
                     </div>
                 }
                 else
@@ -324,15 +374,15 @@ else
                 </div>
             </div>
             <details class="staking-faq-collapsible">
-                <summary>Map Analysis Rules</summary>
+                <summary>Sector Analysis Rules</summary>
                 <ol class="staking-faq-list">
-                    <li>Submitting a map starts the Initial Containment Phase for @Math.Max(0, Overview?.StakeLockHours ?? 48) hours.</li>
-                    <li>Containment lock is enforced in both UI and API. Maps cannot be withdrawn during this window.</li>
-                    <li>After containment, maps enter Continuous Research and progress through deeper Research Depth levels over time.</li>
+                    <li>Submitting a sector starts the Initial Containment Phase for @Math.Max(0, Overview?.StakeLockHours ?? 48) hours.</li>
+                    <li>Containment lock is enforced in both UI and API. Sectors cannot be withdrawn during this window.</li>
+                    <li>After containment, sectors enter Continuous Research and progress through deeper Research Depth levels over time.</li>
                     <li>Base daily credits by difficulty remain: Easy = 5 MN, Medium = 15 MN, Hard = 25 MN.</li>
                     <li>Size multiplier formula: <code>0.7 + (size / 20)</code>, capped at <code>2.0x</code>. Example: 2x2 = 0.8x, 4x4 = 0.9x.</li>
-                    <li>Daily reward per map is <code>ceil(base * sizeMultiplier)</code>. Example: Easy 2x2 = <code>ceil(5 * 0.8) = 4 MN/day</code>.</li>
-                    <li>Submitted maps cannot be listed, sold, or recycled until they are withdrawn after lock expiry.</li>
+                    <li>Daily reward per sector is <code>ceil(base * sizeMultiplier)</code>. Example: Easy 2x2 = <code>ceil(5 * 0.8) = 4 MN/day</code>.</li>
+                    <li>Submitted sectors cannot be listed, sold, or recycled until they are withdrawn after lock expiry.</li>
                     <li>Withdrawing early (after lock) ends research early and may reduce long-form discovery depth.</li>
                     <li>Longer assignments unlock deeper analysis, stronger reports, and better council influence context.</li>
                 </ol>
@@ -343,6 +393,7 @@ else
 
 @code {
     [Parameter] public bool Embedded { get; set; }
+    private const int StakedMapsPerSection = 5;
 
     private static readonly string[] YieldColors =
     [
@@ -374,6 +425,8 @@ else
     private CancellationTokenSource? _refreshCancellation;
     private Task? _refreshTask;
     private bool _loadingOverview;
+    private readonly HashSet<string> _expandedStakedMapIds = new(StringComparer.OrdinalIgnoreCase);
+    private int _currentStakedMapSectionIndex;
 
     private int DailyYield => Math.Max(0, Overview?.TotalDailyReward ?? 0);
     private int EstimatedMonthlyYield => DailyYield * 30;
@@ -480,10 +533,11 @@ else
             var payload = await Api.GetFromJsonAsync<StakingOverviewResponse>("api/auth/staking");
             if (payload is null)
             {
-                throw new InvalidOperationException("Unable to load staking overview.");
+                throw new InvalidOperationException("Unable to load analysis overview.");
             }
 
             Overview = payload.Overview;
+            SyncExpandedStakedMapState();
             Session = payload.User ?? await Api.GetSessionAsync();
             await SyncClientSessionAsync(payload.User);
             if (!silent)
@@ -520,7 +574,7 @@ else
     {
         await ExecuteActionAsync(
             async () => await Api.PostJsonAsync("api/auth/staking/stake", new { mapId }),
-            "Map submitted for anomaly research.");
+            "Sector submitted for anomaly research.");
     }
 
     private async Task UnstakeMapAsync(string mapId)
@@ -536,7 +590,7 @@ else
 
         await ExecuteActionAsync(
             async () => await Api.PostJsonAsync("api/auth/staking/unstake", new { mapId }),
-            "Map withdrawn from anomaly research.");
+            "Sector withdrawn from anomaly research.");
     }
 
     private async Task ClaimDailyAsync()
@@ -568,6 +622,7 @@ else
             }
 
             Overview = payload.Overview ?? Overview;
+            SyncExpandedStakedMapState();
             Session = payload.User ?? Session;
             await SyncClientSessionAsync(payload.User);
             CurrentClientTime = DateTimeOffset.UtcNow;
@@ -746,10 +801,161 @@ else
     {
         if (!IsStakeLocked(map))
         {
-            return "This map can be withdrawn from research.";
+            return "This sector can be withdrawn from research.";
         }
 
         return $"Containment unlocks in {GetStakeLockLabel(map)}.";
+    }
+
+    private List<StakedMapEntry> GetOrderedStakedMaps()
+    {
+        return (Overview?.StakedMaps ?? [])
+            .OrderBy(static map => map.MapName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static int GetTotalStakedMapSections(int totalMaps)
+    {
+        if (totalMaps <= 0)
+        {
+            return 1;
+        }
+
+        return (int)Math.Ceiling(totalMaps / (double)StakedMapsPerSection);
+    }
+
+    private IReadOnlyList<StakedMapEntry> GetVisibleStakedMaps(IReadOnlyList<StakedMapEntry> orderedStakedMaps)
+    {
+        NormalizeStakedMapSectionIndex(orderedStakedMaps.Count);
+        return orderedStakedMaps
+            .Skip(_currentStakedMapSectionIndex * StakedMapsPerSection)
+            .Take(StakedMapsPerSection)
+            .ToList();
+    }
+
+    private string GetStakedMapSectionSummary(int totalMaps)
+    {
+        if (totalMaps <= 0)
+        {
+            return "No sectors in analysis.";
+        }
+
+        NormalizeStakedMapSectionIndex(totalMaps);
+        var totalSections = GetTotalStakedMapSections(totalMaps);
+        var start = (_currentStakedMapSectionIndex * StakedMapsPerSection) + 1;
+        var end = Math.Min(totalMaps, start + StakedMapsPerSection - 1);
+        return $"Section {_currentStakedMapSectionIndex + 1} of {totalSections} • Showing {start}-{end} of {totalMaps}";
+    }
+
+    private bool CanGoToPreviousStakedMapSection(int totalMaps)
+    {
+        return totalMaps > StakedMapsPerSection && _currentStakedMapSectionIndex > 0;
+    }
+
+    private bool CanGoToNextStakedMapSection(int totalMaps)
+    {
+        return totalMaps > StakedMapsPerSection && _currentStakedMapSectionIndex < (GetTotalStakedMapSections(totalMaps) - 1);
+    }
+
+    private void GoToPreviousStakedMapSection(int totalMaps)
+    {
+        if (!CanGoToPreviousStakedMapSection(totalMaps))
+        {
+            return;
+        }
+
+        _currentStakedMapSectionIndex -= 1;
+    }
+
+    private void GoToNextStakedMapSection(int totalMaps)
+    {
+        if (!CanGoToNextStakedMapSection(totalMaps))
+        {
+            return;
+        }
+
+        _currentStakedMapSectionIndex += 1;
+    }
+
+    private void GoToStakedMapSection(int sectionIndex, int totalMaps)
+    {
+        var maxSectionIndex = Math.Max(0, GetTotalStakedMapSections(totalMaps) - 1);
+        _currentStakedMapSectionIndex = Math.Clamp(sectionIndex, 0, maxSectionIndex);
+    }
+
+    private IEnumerable<int> GetVisibleStakedMapSectionIndexes(int totalMaps)
+    {
+        var totalSections = GetTotalStakedMapSections(totalMaps);
+        if (totalSections <= 7)
+        {
+            return Enumerable.Range(0, totalSections);
+        }
+
+        var start = Math.Max(0, _currentStakedMapSectionIndex - 2);
+        var end = Math.Min(totalSections - 1, start + 4);
+
+        if (end - start < 4)
+        {
+            start = Math.Max(0, end - 4);
+        }
+
+        return Enumerable.Range(start, end - start + 1);
+    }
+
+    private string GetStakedMapSectionButtonClass(int sectionIndex)
+    {
+        if (sectionIndex == _currentStakedMapSectionIndex)
+        {
+            return "btn btn-primary leaderboard-page-button";
+        }
+
+        return "btn btn-secondary leaderboard-page-button";
+    }
+
+    private void NormalizeStakedMapSectionIndex(int totalMaps)
+    {
+        var maxSectionIndex = Math.Max(0, GetTotalStakedMapSections(totalMaps) - 1);
+        if (_currentStakedMapSectionIndex < 0)
+        {
+            _currentStakedMapSectionIndex = 0;
+            return;
+        }
+
+        if (_currentStakedMapSectionIndex > maxSectionIndex)
+        {
+            _currentStakedMapSectionIndex = maxSectionIndex;
+        }
+    }
+
+    private bool IsStakedMapExpanded(string mapId)
+    {
+        var normalizedMapId = string.IsNullOrWhiteSpace(mapId) ? string.Empty : mapId.Trim();
+        return !string.IsNullOrWhiteSpace(normalizedMapId) && _expandedStakedMapIds.Contains(normalizedMapId);
+    }
+
+    private void ToggleStakedMapExpanded(string mapId)
+    {
+        var normalizedMapId = string.IsNullOrWhiteSpace(mapId) ? string.Empty : mapId.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedMapId))
+        {
+            return;
+        }
+
+        if (!_expandedStakedMapIds.Add(normalizedMapId))
+        {
+            _expandedStakedMapIds.Remove(normalizedMapId);
+        }
+    }
+
+    private void SyncExpandedStakedMapState()
+    {
+        var activeMapIds = (Overview?.StakedMaps ?? [])
+            .Select(static map => string.IsNullOrWhiteSpace(map.MapId) ? string.Empty : map.MapId.Trim())
+            .Where(static mapId => !string.IsNullOrWhiteSpace(mapId))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _expandedStakedMapIds.RemoveWhere(mapId => !activeMapIds.Contains(mapId));
+        NormalizeStakedMapSectionIndex(activeMapIds.Count);
     }
 
     private double GetResearchDataPercent(StakedMapEntry map)

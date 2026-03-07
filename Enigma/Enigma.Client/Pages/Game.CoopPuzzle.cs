@@ -33,14 +33,14 @@ public partial class Game
         {
             "pressure_systems" => new(
                 "Lock the shared plate pattern together.",
-                "Move both players onto the correct plates and keep them there for the full hold. Blue marks your side and red marks your partner.",
+                "Move both explorers onto the correct plates and keep them there for the full hold. Blue marks your side and red marks your partner.",
                 "Every required plate phase locks in sequence."),
             "sync_reaction" => new(
-                "Lock both players under the timing rule for this room.",
+                "Lock both explorers under the timing rule for this room.",
                 "Use the timing information on the blue side and lock only when your lane is valid. The red lane belongs to your partner.",
-                "Both players are locked in a valid state at the same time."),
+                "Both explorers are locked in a valid state at the same time."),
             "deduction_riddle" => new(
-                "Combine both players' clues into one consistent answer.",
+                "Combine both explorers' clues into one consistent answer.",
                 "Share the prompt, clue fragments, and options with your partner, then commit to the same answer. Blue marks your side and red marks theirs.",
                 "The selected answer matches the combined clue set."),
             "split_memory" => new(
@@ -54,7 +54,7 @@ public partial class Game
             "opposing_pattern_input" => new(
                 "Apply the hidden transformation to the shared pattern.",
                 "Use the blue-side arrow controls and enter the transformed pattern, not the literal preview. Red belongs to your partner.",
-                "Both players finish the correct transformed pattern."),
+                "Both explorers finish the correct transformed pattern."),
             "flow_transfer" => new(
                 "Move shared flow into the exact target distribution.",
                 "Pulse the blue controls. Every pulse changes the whole system, including the red side your partner is reading.",
@@ -73,7 +73,7 @@ public partial class Game
                 "All signals form a valid non-conflicting network."),
             "spatial_sync" => new(
                 "Stand in the correct zones together and hold them in sync.",
-                "Move both players into the active zones at the same time and stay there for the required hold. Blue is your side and red is your partner.",
+                "Move both explorers into the active zones at the same time and stay there for the required hold. Blue is your side and red is your partner.",
                 "All sync steps lock in order."),
             _ => new(
                 "Solve the co-op room together.",

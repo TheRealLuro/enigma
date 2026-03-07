@@ -2,25 +2,25 @@
 @page "/profile/{ViewedUsername}"
 @using Enigma.Client.Models
 
-<SeoHead Title="Enigma Profile | Maps, Inventory, and Account Settings"
-         Description="Manage your Enigma profile, owned maps, discovered maps, inventory, and account settings."
+<SeoHead Title="Enigma Explorer Profile | Sectors, Assets, and Account Controls"
+         Description="Manage your Enigma explorer profile, owned sectors, discovered sectors, field assets, and account controls."
          Robots="noindex,follow"
          OpenGraphType="profile"
          SchemaType="ProfilePage" />
 
 @if (IsLoading)
 {
-    <div class="content"><div class="card enigma-game-message"><div class="loader"></div><p>Loading profile...</p></div></div>
+    <div class="content"><div class="card enigma-game-message"><div class="loader"></div><p>Loading explorer profile...</p></div></div>
 }
 else if (ProfileData is null)
 {
     <div class="content">
         <div class="card enigma-game-message">
-            <h1>Profile unavailable</h1>
-            <p>@(LoadError ?? "This profile could not be loaded.")</p>
+            <h1>Explorer profile unavailable</h1>
+            <p>@(LoadError ?? "This explorer record could not be loaded.")</p>
             <div class="enigma-end-actions">
-                <button class="btn btn-primary" type="button" @onclick="GoHome">Home</button>
-                <button class="btn btn-secondary" type="button" @onclick="GoPlayers">Players</button>
+                <button class="btn btn-primary" type="button" @onclick="GoHome">Command</button>
+                <button class="btn btn-secondary" type="button" @onclick="GoPlayers">Network</button>
             </div>
         </div>
     </div>
@@ -35,9 +35,9 @@ else
                     <h1>@ProfileData.Username</h1>
                     <div class="profile-banner-tags">
                         <span class="profile-chip">@ProfileData.MazeNuggets.ToString("N0") Maze Nuggets</span>
-                        <span class="profile-chip">@ProfileData.OwnedMapsCount owned</span>
-                        <span class="profile-chip">@ProfileData.DiscoveredMapsCount discovered</span>
-                        <span class="profile-chip">@ProfileData.StakedMapsCount staked</span>
+                        <span class="profile-chip">@ProfileData.OwnedMapsCount owned sectors</span>
+                        <span class="profile-chip">@ProfileData.DiscoveredMapsCount archived sectors</span>
+                        <span class="profile-chip">@ProfileData.StakedMapsCount under analysis</span>
                     </div>
                 </div>
             </div>
@@ -45,26 +45,26 @@ else
                 @if (IsOwnProfile)
                 {
                     <div class="profile-balance-card profile-balance-card-tight">
-                        <span>Account</span>
+                        <span>Explorer Reserve</span>
                         <strong>@ProfileData.MazeNuggets.ToString("N0") MN</strong>
-                        <small>@ProfileData.MapsCompleted completed | @FormatPercent(ProfileData.WinRate) win rate</small>
+                        <small>@ProfileData.MapsCompleted completed sectors | @FormatPercent(ProfileData.WinRate) success rate</small>
                     </div>
                 }
                 else if (ProfileData.Relationship.AreFriends)
                 {
-                    <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="RemoveViewedFriendAsync">@(IsActionBusy ? "Updating..." : "Unadd")</button>
+                    <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="RemoveViewedFriendAsync">@(IsActionBusy ? "Updating..." : "Remove Contact")</button>
                 }
                 else if (ProfileData.Relationship.HasIncomingRequest)
                 {
-                    <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="AcceptViewedFriendRequestAsync">@(IsActionBusy ? "Accepting..." : "Accept Friend")</button>
+                    <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="AcceptViewedFriendRequestAsync">@(IsActionBusy ? "Accepting..." : "Accept Contact")</button>
                 }
                 else if (ProfileData.Relationship.HasOutgoingRequest)
                 {
-                    <span class="profile-status-pill warning">Request pending</span>
+                    <span class="profile-status-pill warning">Contact request pending</span>
                 }
                 else
                 {
-                    <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="SendFriendRequestAsync">@(IsActionBusy ? "Sending..." : "Add Friend")</button>
+                    <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="SendFriendRequestAsync">@(IsActionBusy ? "Sending..." : "Add Contact")</button>
                 }
             </div>
         </section>
@@ -77,8 +77,8 @@ else
         @if (IsOwnProfile)
         {
             <section class="profile-retention-note" data-tour-id="profile-retention">
-                <span class="profile-eyebrow">Retention Rule</span>
-                <p>60 consecutive inactive days permanently delete this account and all owned maps.</p>
+                <span class="profile-eyebrow">Retention Protocol</span>
+                <p>60 consecutive inactive days permanently delete this account and all owned sectors.</p>
             </section>
         }
 
@@ -95,32 +95,32 @@ else
                 <section class="panel profile-identity-card profile-release-panel">
                     <ProfileAvatar Image="@ProfileData.ProfileImage" AltText="@($"{ProfileData.Username} profile picture")" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-large-frame" IsOnline="@ProfileData.IsOnline" />
                     <div>
-                        <span class="profile-eyebrow">Identity</span>
+                        <span class="profile-eyebrow">Explorer Identity</span>
                         <h2>@ProfileData.Username</h2>
                     </div>
                     <div class="profile-mini-grid">
-                        <div><span>Owned</span><strong>@ProfileData.OwnedMapsCount</strong></div>
-                        <div><span>Discovered</span><strong>@ProfileData.DiscoveredMapsCount</strong></div>
-                        <div><span>Staked</span><strong>@ProfileData.StakedMapsCount</strong></div>
+                        <div><span>Owned Sectors</span><strong>@ProfileData.OwnedMapsCount</strong></div>
+                        <div><span>Archived Sectors</span><strong>@ProfileData.DiscoveredMapsCount</strong></div>
+                        <div><span>Under Analysis</span><strong>@ProfileData.StakedMapsCount</strong></div>
                         <div><span>Maze Nuggets</span><strong>@ProfileData.MazeNuggets.ToString("N0")</strong></div>
                     </div>
                 </section>
                 <section class="panel profile-stats-panel profile-release-panel">
-                    <div class="panel-heading"><div><span class="profile-eyebrow">Performance</span><h2>Run Stats</h2></div></div>
+                    <div class="panel-heading"><div><span class="profile-eyebrow">Expedition Performance</span><h2>Run Metrics</h2></div></div>
                     <div class="profile-stat-grid">
-                        <article class="profile-stat-card accent-blue"><span>Maps Played</span><strong>@ProfileData.NumberOfMapsPlayed</strong></article>
+                        <article class="profile-stat-card accent-blue"><span>Sectors Played</span><strong>@ProfileData.NumberOfMapsPlayed</strong></article>
                         <article class="profile-stat-card accent-green"><span>Completed</span><strong>@ProfileData.MapsCompleted</strong></article>
-                        <article class="profile-stat-card accent-red"><span>Lost</span><strong>@ProfileData.MapsLost</strong></article>
-                        <article class="profile-stat-card accent-gold"><span>Win Rate</span><strong>@FormatPercent(ProfileData.WinRate)</strong></article>
+                        <article class="profile-stat-card accent-red"><span>Failed</span><strong>@ProfileData.MapsLost</strong></article>
+                        <article class="profile-stat-card accent-gold"><span>Success Rate</span><strong>@FormatPercent(ProfileData.WinRate)</strong></article>
                     </div>
                 </section>
                 @if (IsOwnProfile)
                 {
                     <section class="panel profile-list-panel profile-release-panel">
-                        <div class="panel-heading"><div><span class="profile-eyebrow">Social</span><h2>Friends</h2></div><span class="section-count">@ProfileData.Friends.Count</span></div>
+                        <div class="panel-heading"><div><span class="profile-eyebrow">Network</span><h2>Contacts</h2></div><span class="section-count">@ProfileData.Friends.Count</span></div>
                         @if (ProfileData.Friends.Count == 0)
                         {
-                            <div class="empty-state-inline">No friends added yet.</div>
+                            <div class="empty-state-inline">No contacts added yet.</div>
                         }
                         else
                         {
@@ -129,17 +129,17 @@ else
                                 {
                                     <div class="profile-social-chip">
                                         <button class="list-chip list-chip-button" type="button" @onclick="() => OpenProfile(friend)"><span class="chip-avatar">@GetInitials(friend)</span><span>@friend</span></button>
-                                        <button class="inline-link-button compact danger-link" type="button" @onclick="() => RemoveFriendAsync(friend)">Unadd</button>
+                                        <button class="inline-link-button compact danger-link" type="button" @onclick="() => RemoveFriendAsync(friend)">Remove</button>
                                     </div>
                                 }
                             </div>
                         }
                     </section>
                     <section class="panel profile-list-panel profile-release-panel">
-                        <div class="panel-heading"><div><span class="profile-eyebrow">Inbox</span><h2>Friend Requests</h2></div><span class="section-count">@ProfileData.FriendRequests.Count</span></div>
+                        <div class="panel-heading"><div><span class="profile-eyebrow">Inbox</span><h2>Contact Requests</h2></div><span class="section-count">@ProfileData.FriendRequests.Count</span></div>
                         @if (ProfileData.FriendRequests.Count == 0)
                         {
-                            <div class="empty-state-inline">No pending friend requests.</div>
+                            <div class="empty-state-inline">No pending contact requests.</div>
                         }
                         else
                         {
@@ -157,7 +157,7 @@ else
                 }
                 else
                 {
-                    <section class="panel profile-list-panel profile-release-panel profile-public-card"><div class="panel-heading"><div><span class="profile-eyebrow">Visibility</span><h2>Public Profile</h2></div></div><div class="empty-state-inline">Friends, friend requests, inventory, and account settings stay private. Only public map collection and run stats are visible here.</div></section>
+                    <section class="panel profile-list-panel profile-release-panel profile-public-card"><div class="panel-heading"><div><span class="profile-eyebrow">Visibility</span><h2>Public Explorer Record</h2></div></div><div class="empty-state-inline">Contacts, requests, assets, and account controls stay private. Only public sector collection and run metrics are visible here.</div></section>
                 }
             </div>
         }
@@ -165,80 +165,190 @@ else
         {
             <div class="profile-maps-stack" data-tour-id="profile-maps">
                 <section class="panel profile-maps-panel profile-release-panel">
-                    <div class="panel-heading maps-heading"><div><span class="profile-eyebrow">Collection</span><h2>Owned Maps</h2></div><span class="section-count">@ProfileData.MapsOwned.Count</span></div>
+                    <div class="panel-heading maps-heading"><div><span class="profile-eyebrow">Sector Collection</span><h2>Owned Sectors</h2></div><span class="section-count">@ProfileData.MapsOwned.Count</span></div>
                     @if (ProfileData.MapsOwned.Count == 0)
                     {
-                        <div class="empty-state-inline">No owned maps are attached to this account yet.</div>
+                        <div class="empty-state-inline">No owned sectors are attached to this account yet.</div>
                     }
                     else
                     {
-                        <div class="catalog-card-grid">
-                            @foreach (var map in ProfileData.MapsOwned.OrderBy(static item => item.MapName, StringComparer.OrdinalIgnoreCase))
-                            {
-                                <article class="catalog-card profile-map-card">
-                                    <MapImageFrame ImageUrl="@map.MapImage" AltText="@($"{map.MapName} artwork")" FallbackText="@map.MapName" Class="poster" />
-                                    <div class="catalog-card-body">
-                                        <span class="catalog-card-kicker">Owned Map</span>
-                                        <button class="map-link-button catalog-card-title-button" type="button" @onclick="() => OpenMapAsync(map.MapName)">@map.MapName</button>
-                                        <p class="catalog-card-subline">@FormatThemeLabel(map.ThemeLabel, map.Theme)</p>
-                                        <strong class="catalog-card-price">@map.Value.ToString("N0") MN</strong>
-                                        <div class="catalog-card-meta">
-                                            <span class="catalog-card-meta-pill">Size @map.Size x @map.Size</span>
-                                            <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
-                                            <span class="catalog-card-meta-pill">Best @FormatBestTime(map)</span>
-                                            <span class="catalog-card-meta-pill">Rating @map.RatingAverage.ToString("0.0")</span>
-                                        </div>
-                                        @if (IsOwnProfile)
-                                        {
-                                            <div class="profile-map-actions">
-                                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="() => UseMapForPictureAsync(map)">Use for Picture</button>
-                                                <button class="btn btn-danger"
-                                                        type="button"
-                                                        title="@GetRecycleDisabledReason(map)"
-                                                        disabled="@(!CanRecycleMap(map) || IsActionBusy)"
-                                                        @onclick="() => RecycleMapAsync(map)">
-                                                    @(CanRecycleMap(map) ? "Recycle" : "Staked")
-                                                </button>
-                                            </div>
-                                            @if (IsMapStaked(map))
-                                            {
-                                                <div class="empty-state-inline">@GetMapStakeStatusLabel(map)</div>
-                                            }
-                                        }
-                                    </div>
-                                </article>
-                            }
+                        var filteredOwnedMaps = GetFilteredOwnedMaps();
+                        var visibleOwnedMaps = GetVisibleOwnedMaps(filteredOwnedMaps);
+                        <div class="profile-map-tools">
+                            <input class="form-control"
+                                   type="search"
+                                   value="@OwnedMapSearch"
+                                   @oninput="OnOwnedMapSearchInput"
+                                   placeholder="Search owned sectors by name, theme, difficulty..." />
+                            <select class="form-control" value="@OwnedMapSortKey" @onchange="OnOwnedMapSortChanged">
+                                @foreach (var sortOption in MapSortOptions)
+                                {
+                                    <option value="@sortOption.Key">@sortOption.Label</option>
+                                }
+                            </select>
                         </div>
+                        @if (filteredOwnedMaps.Count == 0)
+                        {
+                            <div class="empty-state-inline">
+                                No owned sectors match your current search.
+                                <button class="inline-link-button compact" type="button" @onclick="ClearOwnedMapFilters">Clear filters</button>
+                            </div>
+                        }
+                        else
+                        {
+                            @if (filteredOwnedMaps.Count > MapCardsPerSection)
+                            {
+                                <section class="panel leaderboard-pagination-panel profile-map-section-nav">
+                                    <p class="leaderboard-pagination-summary">@GetOwnedMapSectionSummary(filteredOwnedMaps.Count)</p>
+                                    <div class="leaderboard-pagination">
+                                        <button class="btn btn-secondary"
+                                                type="button"
+                                                disabled="@(!CanGoToPreviousOwnedMapSection(filteredOwnedMaps.Count))"
+                                                @onclick="() => GoToPreviousOwnedMapSection(filteredOwnedMaps.Count)">
+                                            Previous
+                                        </button>
+                                        @foreach (var sectionIndex in GetVisibleOwnedMapSectionIndexes(filteredOwnedMaps.Count))
+                                        {
+                                            <button class="@GetOwnedMapSectionButtonClass(sectionIndex)"
+                                                    type="button"
+                                                    disabled="@IsLoading"
+                                                    @onclick="() => GoToOwnedMapSection(sectionIndex, filteredOwnedMaps.Count)">
+                                                @(sectionIndex + 1)
+                                            </button>
+                                        }
+                                        <button class="btn btn-secondary"
+                                                type="button"
+                                                disabled="@(!CanGoToNextOwnedMapSection(filteredOwnedMaps.Count))"
+                                                @onclick="() => GoToNextOwnedMapSection(filteredOwnedMaps.Count)">
+                                            Next
+                                        </button>
+                                    </div>
+                                </section>
+                            }
+
+                            <div class="catalog-card-grid">
+                                @foreach (var map in visibleOwnedMaps)
+                                {
+                                    <article class="catalog-card profile-map-card">
+                                        <MapImageFrame ImageUrl="@map.MapImage" AltText="@($"{map.MapName} artwork")" FallbackText="@map.MapName" Class="poster" />
+                                        <div class="catalog-card-body">
+                                            <span class="catalog-card-kicker">Owned Sector</span>
+                                            <button class="map-link-button catalog-card-title-button" type="button" @onclick="() => OpenMapAsync(map.MapName)">@map.MapName</button>
+                                            <p class="catalog-card-subline">@FormatThemeLabel(map.ThemeLabel, map.Theme)</p>
+                                            <strong class="catalog-card-price">@map.Value.ToString("N0") MN</strong>
+                                            <div class="catalog-card-meta">
+                                                <span class="catalog-card-meta-pill">Size @map.Size x @map.Size</span>
+                                                <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
+                                                <span class="catalog-card-meta-pill">Best @FormatBestTime(map)</span>
+                                                <span class="catalog-card-meta-pill">Rating @map.RatingAverage.ToString("0.0")</span>
+                                            </div>
+                                            @if (IsOwnProfile)
+                                            {
+                                                <div class="profile-map-actions">
+                                                    <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="() => UseMapForPictureAsync(map)">Use for Picture</button>
+                                                    <button class="btn btn-danger"
+                                                            type="button"
+                                                            title="@GetRecycleDisabledReason(map)"
+                                                            disabled="@(!CanRecycleMap(map) || IsActionBusy)"
+                                                            @onclick="() => RecycleMapAsync(map)">
+                                                        @(CanRecycleMap(map) ? "Recycle" : "Staked")
+                                                    </button>
+                                                </div>
+                                                @if (IsMapStaked(map))
+                                                {
+                                                    <div class="empty-state-inline">@GetMapStakeStatusLabel(map)</div>
+                                                }
+                                            }
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
                     }
                 </section>
                 <section class="panel profile-maps-panel profile-release-panel">
-                    <div class="panel-heading maps-heading"><div><span class="profile-eyebrow">Archive</span><h2>Discovered Maps</h2></div><span class="section-count">@ProfileData.MapsDiscovered.Count</span></div>
+                    <div class="panel-heading maps-heading"><div><span class="profile-eyebrow">Archive</span><h2>Discovered Sectors</h2></div><span class="section-count">@ProfileData.MapsDiscovered.Count</span></div>
                     @if (ProfileData.MapsDiscovered.Count == 0)
                     {
-                        <div class="empty-state-inline">No discovered maps are attached to this account yet.</div>
+                        <div class="empty-state-inline">No discovered sectors are attached to this account yet.</div>
                     }
                     else
                     {
-                        <div class="catalog-card-grid">
-                            @foreach (var map in ProfileData.MapsDiscovered.OrderBy(static item => item.MapName, StringComparer.OrdinalIgnoreCase))
-                            {
-                                <article class="catalog-card profile-map-card">
-                                    <MapImageFrame ImageUrl="@map.MapImage" AltText="@($"{map.MapName} artwork")" FallbackText="@map.MapName" Class="poster" />
-                                    <div class="catalog-card-body">
-                                        <span class="catalog-card-kicker">Discovered Map</span>
-                                        <button class="map-link-button catalog-card-title-button" type="button" @onclick="() => OpenMapAsync(map.MapName)">@map.MapName</button>
-                                        <p class="catalog-card-subline">@FormatThemeLabel(map.ThemeLabel, map.Theme)</p>
-                                        <strong class="catalog-card-price">@map.Value.ToString("N0") MN</strong>
-                                        <div class="catalog-card-meta">
-                                            <span class="catalog-card-meta-pill">Size @map.Size x @map.Size</span>
-                                            <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
-                                            <span class="catalog-card-meta-pill">Best @FormatBestTime(map)</span>
-                                            <span class="catalog-card-meta-pill">Founder @FormatFounder(map)</span>
-                                        </div>
-                                    </div>
-                                </article>
-                            }
+                        var filteredDiscoveredMaps = GetFilteredDiscoveredMaps();
+                        var visibleDiscoveredMaps = GetVisibleDiscoveredMaps(filteredDiscoveredMaps);
+                        <div class="profile-map-tools">
+                            <input class="form-control"
+                                   type="search"
+                                   value="@DiscoveredMapSearch"
+                                   @oninput="OnDiscoveredMapSearchInput"
+                                   placeholder="Search discovered sectors by name, theme, founder..." />
+                            <select class="form-control" value="@DiscoveredMapSortKey" @onchange="OnDiscoveredMapSortChanged">
+                                @foreach (var sortOption in MapSortOptions)
+                                {
+                                    <option value="@sortOption.Key">@sortOption.Label</option>
+                                }
+                            </select>
                         </div>
+                        @if (filteredDiscoveredMaps.Count == 0)
+                        {
+                            <div class="empty-state-inline">
+                                No discovered sectors match your current search.
+                                <button class="inline-link-button compact" type="button" @onclick="ClearDiscoveredMapFilters">Clear filters</button>
+                            </div>
+                        }
+                        else
+                        {
+                            @if (filteredDiscoveredMaps.Count > MapCardsPerSection)
+                            {
+                                <section class="panel leaderboard-pagination-panel profile-map-section-nav">
+                                    <p class="leaderboard-pagination-summary">@GetDiscoveredMapSectionSummary(filteredDiscoveredMaps.Count)</p>
+                                    <div class="leaderboard-pagination">
+                                        <button class="btn btn-secondary"
+                                                type="button"
+                                                disabled="@(!CanGoToPreviousDiscoveredMapSection(filteredDiscoveredMaps.Count))"
+                                                @onclick="() => GoToPreviousDiscoveredMapSection(filteredDiscoveredMaps.Count)">
+                                            Previous
+                                        </button>
+                                        @foreach (var sectionIndex in GetVisibleDiscoveredMapSectionIndexes(filteredDiscoveredMaps.Count))
+                                        {
+                                            <button class="@GetDiscoveredMapSectionButtonClass(sectionIndex)"
+                                                    type="button"
+                                                    disabled="@IsLoading"
+                                                    @onclick="() => GoToDiscoveredMapSection(sectionIndex, filteredDiscoveredMaps.Count)">
+                                                @(sectionIndex + 1)
+                                            </button>
+                                        }
+                                        <button class="btn btn-secondary"
+                                                type="button"
+                                                disabled="@(!CanGoToNextDiscoveredMapSection(filteredDiscoveredMaps.Count))"
+                                                @onclick="() => GoToNextDiscoveredMapSection(filteredDiscoveredMaps.Count)">
+                                            Next
+                                        </button>
+                                    </div>
+                                </section>
+                            }
+
+                            <div class="catalog-card-grid">
+                                @foreach (var map in visibleDiscoveredMaps)
+                                {
+                                    <article class="catalog-card profile-map-card">
+                                        <MapImageFrame ImageUrl="@map.MapImage" AltText="@($"{map.MapName} artwork")" FallbackText="@map.MapName" Class="poster" />
+                                        <div class="catalog-card-body">
+                                            <span class="catalog-card-kicker">Discovered Sector</span>
+                                            <button class="map-link-button catalog-card-title-button" type="button" @onclick="() => OpenMapAsync(map.MapName)">@map.MapName</button>
+                                            <p class="catalog-card-subline">@FormatThemeLabel(map.ThemeLabel, map.Theme)</p>
+                                            <strong class="catalog-card-price">@map.Value.ToString("N0") MN</strong>
+                                            <div class="catalog-card-meta">
+                                                <span class="catalog-card-meta-pill">Size @map.Size x @map.Size</span>
+                                                <span class="difficulty-badge difficulty-@GetDifficultyClass(map.Difficulty)">@map.Difficulty</span>
+                                                <span class="catalog-card-meta-pill">Best @FormatBestTime(map)</span>
+                                                <span class="catalog-card-meta-pill">Founder @FormatFounder(map)</span>
+                                            </div>
+                                        </div>
+                                    </article>
+                                }
+                            </div>
+                        }
                     }
                 </section>
             </div>
@@ -246,10 +356,10 @@ else
         else if (ActiveTab == InventoryTab && IsOwnProfile)
         {
             <section class="panel profile-release-panel profile-inventory-panel" data-tour-id="profile-inventory">
-                <div class="panel-heading maps-heading"><div><span class="profile-eyebrow">Inventory</span><h2>Owned Items</h2></div><span class="section-count">@InventoryItems.Count</span></div>
+                <div class="panel-heading maps-heading"><div><span class="profile-eyebrow">Field Assets</span><h2>Issued Items</h2></div><span class="section-count">@InventoryItems.Count</span></div>
                 @if (InventoryItems.Count == 0)
                 {
-                    <div class="empty-state-inline">No items owned yet. Visit the marketplace shop to buy support gear.</div>
+                    <div class="empty-state-inline">No field assets owned yet. Visit the marketplace shop to buy support gear.</div>
                 }
                 else
                 {
@@ -259,7 +369,7 @@ else
                             <div class="panel-heading maps-heading profile-inventory-subheading">
                                 <div>
                                     <span class="profile-eyebrow">Loadout</span>
-                                    <h3>Utility Items</h3>
+                                    <h3>Utility Gear</h3>
                                 </div>
                                 <span class="section-count section-count-small">@OwnedGearItems.Count</span>
                             </div>
@@ -297,7 +407,7 @@ else
                             <div class="panel-heading maps-heading profile-inventory-subheading">
                                 <div>
                                     <span class="profile-eyebrow">Collection</span>
-                                    <h3>Owned Cosmetics</h3>
+                                    <h3>Visual Mods</h3>
                                 </div>
                                 <span class="section-count section-count-small">@OwnedCosmeticItems.Count</span>
                             </div>
@@ -335,7 +445,7 @@ else
         {
             <div class="profile-settings-stack" data-tour-id="profile-settings">
                 <section class="panel profile-release-panel profile-settings-panel">
-                    <div class="panel-heading"><div><span class="profile-eyebrow">Identity</span><h2>Change Username</h2></div></div>
+                    <div class="panel-heading"><div><span class="profile-eyebrow">Identity</span><h2>Update Callsign</h2></div></div>
                     <div class="empty-state-inline">@UsernameCooldownMessage</div>
                     <EditForm FormName="ProfileUsernameForm" Model="UsernameForm" OnValidSubmit="UpdateUsernameAsync" class="profile-settings-form">
                         <DataAnnotationsValidator />
@@ -345,7 +455,7 @@ else
                     </EditForm>
                 </section>
                 <section class="panel profile-release-panel profile-settings-panel">
-                    <div class="panel-heading"><div><span class="profile-eyebrow">Settings</span><h2>Update Email</h2></div></div>
+                    <div class="panel-heading"><div><span class="profile-eyebrow">Signal Routing</span><h2>Update Contact Email</h2></div></div>
                     <EditForm FormName="ProfileEmailForm" Model="EmailForm" OnValidSubmit="UpdateEmailAsync" class="profile-settings-form">
                         <DataAnnotationsValidator />
                         <div><label class="form-label">New Email</label><InputText class="form-control" @bind-Value="EmailForm.NewEmail" /><ValidationMessage For="() => EmailForm.NewEmail" /></div>
@@ -354,7 +464,7 @@ else
                     </EditForm>
                 </section>
                 <section class="panel profile-release-panel profile-settings-panel">
-                    <div class="panel-heading"><div><span class="profile-eyebrow">Security</span><h2>Change Password</h2></div></div>
+                    <div class="panel-heading"><div><span class="profile-eyebrow">Access Security</span><h2>Update Access Key</h2></div></div>
                     <EditForm FormName="ProfilePasswordForm" Model="PasswordForm" OnValidSubmit="UpdatePasswordAsync" class="profile-settings-form">
                         <DataAnnotationsValidator />
                         <div><label class="form-label">Current Password</label><div class="password-field-wrap"><InputText class="form-control" type="@(ShowPasswordFields ? "text" : "password")" @bind-Value="PasswordForm.CurrentPassword" /><button class="password-toggle-button" type="button" @onclick="() => ShowPasswordFields = !ShowPasswordFields">@(ShowPasswordFields ? "Hide" : "Show")</button></div><ValidationMessage For="() => PasswordForm.CurrentPassword" /></div>
@@ -364,7 +474,7 @@ else
                     </EditForm>
                 </section>
                 <section class="panel profile-release-panel profile-settings-panel">
-                    <div class="panel-heading"><div><span class="profile-eyebrow">Avatar</span><h2>Profile Picture</h2></div></div>
+                    <div class="panel-heading"><div><span class="profile-eyebrow">Avatar</span><h2>Explorer Portrait</h2></div></div>
                     <div class="profile-avatar-settings-grid">
                         <div class="profile-avatar-preview-card">
                             <span class="catalog-card-kicker">Preview</span>
@@ -377,12 +487,12 @@ else
                         <div class="profile-avatar-controls">
                             @if (AvatarSourceOptions.Count == 0)
                             {
-                                <div class="empty-state-inline">Own a map with artwork to use it as your profile picture.</div>
+                                <div class="empty-state-inline">Own a sector with artwork to use it as your profile picture.</div>
                             }
                             else
                             {
                                 <div>
-                                    <label class="form-label">Source Map</label>
+                                    <label class="form-label">Source Sector</label>
                                     <EnigmaDropdown TValue="string"
                                                     Class="form-control"
                                                     Options="AvatarSourceDropdownOptions"
@@ -394,12 +504,12 @@ else
                     </div>
                 </section>
                 <section class="panel profile-release-panel profile-settings-panel">
-                    <div class="panel-heading"><div><span class="profile-eyebrow">Tutorial</span><h2>Guided Walkthrough</h2></div></div>
-                    <p class="profile-settings-copy">Replay the guided walkthrough. It covers Home, Play, Game, Leaderboard, Economy, Players, Profile, and Settings, then reminds you that 60 consecutive inactive days permanently deletes your account and owned maps.</p>
+                    <div class="panel-heading"><div><span class="profile-eyebrow">Orientation</span><h2>Guided Walkthrough</h2></div></div>
+                    <p class="profile-settings-copy">Replay the guided walkthrough. It covers Command, Expeditions, Co-op, Rankings, Research, Network, Console, and Control, then reminds you that 60 consecutive inactive days permanently deletes your account and owned sectors.</p>
                     <div class="profile-settings-actions-row"><button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="ReplayTutorialAsync">Replay Tutorial</button></div>
                 </section>
                 <section class="panel profile-release-panel profile-settings-panel profile-danger-panel">
-                    <div class="panel-heading"><div><span class="profile-eyebrow">Account</span><h2>Danger Zone</h2></div></div>
+                    <div class="panel-heading"><div><span class="profile-eyebrow">Account</span><h2>Critical Controls</h2></div></div>
                     <div class="profile-settings-actions-row"><button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="LogoutAsync">Sign Out</button></div>
                     <EditForm FormName="ProfileDeleteForm" Model="DeleteForm" OnValidSubmit="DeleteAccountAsync" class="profile-settings-form">
                         <DataAnnotationsValidator />

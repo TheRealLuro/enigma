@@ -11,24 +11,45 @@ namespace Enigma.Client.Pages;
 public partial class Profile : IAsyncDisposable
 {
     private const int DefaultUsernameCooldownDays = 14;
+    private const int MapCardsPerSection = 5;
     private const string OverviewTab = "overview";
     private const string MapsTab = "maps";
     private const string InventoryTab = "inventory";
     private const string SettingsTab = "settings";
+    private const string MapSortByNameAsc = "name_asc";
+    private const string MapSortByNameDesc = "name_desc";
+    private const string MapSortByValueDesc = "value_desc";
+    private const string MapSortByValueAsc = "value_asc";
+    private const string MapSortByDifficulty = "difficulty";
+    private const string MapSortBySizeDesc = "size_desc";
+    private const string MapSortByNewest = "newest";
+    private const string MapSortByOldest = "oldest";
     private static readonly TimeSpan OwnProfileRefreshInterval = TimeSpan.FromSeconds(4);
 
     private static readonly IReadOnlyList<(string Key, string Label)> OwnTabs =
     [
-        (OverviewTab, "Overview"),
-        (MapsTab, "Maps"),
-        (InventoryTab, "Inventory"),
-        (SettingsTab, "Settings"),
+        (OverviewTab, "Console"),
+        (MapsTab, "Sectors"),
+        (InventoryTab, "Assets"),
+        (SettingsTab, "Control"),
     ];
 
     private static readonly IReadOnlyList<(string Key, string Label)> PublicTabs =
     [
-        (OverviewTab, "Overview"),
-        (MapsTab, "Maps"),
+        (OverviewTab, "Console"),
+        (MapsTab, "Sectors"),
+    ];
+
+    private static readonly IReadOnlyList<(string Key, string Label)> MapSortOptions =
+    [
+        (MapSortByNameAsc, "Name A-Z"),
+        (MapSortByNameDesc, "Name Z-A"),
+        (MapSortByValueDesc, "Value High-Low"),
+        (MapSortByValueAsc, "Value Low-High"),
+        (MapSortByDifficulty, "Difficulty"),
+        (MapSortBySizeDesc, "Size Largest"),
+        (MapSortByNewest, "Newest Discovery"),
+        (MapSortByOldest, "Oldest Discovery"),
     ];
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -51,6 +72,12 @@ public partial class Profile : IAsyncDisposable
     private string? StatusMessage { get; set; }
     private string? LoadedUsername { get; set; }
     private string ActiveTab { get; set; } = OverviewTab;
+    private string OwnedMapSearch { get; set; } = string.Empty;
+    private string DiscoveredMapSearch { get; set; } = string.Empty;
+    private string OwnedMapSortKey { get; set; } = MapSortByNameAsc;
+    private string DiscoveredMapSortKey { get; set; } = MapSortByNameAsc;
+    private int OwnedMapSectionIndex { get; set; }
+    private int DiscoveredMapSectionIndex { get; set; }
     private LoginUserSummary? Session { get; set; }
     private ProfileUserData? ProfileData { get; set; }
     private List<ItemCatalogEntry> InventoryItems { get; set; } = [];
@@ -115,11 +142,11 @@ public partial class Profile : IAsyncDisposable
         {
             if (!IsUsernameChangeCoolingDown || NextUsernameChangeAt is not DateTimeOffset nextChangeAt)
             {
-                return $"You can change your username every {UsernameChangeCooldownDays} days.";
+                return $"You can update your callsign every {UsernameChangeCooldownDays} days.";
             }
 
-            return $"Username changes are limited to every {UsernameChangeCooldownDays} days. "
-                + $"Next change available on {nextChangeAt.ToLocalTime():MMM d, yyyy h:mm tt}.";
+            return $"Callsign updates are limited to every {UsernameChangeCooldownDays} days. "
+                + $"Next update available on {nextChangeAt.ToLocalTime():MMM d, yyyy h:mm tt}.";
         }
     }
 
@@ -314,6 +341,315 @@ public partial class Profile : IAsyncDisposable
         NavigationManager.NavigateTo(target, replace: true);
     }
 
+    private static bool IsValidMapSortKey(string sortKey)
+    {
+        return MapSortOptions.Any(option => string.Equals(option.Key, sortKey, StringComparison.Ordinal));
+    }
+
+    private void OnOwnedMapSearchInput(ChangeEventArgs args)
+    {
+        OwnedMapSearch = args.Value?.ToString() ?? string.Empty;
+        OwnedMapSectionIndex = 0;
+    }
+
+    private void OnDiscoveredMapSearchInput(ChangeEventArgs args)
+    {
+        DiscoveredMapSearch = args.Value?.ToString() ?? string.Empty;
+        DiscoveredMapSectionIndex = 0;
+    }
+
+    private void OnOwnedMapSortChanged(ChangeEventArgs args)
+    {
+        var requestedSort = args.Value?.ToString() ?? string.Empty;
+        OwnedMapSortKey = IsValidMapSortKey(requestedSort) ? requestedSort : MapSortByNameAsc;
+        OwnedMapSectionIndex = 0;
+    }
+
+    private void OnDiscoveredMapSortChanged(ChangeEventArgs args)
+    {
+        var requestedSort = args.Value?.ToString() ?? string.Empty;
+        DiscoveredMapSortKey = IsValidMapSortKey(requestedSort) ? requestedSort : MapSortByNameAsc;
+        DiscoveredMapSectionIndex = 0;
+    }
+
+    private void ClearOwnedMapFilters()
+    {
+        OwnedMapSearch = string.Empty;
+        OwnedMapSortKey = MapSortByNameAsc;
+        OwnedMapSectionIndex = 0;
+    }
+
+    private void ClearDiscoveredMapFilters()
+    {
+        DiscoveredMapSearch = string.Empty;
+        DiscoveredMapSortKey = MapSortByNameAsc;
+        DiscoveredMapSectionIndex = 0;
+    }
+
+    private List<MapSummary> GetFilteredOwnedMaps()
+    {
+        return FilterAndSortMaps(ProfileData?.MapsOwned ?? [], OwnedMapSearch, OwnedMapSortKey);
+    }
+
+    private List<MapSummary> GetFilteredDiscoveredMaps()
+    {
+        return FilterAndSortMaps(ProfileData?.MapsDiscovered ?? [], DiscoveredMapSearch, DiscoveredMapSortKey);
+    }
+
+    private static List<MapSummary> FilterAndSortMaps(IEnumerable<MapSummary> source, string search, string sortKey)
+    {
+        var query = source ?? [];
+        var normalizedSearch = (search ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedSearch))
+        {
+            query = query.Where(map => MapMatchesSearch(map, normalizedSearch));
+        }
+
+        return ApplyMapSort(query, sortKey).ToList();
+    }
+
+    private static bool MapMatchesSearch(MapSummary map, string search)
+    {
+        return ContainsText(map.MapName, search)
+            || ContainsText(map.ThemeLabel, search)
+            || ContainsText(map.Theme, search)
+            || ContainsText(map.Difficulty, search)
+            || ContainsText(map.Founder, search)
+            || ContainsText(map.Owner, search);
+    }
+
+    private static bool ContainsText(string? source, string search)
+    {
+        return !string.IsNullOrWhiteSpace(source)
+            && source.Contains(search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<MapSummary> ApplyMapSort(IEnumerable<MapSummary> source, string sortKey)
+    {
+        return sortKey switch
+        {
+            MapSortByNameDesc => source.OrderByDescending(map => map.MapName, StringComparer.OrdinalIgnoreCase),
+            MapSortByValueDesc => source.OrderByDescending(map => map.Value).ThenBy(map => map.MapName, StringComparer.OrdinalIgnoreCase),
+            MapSortByValueAsc => source.OrderBy(map => map.Value).ThenBy(map => map.MapName, StringComparer.OrdinalIgnoreCase),
+            MapSortByDifficulty => source
+                .OrderBy(map => GetDifficultyRank(map.Difficulty))
+                .ThenBy(map => map.MapName, StringComparer.OrdinalIgnoreCase),
+            MapSortBySizeDesc => source
+                .OrderByDescending(map => map.Size)
+                .ThenBy(map => map.MapName, StringComparer.OrdinalIgnoreCase),
+            MapSortByNewest => source
+                .OrderByDescending(GetFoundedTimestampOrMin)
+                .ThenBy(map => map.MapName, StringComparer.OrdinalIgnoreCase),
+            MapSortByOldest => source
+                .OrderBy(GetFoundedTimestampOrMin)
+                .ThenBy(map => map.MapName, StringComparer.OrdinalIgnoreCase),
+            _ => source.OrderBy(map => map.MapName, StringComparer.OrdinalIgnoreCase),
+        };
+    }
+
+    private static int GetDifficultyRank(string? difficulty)
+    {
+        return difficulty?.Trim().ToLowerInvariant() switch
+        {
+            "easy" => 1,
+            "medium" => 2,
+            "hard" => 3,
+            "elite" => 4,
+            _ => 5,
+        };
+    }
+
+    private static DateTimeOffset GetFoundedTimestampOrMin(MapSummary map)
+    {
+        if (DateTimeOffset.TryParse(map.TimeFounded, out var founded))
+        {
+            return founded.ToUniversalTime();
+        }
+
+        return DateTimeOffset.MinValue;
+    }
+
+    private static int GetTotalMapSections(int totalMaps)
+    {
+        if (totalMaps <= 0)
+        {
+            return 1;
+        }
+
+        return (int)Math.Ceiling(totalMaps / (double)MapCardsPerSection);
+    }
+
+    private IReadOnlyList<MapSummary> GetVisibleOwnedMaps(IReadOnlyList<MapSummary> filteredMaps)
+    {
+        NormalizeOwnedMapSectionIndex(filteredMaps.Count);
+        return filteredMaps
+            .Skip(OwnedMapSectionIndex * MapCardsPerSection)
+            .Take(MapCardsPerSection)
+            .ToList();
+    }
+
+    private IReadOnlyList<MapSummary> GetVisibleDiscoveredMaps(IReadOnlyList<MapSummary> filteredMaps)
+    {
+        NormalizeDiscoveredMapSectionIndex(filteredMaps.Count);
+        return filteredMaps
+            .Skip(DiscoveredMapSectionIndex * MapCardsPerSection)
+            .Take(MapCardsPerSection)
+            .ToList();
+    }
+
+    private static IEnumerable<int> GetVisibleMapSectionIndexes(int currentSectionIndex, int totalMaps)
+    {
+        var totalSections = GetTotalMapSections(totalMaps);
+        if (totalSections <= 7)
+        {
+            return Enumerable.Range(0, totalSections);
+        }
+
+        var start = Math.Max(0, currentSectionIndex - 2);
+        var end = Math.Min(totalSections - 1, start + 4);
+        if (end - start < 4)
+        {
+            start = Math.Max(0, end - 4);
+        }
+
+        return Enumerable.Range(start, end - start + 1);
+    }
+
+    private static string BuildMapSectionSummary(int currentSectionIndex, int totalMaps)
+    {
+        if (totalMaps <= 0)
+        {
+            return "No maps found.";
+        }
+
+        var totalSections = GetTotalMapSections(totalMaps);
+        var start = (currentSectionIndex * MapCardsPerSection) + 1;
+        var end = Math.Min(totalMaps, start + MapCardsPerSection - 1);
+        return $"Section {currentSectionIndex + 1} of {totalSections} • Showing {start}-{end} of {totalMaps}";
+    }
+
+    private void NormalizeOwnedMapSectionIndex(int totalMaps)
+    {
+        var maxSectionIndex = Math.Max(0, GetTotalMapSections(totalMaps) - 1);
+        OwnedMapSectionIndex = Math.Clamp(OwnedMapSectionIndex, 0, maxSectionIndex);
+    }
+
+    private void NormalizeDiscoveredMapSectionIndex(int totalMaps)
+    {
+        var maxSectionIndex = Math.Max(0, GetTotalMapSections(totalMaps) - 1);
+        DiscoveredMapSectionIndex = Math.Clamp(DiscoveredMapSectionIndex, 0, maxSectionIndex);
+    }
+
+    private string GetOwnedMapSectionSummary(int totalMaps)
+    {
+        NormalizeOwnedMapSectionIndex(totalMaps);
+        return BuildMapSectionSummary(OwnedMapSectionIndex, totalMaps);
+    }
+
+    private string GetDiscoveredMapSectionSummary(int totalMaps)
+    {
+        NormalizeDiscoveredMapSectionIndex(totalMaps);
+        return BuildMapSectionSummary(DiscoveredMapSectionIndex, totalMaps);
+    }
+
+    private bool CanGoToPreviousOwnedMapSection(int totalMaps)
+    {
+        return totalMaps > MapCardsPerSection && OwnedMapSectionIndex > 0;
+    }
+
+    private bool CanGoToNextOwnedMapSection(int totalMaps)
+    {
+        return totalMaps > MapCardsPerSection && OwnedMapSectionIndex < GetTotalMapSections(totalMaps) - 1;
+    }
+
+    private bool CanGoToPreviousDiscoveredMapSection(int totalMaps)
+    {
+        return totalMaps > MapCardsPerSection && DiscoveredMapSectionIndex > 0;
+    }
+
+    private bool CanGoToNextDiscoveredMapSection(int totalMaps)
+    {
+        return totalMaps > MapCardsPerSection && DiscoveredMapSectionIndex < GetTotalMapSections(totalMaps) - 1;
+    }
+
+    private void GoToPreviousOwnedMapSection(int totalMaps)
+    {
+        if (!CanGoToPreviousOwnedMapSection(totalMaps))
+        {
+            return;
+        }
+
+        OwnedMapSectionIndex -= 1;
+    }
+
+    private void GoToNextOwnedMapSection(int totalMaps)
+    {
+        if (!CanGoToNextOwnedMapSection(totalMaps))
+        {
+            return;
+        }
+
+        OwnedMapSectionIndex += 1;
+    }
+
+    private void GoToPreviousDiscoveredMapSection(int totalMaps)
+    {
+        if (!CanGoToPreviousDiscoveredMapSection(totalMaps))
+        {
+            return;
+        }
+
+        DiscoveredMapSectionIndex -= 1;
+    }
+
+    private void GoToNextDiscoveredMapSection(int totalMaps)
+    {
+        if (!CanGoToNextDiscoveredMapSection(totalMaps))
+        {
+            return;
+        }
+
+        DiscoveredMapSectionIndex += 1;
+    }
+
+    private void GoToOwnedMapSection(int sectionIndex, int totalMaps)
+    {
+        var maxSectionIndex = Math.Max(0, GetTotalMapSections(totalMaps) - 1);
+        OwnedMapSectionIndex = Math.Clamp(sectionIndex, 0, maxSectionIndex);
+    }
+
+    private void GoToDiscoveredMapSection(int sectionIndex, int totalMaps)
+    {
+        var maxSectionIndex = Math.Max(0, GetTotalMapSections(totalMaps) - 1);
+        DiscoveredMapSectionIndex = Math.Clamp(sectionIndex, 0, maxSectionIndex);
+    }
+
+    private IEnumerable<int> GetVisibleOwnedMapSectionIndexes(int totalMaps)
+    {
+        NormalizeOwnedMapSectionIndex(totalMaps);
+        return GetVisibleMapSectionIndexes(OwnedMapSectionIndex, totalMaps);
+    }
+
+    private IEnumerable<int> GetVisibleDiscoveredMapSectionIndexes(int totalMaps)
+    {
+        NormalizeDiscoveredMapSectionIndex(totalMaps);
+        return GetVisibleMapSectionIndexes(DiscoveredMapSectionIndex, totalMaps);
+    }
+
+    private string GetOwnedMapSectionButtonClass(int sectionIndex)
+    {
+        return sectionIndex == OwnedMapSectionIndex
+            ? "btn btn-primary leaderboard-page-button"
+            : "btn btn-secondary leaderboard-page-button";
+    }
+
+    private string GetDiscoveredMapSectionButtonClass(int sectionIndex)
+    {
+        return sectionIndex == DiscoveredMapSectionIndex
+            ? "btn btn-primary leaderboard-page-button"
+            : "btn btn-secondary leaderboard-page-button";
+    }
+
     private async Task SendFriendRequestAsync()
     {
         if (ProfileData is null || IsOwnProfile)
@@ -327,7 +663,7 @@ public partial class Profile : IAsyncDisposable
             {
                 await RefreshSessionAsync();
                 await LoadProfileAsync(forceReload: true);
-                return await ReadStatusAsync(response, "Friend request sent.");
+                return await ReadStatusAsync(response, "Contact request sent.");
             });
     }
 
@@ -339,7 +675,7 @@ public partial class Profile : IAsyncDisposable
             {
                 await RefreshSessionAsync();
                 await LoadProfileAsync(forceReload: true);
-                return await ReadStatusAsync(response, "Friend request accepted.");
+                return await ReadStatusAsync(response, "Contact request accepted.");
             });
     }
 
@@ -356,7 +692,7 @@ public partial class Profile : IAsyncDisposable
             {
                 await RefreshSessionAsync();
                 await LoadProfileAsync(forceReload: true);
-                return await ReadStatusAsync(response, "Friend removed.");
+                return await ReadStatusAsync(response, "Contact removed.");
             });
     }
 
@@ -374,7 +710,7 @@ public partial class Profile : IAsyncDisposable
             }),
             async response =>
             {
-                var message = await RefreshSessionFromUserResponseAsync(response, "Email updated.");
+                var message = await RefreshSessionFromUserResponseAsync(response, "Contact email updated.");
                 EmailForm.CurrentPassword = string.Empty;
                 return message;
             });
@@ -386,14 +722,14 @@ public partial class Profile : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(requestedUsername))
         {
             HasError = true;
-            StatusMessage = "Enter a new username first.";
+            StatusMessage = "Enter a new callsign first.";
             return;
         }
 
         if (Session is not null && EqualsIgnoreCase(Session.Username, requestedUsername))
         {
             HasError = true;
-            StatusMessage = "Choose a different username.";
+            StatusMessage = "Choose a different callsign.";
             return;
         }
 
@@ -406,7 +742,7 @@ public partial class Profile : IAsyncDisposable
 
         var confirmChange = await JS.InvokeAsync<bool>(
             "confirm",
-            $"Change username from '{Session?.Username}' to '{requestedUsername}'?");
+            $"Update callsign from '{Session?.Username}' to '{requestedUsername}'?");
         if (!confirmChange)
         {
             HasError = false;
@@ -439,7 +775,7 @@ public partial class Profile : IAsyncDisposable
                 }
 
                 UsernameForm.CurrentPassword = string.Empty;
-                var message = JsonSerializer.Deserialize<ApiStatusResponse>(raw, JsonOptions)?.ToDisplayMessage() ?? "Username updated.";
+                var message = JsonSerializer.Deserialize<ApiStatusResponse>(raw, JsonOptions)?.ToDisplayMessage() ?? "Callsign updated.";
                 NavigationManager.NavigateTo($"/profile?tab={Uri.EscapeDataString(SettingsTab)}", replace: true);
                 return message;
             });
@@ -462,7 +798,7 @@ public partial class Profile : IAsyncDisposable
             }),
             async response =>
             {
-                var message = await RefreshSessionFromUserResponseAsync(response, "Password updated.");
+                var message = await RefreshSessionFromUserResponseAsync(response, "Access key updated.");
                 PasswordForm = new PasswordFormModel();
                 return message;
             });
@@ -478,7 +814,7 @@ public partial class Profile : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(AvatarMapName) || SelectedAvatarSource is null)
         {
             HasError = true;
-            StatusMessage = "Choose an owned map with artwork first.";
+            StatusMessage = "Choose an owned sector with artwork first.";
             return;
         }
 
@@ -487,7 +823,7 @@ public partial class Profile : IAsyncDisposable
             {
                 mapName = AvatarMapName,
             }),
-            async response => await RefreshSessionFromUserResponseAsync(response, "Profile picture updated."));
+            async response => await RefreshSessionFromUserResponseAsync(response, "Explorer portrait updated."));
     }
 
     private async Task ReplayTutorialAsync()
@@ -496,7 +832,7 @@ public partial class Profile : IAsyncDisposable
             () => Api.PostJsonAsync("api/auth/account/tutorial", new { action = "seen" }),
             async response =>
             {
-                var message = await RefreshSessionFromUserResponseAsync(response, "Tutorial queued.");
+                var message = await RefreshSessionFromUserResponseAsync(response, "Orientation queued.");
                 await JS.InvokeVoidAsync("enigmaGame.startTutorial");
                 return message;
             });
@@ -519,7 +855,7 @@ public partial class Profile : IAsyncDisposable
             }),
             async response =>
             {
-                var message = await ReadStatusAsync(response, "Account deleted.");
+                var message = await ReadStatusAsync(response, "Explorer account deleted.");
                 await ClearLocalSessionAsync();
                 NavigationManager.NavigateTo("/", replace: true);
                 return message;
@@ -562,7 +898,7 @@ public partial class Profile : IAsyncDisposable
             var payload = await Api.GetFromJsonAsync<SeedApiResponse>($"api/auth/loadMap?name={Uri.EscapeDataString(mapName)}");
             if (string.IsNullOrWhiteSpace(payload?.Seed))
             {
-                throw new InvalidOperationException("The selected map did not return a seed.");
+                throw new InvalidOperationException("The selected sector did not return a seed.");
             }
 
             NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(payload.Seed)}&source=load&mapName={Uri.EscapeDataString(mapName)}");
@@ -579,7 +915,7 @@ public partial class Profile : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(map.MapImage))
         {
             HasError = true;
-            StatusMessage = $"{map.MapName} does not have artwork yet, so it cannot be used as a profile picture.";
+            StatusMessage = $"{map.MapName} does not have artwork yet, so it cannot be used as an explorer portrait.";
             return;
         }
 
@@ -604,15 +940,15 @@ public partial class Profile : IAsyncDisposable
     {
         if (!IsMapStaked(map))
         {
-            return "Recycle this map.";
+            return "Recycle this sector.";
         }
 
         if (TryGetMapStakeLock(map, out var lockUntil) && lockUntil > DateTimeOffset.UtcNow)
         {
-            return $"Staked map lock active until {lockUntil.ToLocalTime():MMM d, yyyy h:mm tt}.";
+            return $"Analysis lock active until {lockUntil.ToLocalTime():MMM d, yyyy h:mm tt}.";
         }
 
-        return "Staked maps must be unstaked before recycling.";
+        return "Sectors under analysis must be withdrawn before recycling.";
     }
 
     private string GetMapStakeStatusLabel(MapSummary map)
@@ -638,7 +974,7 @@ public partial class Profile : IAsyncDisposable
             return $"Staked and locked for {Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s.";
         }
 
-        return "Staked map. Unstake it before recycling or listing.";
+        return "Sector is under analysis. Withdraw it before recycling or listing.";
     }
 
     private bool TryGetMapStakeLock(MapSummary map, out DateTimeOffset lockUntil)

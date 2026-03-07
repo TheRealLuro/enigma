@@ -8,6 +8,9 @@
     const runLoadoutKey = "enigma.game.run-loadout";
     const fullscreenOptOutKey = "enigma.game.fullscreen-opt-out";
     const fullscreenPreferenceKey = "enigma.game.fullscreen-preference";
+    const audioOptOutKey = "enigma.game.audio-opt-out";
+    const audioPreferenceKey = "enigma.game.audio-preference";
+    const runAudioApprovalKey = "enigma.game.run-audio-approved";
     const tutorialRequestKey = "enigma.tutorial.requested";
     const tutorialJourneyStateKey = "enigma.tutorial.journey";
 
@@ -25,6 +28,13 @@
     let userSessionDotNetRef = null;
     let userSessionHandler = null;
     let audioContext = null;
+    let radarPingAudio = null;
+    let runAmbianceAudio = null;
+    let runAmbianceSessionId = null;
+    let runAmbianceCycleToken = 0;
+    let runAmbianceLifecycleTimeout = null;
+    let runAmbianceFadeFrame = null;
+    let runAmbianceStartPending = false;
     let pageHideHandler = null;
     const dropdownClosers = new Map();
     let coopSocket = null;
@@ -33,6 +43,19 @@
     let coopSocketReconnectHandle = null;
     const desktopZoomOutValue = 0.8;
     const desktopZoomOutMinWidth = 1024;
+    const radarPingAudioPath = "/sound%20effects/radar-ping.mp3";
+    const runAmbianceTrackPaths = [
+        "/sound%20effects/ambiance/ambiance1.mp3",
+        "/sound%20effects/ambiance/ambiance2.mp3",
+        "/sound%20effects/ambiance/ambiance3.mp3"
+    ];
+    const runAmbianceTargetVolume = 0.68;
+    const runAmbianceFadeInMs = 2400;
+    const runAmbianceFadeOutMs = 2400;
+    const runAmbianceGapMs = 0;
+    const runAmbianceLoopFloorVolume = 0.18;
+    const runAmbianceStartOffsetSeconds = 0.06;
+    const runAmbianceTailTrimMs = 120;
     let viewportZoomHandler = null;
     let historyZoomPatchApplied = false;
     const storageFallback = {
@@ -200,6 +223,23 @@
             "Digit1", "Digit2", "Digit3",
             "Numpad1", "Numpad2", "Numpad3"
         ].includes(code);
+    }
+
+    function getStoredAudioPreference() {
+        const storedPreference = String(getStorageItem("local", audioPreferenceKey) || "").trim().toLowerCase();
+        if (storedPreference === "enabled" || storedPreference === "disabled") {
+            return storedPreference;
+        }
+
+        if (getStorageItem("local", audioOptOutKey) === "true") {
+            return "disabled";
+        }
+
+        return "";
+    }
+
+    function isRunAudioApproved() {
+        return getStorageItem("session", runAudioApprovalKey) === "true";
     }
 
     function removeListeners() {
@@ -484,6 +524,300 @@
         return audioContext;
     }
 
+    function resumeAudioContextIfNeeded() {
+        const context = ensureAudioContext();
+        if (!context || context.state !== "suspended") {
+            return context;
+        }
+
+        context.resume().catch(() => {});
+        return context;
+    }
+
+    function clearRunAmbianceTimers() {
+        if (runAmbianceLifecycleTimeout) {
+            window.clearTimeout(runAmbianceLifecycleTimeout);
+            runAmbianceLifecycleTimeout = null;
+        }
+
+        if (runAmbianceFadeFrame) {
+            window.cancelAnimationFrame(runAmbianceFadeFrame);
+            runAmbianceFadeFrame = null;
+        }
+    }
+
+    function withRunAmbianceAudio(callback) {
+        if (!runAmbianceAudio || typeof callback !== "function") {
+            return;
+        }
+
+        try {
+            callback(runAmbianceAudio);
+        } catch {
+        }
+    }
+
+    function easeInOutQuad(progress) {
+        if (progress <= 0) {
+            return 0;
+        }
+
+        if (progress >= 1) {
+            return 1;
+        }
+
+        return progress < 0.5
+            ? 2 * progress * progress
+            : 1 - (Math.pow(-2 * progress + 2, 2) / 2);
+    }
+
+    function getRunAmbianceStartTime(audio) {
+        const baseStart = Math.max(0, Number(runAmbianceStartOffsetSeconds) || 0);
+        const duration = Number(audio && audio.duration);
+        if (!Number.isFinite(duration) || duration <= 0) {
+            return baseStart;
+        }
+
+        return Math.max(0, Math.min(baseStart, Math.max(0, duration - 0.25)));
+    }
+
+    function fadeRunAmbianceTo(targetVolume, durationMs, token, onCompleted) {
+        withRunAmbianceAudio(function (audio) {
+            clearRunAmbianceTimers();
+            const startVolume = Number(audio.volume) || 0;
+            const clampedTarget = Math.max(0, Math.min(1, Number(targetVolume) || 0));
+            const totalDurationMs = Math.max(0, Number(durationMs) || 0);
+            if (totalDurationMs <= 0) {
+                audio.volume = clampedTarget;
+                if (onCompleted) {
+                    onCompleted();
+                }
+
+                return;
+            }
+
+            const start = performance.now();
+            const tick = function (now) {
+                if (token !== runAmbianceCycleToken || !runAmbianceAudio) {
+                    return;
+                }
+
+                const elapsed = Math.max(0, now - start);
+                const progress = Math.min(1, elapsed / totalDurationMs);
+                const easedProgress = easeInOutQuad(progress);
+                audio.volume = startVolume + ((clampedTarget - startVolume) * easedProgress);
+                if (progress < 1) {
+                    runAmbianceFadeFrame = window.requestAnimationFrame(tick);
+                    return;
+                }
+
+                runAmbianceFadeFrame = null;
+                if (onCompleted) {
+                    onCompleted();
+                }
+            };
+
+            runAmbianceFadeFrame = window.requestAnimationFrame(tick);
+        });
+    }
+
+    function scheduleRunAmbianceFadeCycle(token) {
+        withRunAmbianceAudio(function (audio) {
+            if (!Number.isFinite(audio.duration) || audio.duration <= 0) {
+                runAmbianceLifecycleTimeout = window.setTimeout(function () {
+                    if (token !== runAmbianceCycleToken || !runAmbianceAudio) {
+                        return;
+                    }
+
+                    scheduleRunAmbianceFadeCycle(token);
+                }, 500);
+                return;
+            }
+
+            const totalMs = audio.duration * 1000;
+            const trimmedTotalMs = Math.max(0, totalMs - Math.max(0, Number(runAmbianceTailTrimMs) || 0));
+            const fadeLeadMs = runAmbianceFadeOutMs + runAmbianceGapMs;
+            const fadeStartMs = Math.max(0, trimmedTotalMs - fadeLeadMs);
+            runAmbianceLifecycleTimeout = window.setTimeout(function () {
+                if (token !== runAmbianceCycleToken || !runAmbianceAudio) {
+                    return;
+                }
+
+                fadeRunAmbianceTo(runAmbianceLoopFloorVolume, runAmbianceFadeOutMs, token, function () {
+                    if (token !== runAmbianceCycleToken || !runAmbianceAudio) {
+                        return;
+                    }
+
+                    withRunAmbianceAudio(function (activeAudio) {
+                        const restartTime = getRunAmbianceStartTime(activeAudio);
+                        try {
+                            activeAudio.currentTime = restartTime;
+                        } catch {
+                            try {
+                                activeAudio.currentTime = 0;
+                            } catch {
+                            }
+                        }
+
+                        const continueCycle = function () {
+                            if (token !== runAmbianceCycleToken || !runAmbianceAudio) {
+                                return;
+                            }
+
+                            fadeRunAmbianceTo(runAmbianceTargetVolume, runAmbianceFadeInMs, token);
+                            scheduleRunAmbianceFadeCycle(token);
+                        };
+
+                        if (!activeAudio.paused) {
+                            continueCycle();
+                            return;
+                        }
+
+                        const attemptPlay = function (onSuccess, onFailure) {
+                            try {
+                                const playPromise = activeAudio.play();
+                                if (playPromise && typeof playPromise.then === "function") {
+                                    playPromise.then(onSuccess).catch(onFailure);
+                                    return;
+                                }
+
+                                onSuccess();
+                            } catch {
+                                onFailure();
+                            }
+                        };
+
+                        activeAudio.muted = false;
+                        attemptPlay(
+                            continueCycle,
+                            function () {
+                                try {
+                                    activeAudio.currentTime = restartTime;
+                                } catch {
+                                    try {
+                                        activeAudio.currentTime = 0;
+                                    } catch {
+                                    }
+                                }
+
+                                activeAudio.muted = true;
+                                attemptPlay(
+                                    function () {
+                                        activeAudio.muted = false;
+                                        continueCycle();
+                                    },
+                                    function () {
+                                        activeAudio.muted = false;
+                                        runAmbianceStartPending = true;
+                                    });
+                            });
+                    });
+                });
+            }, fadeStartMs);
+        });
+    }
+
+    function startRunAmbiancePlayback(token) {
+        withRunAmbianceAudio(function (audio) {
+            runAmbianceStartPending = false;
+            const startTime = getRunAmbianceStartTime(audio);
+            try {
+                audio.currentTime = startTime;
+            } catch {
+                audio.currentTime = 0;
+            }
+            audio.volume = 0;
+
+            const beginCycle = function () {
+                if (token !== runAmbianceCycleToken || !runAmbianceAudio) {
+                    return;
+                }
+
+                fadeRunAmbianceTo(runAmbianceTargetVolume, runAmbianceFadeInMs, token);
+                scheduleRunAmbianceFadeCycle(token);
+            };
+
+            const attemptPlay = function (onSuccess, onFailure) {
+                try {
+                    const playPromise = audio.play();
+                    if (playPromise && typeof playPromise.then === "function") {
+                        playPromise.then(onSuccess).catch(onFailure);
+                        return;
+                    }
+
+                    onSuccess();
+                } catch {
+                    onFailure();
+                }
+            };
+
+            audio.muted = false;
+            attemptPlay(
+                beginCycle,
+                function () {
+                    // Fallback: many browsers allow muted autoplay even when unmuted autoplay is blocked.
+                    try {
+                        audio.currentTime = startTime;
+                    } catch {
+                        audio.currentTime = 0;
+                    }
+                    audio.muted = true;
+                    attemptPlay(
+                        function () {
+                            audio.muted = false;
+                            beginCycle();
+                        },
+                        function () {
+                            audio.muted = false;
+                            runAmbianceStartPending = true;
+                        });
+                });
+        });
+    }
+
+    function stopRunAmbianceInternal(resetSessionId) {
+        runAmbianceCycleToken++;
+        runAmbianceStartPending = false;
+        clearRunAmbianceTimers();
+        withRunAmbianceAudio(function (audio) {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.src = "";
+        });
+        runAmbianceAudio = null;
+        if (resetSessionId) {
+            runAmbianceSessionId = null;
+        }
+    }
+
+    function tryStartPendingRunAmbiance() {
+        if (!runAmbianceStartPending || !runAmbianceAudio) {
+            return;
+        }
+
+        startRunAmbiancePlayback(runAmbianceCycleToken);
+    }
+
+    function ensureRadarPingAudio() {
+        if (radarPingAudio) {
+            return radarPingAudio;
+        }
+
+        if (typeof window.Audio !== "function") {
+            return null;
+        }
+
+        try {
+            radarPingAudio = new window.Audio(radarPingAudioPath);
+            radarPingAudio.preload = "auto";
+            radarPingAudio.volume = 0.42;
+        } catch {
+            radarPingAudio = null;
+        }
+
+        return radarPingAudio;
+    }
+
     function playOscillatorTone(context, frequency, peakGain, duration, type) {
         const oscillator = context.createOscillator();
         const gainNode = context.createGain();
@@ -544,6 +878,9 @@
                     return;
                 }
 
+                // Key input counts as a user gesture and helps unlock audio playback.
+                resumeAudioContextIfNeeded();
+                tryStartPendingRunAmbiance();
                 event.preventDefault();
                 dotNetRef.invokeMethodAsync("HandleKeyChange", code, true);
             };
@@ -566,6 +903,8 @@
         disposeInput: function () {
             removeListeners();
             dotNetRef = null;
+            stopRunAmbianceInternal(true);
+            removeStorageItem("session", runAudioApprovalKey);
             applyDesktopZoomOut();
         },
 
@@ -586,6 +925,18 @@
 
         sessionRemove: function (key) {
             removeStorageItem("session", key);
+        },
+
+        localSetJson: function (key, value) {
+            setStorageItem("local", key, JSON.stringify(value));
+        },
+
+        localGetJson: function (key) {
+            return parseJsonValue(getStorageItem("local", key), "local", key);
+        },
+
+        localRemove: function (key) {
+            removeStorageItem("local", key);
         },
 
         setPlayerIdentity: function (identity, rememberMe) {
@@ -823,6 +1174,55 @@
             removeStorageItem("local", fullscreenOptOutKey);
         },
 
+        setAudioOptOut: function (value) {
+            if (value) {
+                setStorageItem("local", audioOptOutKey, "true");
+                return;
+            }
+
+            removeStorageItem("local", audioOptOutKey);
+            removeStorageItem("local", audioPreferenceKey);
+        },
+
+        getAudioOptOut: function () {
+            return getStorageItem("local", audioOptOutKey) === "true";
+        },
+
+        setAudioPreference: function (mode) {
+            const normalizedMode = String(mode || "").trim().toLowerCase();
+            if (normalizedMode !== "enabled" && normalizedMode !== "disabled") {
+                removeStorageItem("local", audioPreferenceKey);
+                removeStorageItem("local", audioOptOutKey);
+                return;
+            }
+
+            setStorageItem("local", audioPreferenceKey, normalizedMode);
+            setStorageItem("local", audioOptOutKey, "true");
+        },
+
+        getAudioPreference: function () {
+            return getStoredAudioPreference();
+        },
+
+        clearAudioPreference: function () {
+            removeStorageItem("local", audioPreferenceKey);
+            removeStorageItem("local", audioOptOutKey);
+        },
+
+        approveAudioForCurrentRun: function (value) {
+            if (!value) {
+                removeStorageItem("session", runAudioApprovalKey);
+                return;
+            }
+
+            setStorageItem("session", runAudioApprovalKey, "true");
+            resumeAudioContextIfNeeded();
+        },
+
+        primeAudio: function () {
+            resumeAudioContextIfNeeded();
+        },
+
         startTutorial: function () {
             setStorageItem("session", tutorialRequestKey, "true");
             dispatchCustomEvent("enigma:tutorial-requested");
@@ -836,17 +1236,8 @@
                     tutorialDotNetRef.invokeMethodAsync("HandleTutorialRequestedAsync");
                 }
             };
-            tutorialObjectiveHandler = function (event) {
-                const objectiveKey = event && event.detail && typeof event.detail.objectiveKey === "string"
-                    ? event.detail.objectiveKey.trim()
-                    : "";
-                if (tutorialDotNetRef && objectiveKey) {
-                    tutorialDotNetRef.invokeMethodAsync("HandleTutorialObjectiveCompletedAsync", objectiveKey).catch(() => {});
-                }
-            };
 
             addWindowListener("enigma:tutorial-requested", tutorialRequestHandler);
-            addWindowListener("enigma:tutorial-objective-completed", tutorialObjectiveHandler);
         },
 
         disposeTutorialListener: function () {
@@ -901,14 +1292,8 @@
         },
 
         reportTutorialObjective: function (objectiveKey) {
-            const normalizedKey = String(objectiveKey || "").trim();
-            if (!normalizedKey) {
-                return;
-            }
-
-            dispatchCustomEvent("enigma:tutorial-objective-completed", {
-                objectiveKey: normalizedKey
-            });
+            // Objective-based tutorial completion is intentionally disabled.
+            return;
         },
 
         requestFullscreen: async function (elementId) {
@@ -987,6 +1372,80 @@
                 playOscillatorTone(context, 660, 0.04, 0.14, "sine");
             } catch {
             }
+        },
+
+        playRadarPing: function () {
+            const context = resumeAudioContextIfNeeded();
+            tryStartPendingRunAmbiance();
+            const playFallback = function () {
+                if (!context) {
+                    return;
+                }
+
+                try {
+                    playOscillatorTone(context, 520, 0.03, 0.11, "triangle");
+                } catch {
+                }
+            };
+
+            const pingAudio = ensureRadarPingAudio();
+            if (pingAudio) {
+                try {
+                    pingAudio.currentTime = 0;
+                    const playPromise = pingAudio.play();
+                    if (playPromise && typeof playPromise.catch === "function") {
+                        playPromise.catch(() => {
+                            playFallback();
+                        });
+                    }
+                    return;
+                } catch {
+                    playFallback();
+                    return;
+                }
+            }
+
+            playFallback();
+        },
+
+        startRunAmbiance: function (sessionId) {
+            const normalizedSessionId = String(sessionId || "").trim();
+            if (!normalizedSessionId || runAmbianceTrackPaths.length === 0) {
+                return;
+            }
+
+            const storedPreference = getStoredAudioPreference();
+            if (storedPreference === "disabled" || (storedPreference !== "enabled" && !isRunAudioApproved())) {
+                return;
+            }
+
+            if (runAmbianceSessionId === normalizedSessionId && runAmbianceAudio) {
+                return;
+            }
+
+            stopRunAmbianceInternal(false);
+            runAmbianceSessionId = normalizedSessionId;
+
+            const trackIndex = Math.floor(Math.random() * runAmbianceTrackPaths.length);
+            const trackPath = runAmbianceTrackPaths[Math.max(0, Math.min(trackIndex, runAmbianceTrackPaths.length - 1))];
+
+            try {
+                runAmbianceAudio = new window.Audio(trackPath);
+                runAmbianceAudio.preload = "auto";
+                runAmbianceAudio.loop = false;
+                runAmbianceAudio.volume = 0;
+                runAmbianceAudio.playsInline = true;
+            } catch {
+                runAmbianceAudio = null;
+                return;
+            }
+
+            const token = runAmbianceCycleToken;
+            startRunAmbiancePlayback(token);
+        },
+
+        stopRunAmbiance: function () {
+            stopRunAmbianceInternal(true);
         },
 
         goBack: function (fallbackUrl) {

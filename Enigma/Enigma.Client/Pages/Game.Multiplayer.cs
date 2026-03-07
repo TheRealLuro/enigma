@@ -81,7 +81,7 @@ public partial class Game
             return "No shared room vote in progress.";
         }
 
-        return $"Moving to {_coopSession.MoveVote.Target} when both players confirm.";
+        return $"Moving to {_coopSession.MoveVote.Target} when both explorers confirm.";
     }
 
     private void SyncCurrentRoomProgressFromSession()
@@ -140,7 +140,7 @@ public partial class Game
         if (!string.Equals(payload.Session.Status, "active", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(payload.Session.Status, "completed", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("This co-op session is not active yet. Return to the lobby and wait for both players to ready up.");
+            throw new InvalidOperationException("This co-op session is not active yet. Return to the lobby and wait for both explorers to ready up.");
         }
 
         ApplyCoopSession(payload.Session, forcePosition: true);
@@ -374,7 +374,7 @@ public partial class Game
             var (nextX, nextY) = NormalizeCoopPosition(session.You?.Position);
             PlayerX = nextX;
             PlayerY = nextY;
-            ShowBanner($"Both players entered room {nextPoint}", 0.8d);
+            ShowBanner($"Both explorers entered room {nextPoint}", 0.8d);
         }
         else if (forcePosition && session.You is not null)
         {
@@ -485,7 +485,7 @@ public partial class Game
             {
                 ApplyCoopSession(payload.Session, forcePosition: true);
                 _playerStateDirty = true;
-                ShowBanner(payload.RoomMoved ? $"Both players moved to room {nextPoint}" : "Waiting for your partner to choose the same doorway.", 1.0d);
+                ShowBanner(payload.RoomMoved ? $"Both explorers moved to room {nextPoint}" : "Waiting for your partner to choose the same doorway.", 1.0d);
                 return;
             }
 

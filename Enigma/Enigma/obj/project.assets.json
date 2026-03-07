@@ -1113,11 +1113,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\Users\\jkwiatkowski\\Desktop\\enigma\\Enigma\\Enigma\\Enigma.csproj",
+      "projectUniqueName": "C:\\Users\\jkwiatkowski\\Desktop\\enigma\\Enigma\\Enigma\\Enigma.csproj",
       "projectName": "Enigma",
-      "projectPath": "c:\\Users\\jkwiatkowski\\Desktop\\enigma\\Enigma\\Enigma\\Enigma.csproj",
+      "projectPath": "C:\\Users\\jkwiatkowski\\Desktop\\enigma\\Enigma\\Enigma\\Enigma.csproj",
       "packagesPath": "C:\\Users\\jkwiatkowski\\.nuget\\packages\\",
-      "outputPath": "c:\\Users\\jkwiatkowski\\Desktop\\enigma\\Enigma\\Enigma\\obj\\",
+      "outputPath": "C:\\Users\\jkwiatkowski\\Desktop\\enigma\\Enigma\\Enigma\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

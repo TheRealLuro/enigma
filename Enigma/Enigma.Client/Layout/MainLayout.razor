@@ -15,18 +15,19 @@
         <header class="app-header app-shell-header">
             <div class="app-shell-brand">
                 <div class="app-shell-brand-copy">
-                    <button class="app-brand-button" @onclick="GoHome">Enigma</button>
-                    <span class="app-shell-brand-tag">Anomaly Research Division</span>
+                    <button class="app-brand-button" @onclick="GoHome">Enigma Corporation</button>
+                    <span class="app-shell-brand-tag">Anomaly Research Division (A.R.D)</span>
                 </div>
             </div>
 
             <nav class="app-shell-nav">
-                <NavLink class="nav-link" href="/home" data-tour-id="nav-home">Home</NavLink>
-                <NavLink class="nav-link" href="/play" data-tour-id="nav-play">Play</NavLink>
-                <NavLink class="nav-link" href="/leaderboard" data-tour-id="nav-leaderboard">Leaderboard</NavLink>
-                <NavLink class="nav-link" href="/players" data-tour-id="nav-players">Players</NavLink>
-                <NavLink class="nav-link" href="/profile" data-tour-id="nav-profile">Profile</NavLink>
-                <NavLink class="nav-link" href="/economy" data-tour-id="nav-economy">Economy</NavLink>
+                <NavLink class="nav-link" href="/home" data-tour-id="nav-home">Command</NavLink>
+                <NavLink class="nav-link" href="/play" data-tour-id="nav-play">Expeditions</NavLink>
+                <NavLink class="nav-link" href="/leaderboard" data-tour-id="nav-leaderboard">Rankings</NavLink>
+                <NavLink class="nav-link" href="/players" data-tour-id="nav-players">Network</NavLink>
+                <NavLink class="nav-link" href="/profile" data-tour-id="nav-profile">Console</NavLink>
+                <NavLink class="nav-link" href="/economy" data-tour-id="nav-economy">Research</NavLink>
+                <NavLink class="nav-link" href="/marketplace" data-tour-id="nav-marketplace">Exchange</NavLink>
             </nav>
 
             <div class="app-shell-account">
@@ -46,8 +47,8 @@
                 @if (IsAccountMenuOpen)
                 {
                     <div class="app-shell-account-menu">
-                        <button class="app-shell-account-link" @onclick="GoProfile">View Profile</button>
-                        <button class="app-shell-account-link" @onclick="GoToSettings">Settings</button>
+                        <button class="app-shell-account-link" @onclick="GoProfile">Open Console</button>
+                        <button class="app-shell-account-link" @onclick="GoToSettings">Command Settings</button>
                         <button class="app-shell-account-link danger" @onclick="LogoutAsync">Sign Out</button>
                     </div>
                 }
@@ -98,7 +99,7 @@
             <h2>@CurrentTutorialStep.Title</h2>
             <p>@CurrentTutorialStep.Description</p>
             <div class="tutorial-route-hint">
-                <span>Target Route</span>
+                <span>Target Page</span>
                 <strong>@GetTutorialDestinationLabel(CurrentTutorialStep)</strong>
             </div>
             <div class="tutorial-step-rail" role="list" aria-label="Tutorial guide steps">
@@ -116,11 +117,8 @@
                 }
             </div>
             <div class="tutorial-objective-card">
-                <span class="profile-eyebrow">@CurrentTutorialStep.Eyebrow Guide</span>
-                <p>@CurrentTutorialStep.Objective</p>
-                <span class="tutorial-objective-status @(IsCurrentTutorialStepComplete ? "complete" : string.Empty)">
-                    @(IsCurrentTutorialStepComplete ? "Page visited." : "Visit this page to mark it complete.")
-                </span>
+                <span class="profile-eyebrow">@CurrentTutorialStep.Eyebrow Location</span>
+                <p>This step shows where to find <strong>@CurrentTutorialStep.Eyebrow</strong> and what it is used for.</p>
             </div>
             @if (!string.IsNullOrWhiteSpace(CurrentTutorialStep.HelperText))
             {
@@ -131,7 +129,7 @@
             </div>
             <div class="tutorial-progress-row">
                 <span>Step @(_tutorialIndex + 1) of @_tutorialSteps.Count</span>
-                <span>@CompletedTutorialStepCount / @_tutorialSteps.Count pages visited</span>
+                <span>Simple page guide mode</span>
             </div>
             <div class="enigma-end-actions tutorial-action-row">
                 <button class="btn btn-secondary" type="button" @onclick="RestartTutorialJourneyAsync">Restart</button>
@@ -204,73 +202,73 @@
     [
         new()
         {
-            Chapter = "Guide - Navigation",
-            Eyebrow = "Home",
-            Title = "Home Hub",
-            Description = "Home is your launch point for every major page in the app.",
-            Objective = "Open Home and review the main navigation cards.",
+            Chapter = "A.R.D Orientation - Command",
+            Eyebrow = "Command",
+            Title = "Command Hub",
+            Description = "Command is your launch point for every major page in the app.",
+            Objective = "Open Command and review the main navigation cards.",
             HelperText = "Use this page whenever you want a quick jump to core areas.",
             Path = "/home"
         },
         new()
         {
-            Chapter = "Guide - Navigation",
-            Eyebrow = "Play",
-            Title = "Play Launcher",
-            Description = "Play is where you start new seeds and load saved maps.",
-            Objective = "Open Play and review run setup controls.",
-            HelperText = "This page handles seed setup, loadout, and run start.",
+            Chapter = "A.R.D Orientation - Command",
+            Eyebrow = "Expeditions",
+            Title = "Expedition Launcher",
+            Description = "Expeditions is where you deploy E-Units into new anomaly seeds or mapped sectors.",
+            Objective = "Open Expeditions and review run setup controls.",
+            HelperText = "This page handles seed setup, field-tool loadout, and E-Unit launch.",
             Path = "/play"
         },
         new()
         {
-            Chapter = "Guide - Navigation",
-            Eyebrow = "Co-op",
+            Chapter = "A.R.D Orientation - Command",
+            Eyebrow = "Co-op Command",
             Title = "Co-op Lobby",
-            Description = "Co-op lobby manages invites, ready state, and shared session entry.",
+            Description = "Co-op command manages invites, ready state, and shared E-Unit session entry.",
             Objective = "Open the Co-op page and review lobby sections.",
             HelperText = "Invites and session status update live while you stay on this page.",
             Path = "/play/coop"
         },
         new()
         {
-            Chapter = "Guide - Pages",
-            Eyebrow = "Leaderboard",
-            Title = "Leaderboard",
-            Description = "Leaderboard tracks map and player rankings.",
-            Objective = "Open Leaderboard and review ranking sections.",
+            Chapter = "A.R.D Orientation - Pages",
+            Eyebrow = "Rankings",
+            Title = "Research Rankings",
+            Description = "Rankings tracks sector and explorer standings.",
+            Objective = "Open Rankings and review ranking sections.",
             HelperText = "Use filters and tabs to switch between ranking views.",
             Path = "/leaderboard"
         },
         new()
         {
-            Chapter = "Guide - Pages",
-            Eyebrow = "Players",
-            Title = "Players",
-            Description = "Players page is your social lookup and profile discovery area.",
-            Objective = "Open Players and review search + profile results.",
+            Chapter = "A.R.D Orientation - Pages",
+            Eyebrow = "Network",
+            Title = "Explorer Network",
+            Description = "Network is your social lookup and explorer console discovery area.",
+            Objective = "Open Network and review search + console results.",
             HelperText = "Online status and profile summary data are shown here.",
             Path = "/players"
         },
         new()
         {
-            Chapter = "Guide - Profile",
-            Eyebrow = "Profile",
-            Title = "Profile Overview",
-            Description = "Profile combines identity, run stats, and social/account controls.",
-            Objective = "Open Profile overview and review your summary cards.",
-            HelperText = "Other players only see public-facing profile sections.",
+            Chapter = "A.R.D Orientation - Console",
+            Eyebrow = "Console",
+            Title = "Explorer Console",
+            Description = "Console combines identity, run stats, and social/account controls.",
+            Objective = "Open Console overview and review your summary cards.",
+            HelperText = "Other explorers only see public-facing profile sections.",
             Path = "/profile",
             MatchPaths = ["/profile", "/profile/"],
             AllowPathPrefixMatch = true
         },
         new()
         {
-            Chapter = "Guide - Profile",
-            Eyebrow = "Maps",
-            Title = "Profile Maps Tab",
-            Description = "Maps tab separates owned maps and discovered archive data.",
-            Objective = "Open Profile > Maps and review both map lists.",
+            Chapter = "A.R.D Orientation - Console",
+            Eyebrow = "Sectors",
+            Title = "Console Sectors Tab",
+            Description = "Sectors tab separates owned sectors and discovered archive data.",
+            Objective = "Open Console > Sectors and review both sector lists.",
             HelperText = "Owned and discovered are tracked separately by design.",
             Path = "/profile?tab=maps",
             MatchPaths = ["/profile?tab=maps"],
@@ -278,67 +276,67 @@
         },
         new()
         {
-            Chapter = "Guide - Profile",
-            Eyebrow = "Inventory",
-            Title = "Profile Inventory Tab",
-            Description = "Inventory contains gameplay items and cosmetic ownership.",
-            Objective = "Open Profile > Inventory and review item sections.",
-            HelperText = "Inventory state controls what can be used in loadouts.",
+            Chapter = "A.R.D Orientation - Console",
+            Eyebrow = "Assets",
+            Title = "Console Assets Tab",
+            Description = "Assets contains field tools and cosmetic ownership.",
+            Objective = "Open Console > Assets and review item sections.",
+            HelperText = "Asset state controls what can be used in loadouts.",
             Path = "/profile?tab=inventory",
             MatchPaths = ["/profile?tab=inventory"],
             AllowPathPrefixMatch = true
         },
         new()
         {
-            Chapter = "Guide - Profile",
-            Eyebrow = "Settings",
-            Title = "Profile Settings Tab",
-            Description = "Settings holds account changes, security actions, and tutorial replay.",
-            Objective = "Open Profile > Settings and review account controls.",
-            HelperText = "You can replay this guide anytime from Settings.",
+            Chapter = "A.R.D Orientation - Console",
+            Eyebrow = "Control",
+            Title = "Console Control Tab",
+            Description = "Control holds account changes, security actions, and guide replay.",
+            Objective = "Open Console > Control and review account controls.",
+            HelperText = "You can replay this guide anytime from Console Control.",
             Path = "/profile?tab=settings",
             MatchPaths = ["/profile?tab=settings"],
             AllowPathPrefixMatch = true
         },
         new()
         {
-            Chapter = "Guide - Economy",
-            Eyebrow = "Economy",
-            Title = "Economy Overview",
-            Description = "Economy overview shows circulation, activity, and system health.",
-            Objective = "Open Economy and review the top-level metrics.",
-            HelperText = "Use the economy tab bar to switch between subpages.",
+            Chapter = "A.R.D Orientation - Research",
+            Eyebrow = "Research",
+            Title = "Research Overview",
+            Description = "Research overview shows circulation, activity, and system health.",
+            Objective = "Open Research and review the top-level metrics.",
+            HelperText = "Use the research tab bar to switch between overview, analysis, and council voting.",
             Path = "/economy"
         },
         new()
         {
-            Chapter = "Guide - Economy",
-            Eyebrow = "Marketplace",
-            Title = "Marketplace Tab",
-            Description = "Marketplace handles map listings, purchases, and listing management.",
-            Objective = "Open Economy > Marketplace and review live listings.",
+            Chapter = "A.R.D Orientation - Exchange",
+            Eyebrow = "Exchange",
+            Title = "Anomaly Exchange",
+            Description = "Exchange handles sector listings, purchases, and listing management.",
+            Objective = "Open Exchange and review live listings.",
             HelperText = "Listing and stock updates are reflected dynamically.",
-            Path = "/economy?tab=marketplace",
-            MatchPaths = ["/economy?tab=marketplace", "/marketplace"]
+            Path = "/marketplace",
+            MatchPaths = ["/marketplace"]
         },
         new()
         {
-            Chapter = "Guide - Economy",
-            Eyebrow = "Staking",
-            Title = "Staking Tab",
-            Description = "Staking assigns maps to analysis for daily MN and governance influence.",
-            Objective = "Open Economy > Staking and review analysis + available map panels.",
-            HelperText = "Submitted maps remain lock-protected during containment.",
+            Chapter = "A.R.D Orientation - Research",
+            Eyebrow = "Analysis",
+            Title = "Analysis Tab",
+            Description = "Analysis assigns sectors for daily MN and governance influence.",
+            Objective = "Open Research > Analysis and review active + available sector panels.",
+            HelperText = "Submitted sectors remain lock-protected during containment.",
             Path = "/economy?tab=staking",
             MatchPaths = ["/economy?tab=staking", "/staking"]
         },
         new()
         {
-            Chapter = "Guide - Economy",
-            Eyebrow = "Voting",
-            Title = "Voting Tab",
+            Chapter = "A.R.D Orientation - Research",
+            Eyebrow = "Council Voting",
+            Title = "Council Voting Tab",
             Description = "Voting converts MN into weighted governance power during active sessions.",
-            Objective = "Open Economy > Voting and review session status and vote panels.",
+            Objective = "Open Research > Council Voting and review session status and vote panels.",
             HelperText = "Closed sessions still show results and recent vote history.",
             Path = "/economy?tab=voting",
             MatchPaths = ["/economy?tab=voting", "/voting"]
@@ -349,9 +347,7 @@
         _tutorialIndex >= 0 && _tutorialIndex < _tutorialSteps.Count
             ? _tutorialSteps[_tutorialIndex]
             : null;
-    private bool IsCurrentTutorialStepComplete => _completedTutorialStepIndexes.Contains(_tutorialIndex);
     private bool CanAdvanceTutorialStep => _tutorialSteps.Count > 0;
-    private int CompletedTutorialStepCount => _completedTutorialStepIndexes.Count;
 
     private bool ShouldShowHeader => !IsPublicPath() && !IsGamePath() && AuthCheckComplete && IsAuthenticated;
     private bool ShouldShowHeaderBalance => ShouldShowHeader && Session is not null;
@@ -509,7 +505,6 @@
         if (TutorialVisible)
         {
             UpdateTutorialIndexFromUri(args.Location);
-            QueueTutorialRouteCompletion(args.Location, announce: true);
             _ = PersistTutorialJourneyStateAsync();
         }
         ResetAuthStateForCurrentPath(args.Location);
@@ -761,18 +756,14 @@
         }
         else
         {
-            _tutorialIndex = GetFirstIncompleteTutorialStepIndex();
+            _tutorialIndex = 0;
         }
 
-        QueueTutorialRouteCompletion(NavigationManager.Uri, announce: false);
         _ = PersistTutorialJourneyStateAsync();
     }
 
     private void ResetTutorialJourneyProgress()
     {
-        CancelPendingTutorialRouteCompletion();
-        _completedTutorialStepIndexes.Clear();
-        _announcedTutorialStepIndexes.Clear();
         _tutorialIndex = 0;
     }
 
@@ -1102,33 +1093,14 @@
             return false;
         }
 
-        var completedIndexes = savedState.CompletedIndexes
-            .Where(index => index >= 0 && index < _tutorialSteps.Count)
-            .Distinct()
-            .ToList();
-        if (completedIndexes.Count >= _tutorialSteps.Count)
-        {
-            await ClearTutorialJourneyStateAsync();
-            return false;
-        }
-
-        _completedTutorialStepIndexes.Clear();
-        _announcedTutorialStepIndexes.Clear();
-        foreach (var index in completedIndexes)
-        {
-            _completedTutorialStepIndexes.Add(index);
-            _announcedTutorialStepIndexes.Add(index);
-        }
-
         var normalizedIndex = savedState.CurrentIndex;
         if (normalizedIndex < 0 || normalizedIndex >= _tutorialSteps.Count)
         {
-            normalizedIndex = GetFirstIncompleteTutorialStepIndex();
+            normalizedIndex = 0;
         }
 
         _tutorialIndex = normalizedIndex;
         TutorialVisible = true;
-        QueueTutorialRouteCompletion(NavigationManager.Uri, announce: false);
         await PersistTutorialJourneyStateAsync();
         return true;
     }
@@ -1140,7 +1112,7 @@
             return;
         }
 
-        if (!TutorialVisible && _completedTutorialStepIndexes.Count == 0)
+        if (!TutorialVisible)
         {
             await ClearTutorialJourneyStateAsync();
             return;
@@ -1155,7 +1127,7 @@
                     Username = Session!.Username,
                     Visible = TutorialVisible,
                     CurrentIndex = _tutorialIndex,
-                    CompletedIndexes = _completedTutorialStepIndexes.OrderBy(index => index).ToList(),
+                    CompletedIndexes = [],
                     UpdatedAtUtc = DateTimeOffset.UtcNow.ToString("O"),
                 });
         }
@@ -1181,19 +1153,9 @@
 
     private string GetTutorialStepButtonClass(int index)
     {
-        if (IsTutorialStepCurrent(index) && IsTutorialStepCompleted(index))
-        {
-            return "tutorial-step-pill current complete";
-        }
-
         if (IsTutorialStepCurrent(index))
         {
             return "tutorial-step-pill current";
-        }
-
-        if (IsTutorialStepCompleted(index))
-        {
-            return "tutorial-step-pill complete";
         }
 
         return "tutorial-step-pill";
@@ -1216,7 +1178,7 @@
             return "width:0%;";
         }
 
-        var percent = Math.Clamp((CompletedTutorialStepCount * 100.0) / _tutorialSteps.Count, 0.0, 100.0);
+        var percent = Math.Clamp(((_tutorialIndex + 1) * 100.0) / _tutorialSteps.Count, 0.0, 100.0);
         return $"width:{percent:0.##}%;";
     }
 
@@ -1262,13 +1224,7 @@
             return;
         }
 
-        var nextIndex = _tutorialIndex + 1;
-        while (nextIndex < _tutorialSteps.Count && _completedTutorialStepIndexes.Contains(nextIndex))
-        {
-            nextIndex++;
-        }
-
-        _tutorialIndex = Math.Min(nextIndex, _tutorialSteps.Count - 1);
+        _tutorialIndex = Math.Min(_tutorialIndex + 1, _tutorialSteps.Count - 1);
         await NavigateToTutorialStepAsync(_tutorialIndex);
     }
 
@@ -1310,15 +1266,12 @@
     private async Task CompleteTutorialAsync()
     {
         TutorialVisible = false;
-        _completedTutorialStepIndexes.Clear();
-        _announcedTutorialStepIndexes.Clear();
-        CancelPendingTutorialRouteCompletion();
         await JS.InvokeAsync<bool>("enigmaGame.consumeTutorialRequest");
         await ClearTutorialJourneyStateAsync();
         try
         {
             await Api.PostJsonAsync("api/auth/account/tutorial", new { action = "completed" });
-            Notifications.Success("Guide complete. Replay anytime from Profile Settings.", 5);
+            Notifications.Success("Guide complete. Replay anytime from Console Control.", 5);
         }
         catch
         {
@@ -1626,12 +1579,12 @@
         var stakedDelta = latestSession.StakedMapsCount - previousSession.StakedMapsCount;
         if (stakedDelta > 0)
         {
-            Notifications.Info(stakedDelta == 1 ? "1 map was submitted for anomaly research." : $"{stakedDelta} maps were submitted for anomaly research.");
+            Notifications.Info(stakedDelta == 1 ? "1 sector was submitted for anomaly research." : $"{stakedDelta} sectors were submitted for anomaly research.");
         }
         else if (stakedDelta < 0)
         {
             var unstakedCount = Math.Abs(stakedDelta);
-            Notifications.Info(unstakedCount == 1 ? "1 map was withdrawn from anomaly research." : $"{unstakedCount} maps were withdrawn from anomaly research.");
+            Notifications.Info(unstakedCount == 1 ? "1 sector was withdrawn from anomaly research." : $"{unstakedCount} sectors were withdrawn from anomaly research.");
         }
     }
 

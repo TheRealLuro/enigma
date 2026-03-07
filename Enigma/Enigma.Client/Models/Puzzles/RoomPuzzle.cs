@@ -737,32 +737,7 @@ public static class PuzzleFactory
         {
             return AdvancedPuzzleFactory.Create(seed, runNonce ?? Guid.NewGuid().ToString("N"), room, difficulty);
         }
-
-        var profile = GetProfile(difficulty);
-        var hashSeed = string.IsNullOrWhiteSpace(runNonce) ? seed : $"{seed}|{runNonce}";
-        var hash = StableHash($"{hashSeed}|{room.Coordinates.X}|{room.Coordinates.Y}|{room.PuzzleKey}");
-        return room.PuzzleKey switch
-        {
-            'p' => new PressurePlatePuzzle(
-                CreateRect(hash, 240d, 240d, profile.PlateSize, profile.PlateSize),
-                profile.PressurePlateMinHoldSeconds + ((hash % 7) * profile.PressurePlateHoldVarianceSeconds),
-                profile.PressurePlateDecayRate),
-            'q' => new QuickTimePuzzle(
-                0.12d + ((hash % 55) / 100d),
-                profile.QuickTimeTargetWidth,
-                profile.QuickTimePulseSpeed,
-                profile.QuickTimeRequiredHits),
-            'r' => CreateRiddle(hash, difficulty),
-            's' => new SequenceMemoryPuzzle(CreateSequence(hash, profile), profile.SequenceRevealSeconds),
-            't' => new TileRotationPuzzle(CreateRotations(hash, profile)),
-            'u' => new UnlockPatternPuzzle(CreatePattern(hash, profile), profile.PatternRevealSeconds),
-            'v' => CreateValveFlow(hash, profile),
-            'w' => CreateWeightBalance(hash, profile),
-            'x' => new XorLogicPuzzle((hash & 1) == 1, profile.XorInputCount, CreateXorTargetEnabledCount(hash, profile.XorInputCount, (hash & 1) == 1)),
-            'y' => new YarnUntanglePuzzle(CreateUntangledSeed(hash, profile)),
-            'z' => new ZoneActivationPuzzle(CreateZones(hash, profile), profile.ZoneHoldSeconds),
-            _ => throw new MazeSeedParseException($"Unknown puzzle type '{room.PuzzleKey}'."),
-        };
+        return ImmersiveEasyPuzzleFactory.Create(seed, runNonce ?? Guid.NewGuid().ToString("N"), room);
     }
 
     public static int StableHash(string value)

@@ -9,8 +9,8 @@
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable
 
-<SeoHead Title="Enigma Co-op Lobby | Create a Shared Maze Session"
-         Description="Create or join a two-player Enigma co-op session, invite a friend, and prepare a synchronized maze expedition."
+<SeoHead Title="Enigma Co-op Command | Create a Shared Sector Session"
+         Description="Create or join a two-explorer Enigma co-op session, invite a contact, and prepare a synchronized sector expedition."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -20,7 +20,7 @@
     <div class="content">
         <div class="card enigma-game-message">
             <div class="loader"></div>
-            <p>Loading co-op lobby...</p>
+            <p>Loading co-op command...</p>
         </div>
     </div>
 }
@@ -28,11 +28,11 @@ else if (Session is null)
 {
     <div class="content">
         <div class="card enigma-game-message">
-            <h1>Co-op Lobby Unavailable</h1>
-            <p>Sign in before creating or joining a co-op session.</p>
+            <h1>Co-op Command Unavailable</h1>
+            <p>Sign in before creating or joining a co-op operation.</p>
             <div class="enigma-end-actions">
-                <button class="btn btn-primary" @onclick="GoPlay">Play</button>
-                <button class="btn btn-secondary" @onclick="GoHome">Home</button>
+                <button class="btn btn-primary" @onclick="GoPlay">Expeditions</button>
+                <button class="btn btn-secondary" @onclick="GoHome">Command</button>
             </div>
         </div>
     </div>
@@ -42,11 +42,11 @@ else
     <div class="content coop-shell" data-tour-id="coop-shell">
         <section class="coop-banner" data-tour-id="coop-banner">
             <div>
-                <span class="profile-kicker">Co-op Lobby</span>
-                <h1>Dual Expedition</h1>
+                <span class="profile-kicker">Co-op Command</span>
+                <h1>Dual Operation</h1>
             </div>
             <div class="play-header-actions">
-                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="RefreshSessionSummaryAsync">Refresh Lobby</button>
+                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="RefreshSessionSummaryAsync">Refresh Command</button>
             </div>
         </section>
 
@@ -72,7 +72,7 @@ else
                     </div>
                     @if (Session.PendingMultiplayerInvites.Count == 0)
                     {
-                        <div class="empty-state-inline">No active co-op invites right now. Ask a friend to invite you from their co-op lobby, then refresh here.</div>
+                        <div class="empty-state-inline">No active co-op invites right now. Ask a contact to invite you from their co-op command, then refresh here.</div>
                     }
                     else
                     {
@@ -82,7 +82,7 @@ else
                                 <article class="coop-invite-card">
                                     <div>
                                         <span class="profile-eyebrow">Invite from @invite.OwnerUsername</span>
-                                        <strong>@(string.IsNullOrWhiteSpace(invite.MapName) ? "Generated Co-op Run" : invite.MapName)</strong>
+                                        <strong>@(string.IsNullOrWhiteSpace(invite.MapName) ? "Request Operation" : invite.MapName)</strong>
                                     </div>
                                     <div class="coop-player-meta">
                                         <span>@FormatSessionStatus(invite.Status)</span>
@@ -116,7 +116,7 @@ else
                             <div class="coop-create-block">
                                 <div class="coop-create-block-head">
                                     <span class="profile-eyebrow">Fresh Run</span>
-                                    <h3>Generate a New Co-op Maze</h3>
+                                    <h3>Request an Operation</h3>
                                 </div>
                                 <div class="coop-form-grid">
                                     <div>
@@ -137,7 +137,7 @@ else
                                 <ValidationMessage For="() => CreateRequest.Size" />
                                 <div class="coop-form-grid coop-form-grid-single">
                                     <div>
-                                        <label class="form-label">Invite Friend</label>
+                                        <label class="form-label">Invite Contact</label>
                                         <EnigmaDropdown TValue="string"
                                                         Class="form-control"
                                                         Options="AvailableFriendOptions"
@@ -145,7 +145,7 @@ else
                                     </div>
                                 </div>
                                 <button class="btn btn-primary w-100" type="submit" disabled="@IsActionBusy">
-                                    @(IsActionBusy ? "Creating..." : "Generate Co-op Maze")
+                                    @(IsActionBusy ? "Creating..." : "Send Operation Request")
                                 </button>
                             </div>
                         </EditForm>
@@ -156,26 +156,26 @@ else
                             <DataAnnotationsValidator />
                             <div class="coop-create-block">
                                 <div class="coop-create-block-head">
-                                    <span class="profile-eyebrow">Saved Map</span>
-                                    <h3>Load an Existing Maze</h3>
+                                    <span class="profile-eyebrow">Mapped Sector</span>
+                                    <h3>Load an Existing Sector</h3>
                                 </div>
                                 <div>
-                                    <MapSearchBox Label="Saved Map Name"
+                                    <MapSearchBox Label="Mapped Sector Name"
                                                   InputId="coop-map-search"
-                                                  Placeholder="type a saved maze name"
+                                                  Placeholder="type a mapped sector name"
                                                   Value="@LoadRequest.MapName"
                                                   ValueChanged="OnCoopMapNameChanged" />
                                     <ValidationMessage For="() => LoadRequest.MapName" />
                                 </div>
                                 <div>
-                                    <label class="form-label">Invite Friend</label>
+                                    <label class="form-label">Invite Contact</label>
                                     <EnigmaDropdown TValue="string"
                                                     Class="form-control"
                                                     Options="AvailableFriendOptions"
                                                     @bind-Value="SelectedInviteFriend" />
                                 </div>
                                 <button class="btn btn-secondary w-100" type="submit" disabled="@IsActionBusy">
-                                    @(IsActionBusy ? "Loading..." : "Load Map Into Co-op")
+                                    @(IsActionBusy ? "Loading..." : "Load Sector Into Co-op")
                                 </button>
                             </div>
                         </EditForm>
@@ -219,9 +219,9 @@ else
                             <span>Status</span>
                             <strong>@FormatSessionStatus(CurrentSession.Status)</strong>
                         </div>
-                        <div class="coop-meta-pill map" title="@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Seed" : CurrentSession.MapName)">
-                            <span>Map</span>
-                            <strong>@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Seed" : CurrentSession.MapName)</strong>
+                        <div class="coop-meta-pill map" title="@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Sector Seed" : CurrentSession.MapName)">
+                            <span>Sector</span>
+                            <strong>@(string.IsNullOrWhiteSpace(CurrentSession.MapName) ? "Generated Sector Seed" : CurrentSession.MapName)</strong>
                         </div>
                         <div class="coop-meta-pill">
                             <span>Difficulty</span>
@@ -250,7 +250,7 @@ else
 
                         <article class="coop-player-card partner">
                             <div class="coop-player-main">
-                                <strong>@(CurrentSession.OtherPlayer?.Username ?? CurrentSession.GuestUsername ?? "Waiting for invited friend")</strong>
+                                <strong>@(CurrentSession.OtherPlayer?.Username ?? CurrentSession.GuestUsername ?? "Waiting for invited explorer")</strong>
                                 <span class="coop-player-context">Red console</span>
                             </div>
                             <div class="coop-player-meta">
@@ -265,11 +265,11 @@ else
                         <section class="coop-invite-section">
                             <div class="coop-invite-section-head">
                                 <span class="profile-eyebrow">Invite</span>
-                                <strong>Bring a friend into this run</strong>
+                                <strong>Bring a contact into this expedition</strong>
                             </div>
                             @if (InviteCandidates.Count == 0)
                             {
-                                <div class="empty-state-inline">No available friends to invite right now.</div>
+                                <div class="empty-state-inline">No available contacts to invite right now.</div>
                             }
                             else
                             {
@@ -307,14 +307,14 @@ else
                             @(CurrentSession.You?.Ready == true ? "Unready" : "Ready Up")
                         </button>
                         <button class="btn btn-secondary" type="button" disabled="@(!CanEnterGame || IsEnteringActiveSession)" @onclick="EnterActiveSessionAsync">
-                            Enter Maze
+                            Enter Sector
                         </button>
                         <button class="btn btn-danger" type="button" disabled="@IsActionBusy" @onclick="LeaveSessionAsync">
                             Leave Session
                         </button>
                     </div>
 
-                    <div class="empty-state-inline coop-session-note">The maze starts once both players are present and ready. Movement and room changes stay synchronized after entry.</div>
+                    <div class="empty-state-inline coop-session-note">The sector starts once both explorers are present and ready. Movement and room changes stay synchronized after entry.</div>
                 </section>
 
             </div>
@@ -331,7 +331,7 @@ else
         [Required]
         public Difficulty Difficulty { get; set; } = Difficulty.Easy;
 
-        [Range(2, 250, ErrorMessage = "Co-op maze size must be between 2 and 250.")]
+        [Range(2, 250, ErrorMessage = "Co-op sector size must be between 2 and 250.")]
         public int Size { get; set; } = 4;
     }
 
@@ -497,7 +497,7 @@ else
         await EnsureSuccessAsync(response, payload, "Unable to create a co-op session.");
         ApplySessionEnvelope(payload);
         await ReportCoopTutorialInteractionAsync();
-        StatusMessage = "Session created. Share the session id or invite a friend to join.";
+        StatusMessage = "Session created. Share the session id or invite an explorer to join.";
         HasError = false;
     }
 
@@ -510,7 +510,7 @@ else
             await EnsureSuccessAsync(response, payload, "Unable to join the co-op session.");
             ApplySessionEnvelope(payload);
             await ReportCoopTutorialInteractionAsync();
-            StatusMessage = "Joined session. Ready up when both players are in the lobby.";
+            StatusMessage = "Joined session. Ready up when both explorers are in the command room.";
             HasError = false;
         });
     }
@@ -557,7 +557,7 @@ else
                 friendUsername = InvitePendingFriend,
             });
             var payload = await Api.ReadJsonAsync<MultiplayerSessionEnvelope>(response);
-            await EnsureSuccessAsync(response, payload, "Unable to invite that friend.");
+            await EnsureSuccessAsync(response, payload, "Unable to invite that contact.");
             InvitePendingFriend = string.Empty;
             ApplySessionEnvelope(payload);
             await ReportCoopTutorialInteractionAsync();
@@ -792,7 +792,7 @@ else
 
         if (CanEnterGame && !HasEnteredActiveSession && !IsEnteringActiveSession)
         {
-            StatusMessage = "Both players are ready. Enter the unknown when you're ready.";
+            StatusMessage = "Both explorers are ready. Enter the unknown when you're ready.";
             HasError = false;
         }
     }
@@ -806,7 +806,7 @@ else
 
         IsEnteringActiveSession = true;
         HasEnteredActiveSession = true;
-        StatusMessage = "Entering the co-op maze...";
+        StatusMessage = "Entering the co-op sector...";
         HasError = false;
         await StopPollingAsync();
 
@@ -865,7 +865,7 @@ else
                     CurrentSession = payload.Session;
                     if (CanEnterGame && !HasEnteredActiveSession && !IsEnteringActiveSession)
                     {
-                        StatusMessage = "Both players are ready. Enter the maze when you're ready.";
+                        StatusMessage = "Both explorers are ready. Enter the sector when you're ready.";
                         HasError = false;
                     }
                     StateHasChanged();
@@ -953,7 +953,7 @@ else
         }
 
         return string.IsNullOrWhiteSpace(CurrentSession.MapName)
-            ? "Found an Uncharted Maze"
+            ? "Found an Uncharted Sector"
             : CurrentSession.MapName;
     }
 

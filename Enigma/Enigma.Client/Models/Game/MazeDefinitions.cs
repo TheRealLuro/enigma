@@ -146,6 +146,8 @@ public sealed class PuzzleUpdateContext
 {
     public required PlayAreaRect PlayerBounds { get; init; }
     public required double DeltaTimeSeconds { get; init; }
+    public required double NowSeconds { get; init; }
+    public required PlayerDirection PlayerFacing { get; init; }
 }
 
 public sealed class MazeSeedParseException(string message) : Exception(message);

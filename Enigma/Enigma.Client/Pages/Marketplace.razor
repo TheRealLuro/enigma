@@ -9,8 +9,8 @@
 
 @if (!Embedded)
 {
-    <SeoHead Title="Enigma Marketplace | Map Trading and Item Shop"
-             Description="Trade Enigma maps, review live listings, and buy item-shop inventory from the marketplace."
+    <SeoHead Title="Enigma Sector Exchange | Sector Trading and Item Shop"
+             Description="Trade Enigma sectors, review live listings, and buy item-shop inventory from the sector exchange."
              Robots="noindex,follow"
              OpenGraphType="website"
              SchemaType="WebPage" />
@@ -21,7 +21,7 @@
     <div class="@(Embedded ? "economy-embedded-state" : "content")">
         <div class="card enigma-game-message">
             <div class="loader"></div>
-            <p>Loading marketplace...</p>
+            <p>Loading sector exchange...</p>
         </div>
     </div>
 }
@@ -29,11 +29,11 @@ else if (Session is null)
 {
     <div class="@(Embedded ? "economy-embedded-state" : "content")">
         <div class="card enigma-game-message">
-            <h1>Marketplace unavailable</h1>
-            <p>Sign in to browse and trade maps.</p>
+            <h1>Sector exchange unavailable</h1>
+            <p>Sign in to browse and trade sectors.</p>
             <div class="enigma-end-actions">
-                <button class="btn btn-primary" @onclick="GoHome">Home</button>
-                <button class="btn btn-secondary" @onclick="GoLogin">Login</button>
+                <button class="btn btn-primary" @onclick="GoHome">Command</button>
+                <button class="btn btn-secondary" @onclick="GoLogin">Sign In</button>
             </div>
         </div>
     </div>
@@ -43,7 +43,9 @@ else
     <div class="@(Embedded ? "marketplace-shell economy-embedded-shell" : "content marketplace-shell")">
         <section class="marketplace-banner">
             <div>
-                <h1>Marketplace</h1>
+                <span class="profile-eyebrow">Sector Exchange</span>
+                <h1>Sector Exchange</h1>
+                <p>Trade certified sector domains and expedition assets through Enigma's live exchange interface.</p>
             </div>
 
             <div class="marketplace-banner-metrics">
@@ -55,6 +57,14 @@ else
                     <span>Shop Items</span>
                     <strong>@ShopItems.Count</strong>
                 </div>
+                <div>
+                    <span>Listing Volume</span>
+                    <strong>@TotalListingVolumeMn.ToString("N0") MN</strong>
+                </div>
+                <div>
+                    <span>Avg Price</span>
+                    <strong>@AverageListingPriceMn.ToString("N0") MN</strong>
+                </div>
             </div>
         </section>
 
@@ -64,75 +74,178 @@ else
         }
 
         <div class="profile-tabbar marketplace-tabbar" data-tour-id="marketplace-tabs">
-            <button class="@(GetMarketplaceTabClass(MapShopTab))" type="button" @onclick='@(() => SetActiveMarketplaceTab(MapShopTab))'>Map Shop</button>
+            <button class="@(GetMarketplaceTabClass(MapShopTab))" type="button" @onclick='@(() => SetActiveMarketplaceTab(MapShopTab))'>Sector Exchange</button>
             <button class="@(GetMarketplaceTabClass(ItemShopTab))" type="button" @onclick='@(() => SetActiveMarketplaceTab(ItemShopTab))'>Item Shop</button>
         </div>
 
         @if (ActiveMarketplaceTab == MapShopTab)
         {
-            <div class="marketplace-top-grid">
-                <section class="panel marketplace-sell-panel">
-                    <div class="panel-heading">
+            <section class="panel marketplace-protocol-panel">
+                <div class="panel-heading maps-heading">
+                    <div>
+                        <span class="profile-eyebrow">Trade Protocol</span>
+                        <h2>Sector Exchange Rules</h2>
+                    </div>
+                    <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="@(() => LoadMarketplaceAsync())">
+                        @(IsLoading ? "Refreshing..." : "Refresh")
+                    </button>
+                </div>
+                <div class="marketplace-protocol-grid">
+                    <article class="marketplace-protocol-card">
+                        <span class="marketplace-protocol-kicker">Transfer</span>
+                        <h3>Ownership Move</h3>
+                        <p>Sector ownership transfers immediately after a successful purchase.</p>
+                    </article>
+                    <article class="marketplace-protocol-card">
+                        <span class="marketplace-protocol-kicker">Payout</span>
+                        <h3>Seller Share</h3>
+                        <p>Sellers receive <strong>90%</strong> of each completed sale.</p>
+                    </article>
+                    <article class="marketplace-protocol-card">
+                        <span class="marketplace-protocol-kicker">Bank Tax</span>
+                        <h3>Enigma Reserve</h3>
+                        <p>Enigma Bank receives the remaining <strong>10%</strong>.</p>
+                    </article>
+                    <article class="marketplace-protocol-card">
+                        <span class="marketplace-protocol-kicker">Live Signal</span>
+                        <h3>Market Depth</h3>
+                        <p>@MapLiveSignal</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="panel marketplace-sell-panel marketplace-sell-panel-priority">
+                <div class="panel-heading maps-heading">
+                    <div>
+                        <span class="profile-eyebrow">Seller Console</span>
+                        <h2>Offer a Sector</h2>
+                        <p class="marketplace-seller-copy">List eligible sectors directly to the exchange with live pricing control.</p>
+                    </div>
+                    <span class="section-count">@AvailableOwnedMaps.Count</span>
+                </div>
+
+                <div class="marketplace-seller-status-row">
+                    <span class="marketplace-filter-pill muted">@AvailableOwnedMaps.Count ready to list</span>
+                    <span class="marketplace-filter-pill muted">@StakedOwnedMapCount under analysis</span>
+                </div>
+
+                @if (StakedOwnedMapCount > 0)
+                {
+                    <div class="empty-state-inline marketplace-seller-note">@StakedOwnedMapCount analyzed sector(s) are hidden from listing until unstaked.</div>
+                }
+
+                @if (AvailableOwnedMaps.Count == 0)
+                {
+                    <div class="empty-state-inline marketplace-seller-note">@GetMapListingEmptyStateMessage()</div>
+                }
+                else
+                {
+                    <EditForm FormName="MarketplaceSellForm" Model="SellRequest" OnValidSubmit="ListMapAsync" class="marketplace-sell-form">
+                        <DataAnnotationsValidator />
+
                         <div>
-                            <span class="profile-eyebrow">Map Shop</span>
-                            <h2>List a Map</h2>
+                            <label class="form-label">Owned Sector</label>
+                            <EnigmaDropdown TValue="string"
+                                            Class="form-control"
+                                            Options="AvailableOwnedMapOptions"
+                                            @bind-Value="SellRequest.MapName" />
                         </div>
-                        <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="@(() => LoadMarketplaceAsync())">
-                            @(IsLoading ? "Refreshing..." : "Refresh")
+
+                        <div>
+                            <label class="form-label">Listing Price</label>
+                            <EnigmaIntStepper Class="form-control"
+                                              Min="1"
+                                              Max="100000000"
+                                              @bind-Value="SellRequest.Price" />
+                            <ValidationMessage For="() => SellRequest.Price" />
+                        </div>
+
+                        <button class="btn btn-primary" type="submit" disabled="@(!CanListSelectedMap || IsActionBusy)" title="@GetMapListingBlockedReason()">
+                            @(GetMapListingButtonLabel())
                         </button>
+                    </EditForm>
+                }
+            </section>
+
+            <section class="panel marketplace-browse-panel">
+                <div class="panel-heading maps-heading">
+                    <div>
+                        <span class="profile-eyebrow">Browse Discoveries</span>
+                        <h2>Active Listings</h2>
                     </div>
-                    @if (StakedOwnedMapCount > 0)
-                    {
-                        <div class="empty-state-inline">@StakedOwnedMapCount staked map(s) are hidden from listing until unstaked.</div>
-                    }
+                    <span class="section-count">@AllFilteredListings.Count</span>
+                </div>
 
-                    @if (AvailableOwnedMaps.Count == 0)
-                    {
-                        <div class="empty-state-inline">@GetMapListingEmptyStateMessage()</div>
-                    }
-                    else
-                    {
-                        <EditForm FormName="MarketplaceSellForm" Model="SellRequest" OnValidSubmit="ListMapAsync" class="marketplace-sell-form">
-                            <DataAnnotationsValidator />
+                <p class="marketplace-results-copy">@MapListingSummary</p>
 
-                            <div>
-                                <label class="form-label">Owned Map</label>
-                                <EnigmaDropdown TValue="string"
-                                                Class="form-control"
-                                                Options="AvailableOwnedMapOptions"
-                                                @bind-Value="SellRequest.MapName" />
-                            </div>
-
-                            <div>
-                                <label class="form-label">Listing Price</label>
-                                <EnigmaIntStepper Class="form-control"
-                                                  Min="1"
-                                                  Max="100000000"
-                                                  @bind-Value="SellRequest.Price" />
-                                <ValidationMessage For="() => SellRequest.Price" />
-                            </div>
-
-                            <button class="btn btn-primary" type="submit" disabled="@(!CanListSelectedMap || IsActionBusy)" title="@GetMapListingBlockedReason()">
-                                @(GetMapListingButtonLabel())
-                            </button>
-                        </EditForm>
-                    }
-                </section>
-
-                <section class="panel marketplace-info-panel">
-                    <div class="panel-heading">
-                        <div>
-                            <span class="profile-eyebrow">Map Shop</span>
-                            <h2>How It Works</h2>
-                        </div>
+                <div class="marketplace-filter-grid marketplace-filter-grid-map">
+                    <div class="marketplace-filter-search">
+                        <label class="form-label">Search</label>
+                        <input class="form-control"
+                               type="text"
+                               placeholder="Search by sector, seller, or theme"
+                               @bind="MapSearchQuery"
+                               @bind:event="oninput" />
                     </div>
-                    <div class="marketplace-bullet-list">
-                        <div>Listings refresh live from the backend marketplace APIs.</div>
-                        <div>Buying transfers ownership, the buyer pays full price, the seller receives 90%, and Enigma Bank receives 10%.</div>
-                        <div>Use this section when you want to trade mazes, not items.</div>
+
+                    <div>
+                        <label class="form-label">Difficulty</label>
+                        <EnigmaDropdown TValue="string"
+                                        Class="form-control"
+                                        Options="MapDifficultyOptions"
+                                        @bind-Value="MapDifficultyFilter" />
                     </div>
-                </section>
-            </div>
+
+                    <div>
+                        <label class="form-label">Theme</label>
+                        <EnigmaDropdown TValue="string"
+                                        Class="form-control"
+                                        Options="MapThemeOptions"
+                                        @bind-Value="MapThemeFilter" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Sort By</label>
+                        <EnigmaDropdown TValue="string"
+                                        Class="form-control"
+                                        Options="MapSortOptions"
+                                        @bind-Value="MapSortBy" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Order</label>
+                        <EnigmaDropdown TValue="string"
+                                        Class="form-control"
+                                        Options="SortOrderOptions"
+                                        @bind-Value="MapSortOrder" />
+                    </div>
+                </div>
+
+                @{
+                    var mapFilterChips = GetMapFilterChips();
+                }
+                <div class="marketplace-filter-toolbar">
+                    <div class="marketplace-active-filter-chips">
+                        @if (mapFilterChips.Count == 0)
+                        {
+                            <span class="marketplace-filter-pill muted">No active filters.</span>
+                        }
+                        else
+                        {
+                            @foreach (var filterChip in mapFilterChips)
+                            {
+                                <span class="marketplace-filter-pill">@filterChip</span>
+                            }
+                        }
+                    </div>
+                    <button class="btn btn-secondary"
+                            type="button"
+                            disabled="@(!HasActiveMapFilters)"
+                            @onclick="ResetMapFilters">
+                        Reset Filters
+                    </button>
+                </div>
+            </section>
 
             @if (IsLoading)
             {
@@ -145,73 +258,19 @@ else
             {
                 <section class="panel leaderboard-empty-panel">
                     <h2>No active listings</h2>
-                    <p>The marketplace is empty right now.</p>
+                    <p>The exchange is clear right now. Check back soon for new anomaly sectors.</p>
+                </section>
+            }
+            else if (AllFilteredListings.Count == 0)
+            {
+                <section class="panel leaderboard-empty-panel">
+                    <h2>No matching listings</h2>
+                    <p>Adjust your search or filters to see more results.</p>
+                    <button class="btn btn-secondary" type="button" @onclick="ResetMapFilters">Reset Filters</button>
                 </section>
             }
             else
             {
-                <section class="panel marketplace-browse-panel">
-                    <div class="panel-heading maps-heading">
-                        <div>
-                            <span class="profile-eyebrow">Browse Maps</span>
-                            <h2>Find a Listing</h2>
-                        </div>
-                        <span class="section-count">@MapListingSummary</span>
-                    </div>
-
-                    <div class="marketplace-filter-grid">
-                        <div>
-                            <label class="form-label">Search</label>
-                            <input class="form-control"
-                                   type="text"
-                                   placeholder="Search by map or seller"
-                                   @bind="MapSearchQuery"
-                                   @bind:event="oninput" />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Difficulty</label>
-                            <EnigmaDropdown TValue="string"
-                                            Class="form-control"
-                                            Options="MapDifficultyOptions"
-                                            @bind-Value="MapDifficultyFilter" />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Theme</label>
-                            <EnigmaDropdown TValue="string"
-                                            Class="form-control"
-                                            Options="MapThemeOptions"
-                                            @bind-Value="MapThemeFilter" />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Sort By</label>
-                            <EnigmaDropdown TValue="string"
-                                            Class="form-control"
-                                            Options="MapSortOptions"
-                                            @bind-Value="MapSortBy" />
-                        </div>
-
-                        <div>
-                            <label class="form-label">Order</label>
-                            <EnigmaDropdown TValue="string"
-                                            Class="form-control"
-                                            Options="SortOrderOptions"
-                                            @bind-Value="MapSortOrder" />
-                        </div>
-                    </div>
-                </section>
-
-                @if (AllFilteredListings.Count == 0)
-                {
-                    <section class="panel leaderboard-empty-panel">
-                        <h2>No matching listings</h2>
-                        <p>Adjust the current map search or filter settings.</p>
-                    </section>
-                }
-                else
-                {
                 @if (TotalListingSections > 1)
                 {
                     <section class="panel leaderboard-pagination-panel">
@@ -243,33 +302,41 @@ else
                     </section>
                 }
 
-                <section class="catalog-card-grid marketplace-grid">
+                <section class="@GetMapListingGridClass()">
                     @foreach (var listing in PagedFilteredListings)
                     {
-                        <article class="catalog-card marketplace-card">
+                        var isOwnListing = IsOwnListing(listing);
+                        var missingMn = GetMissingMnForListing(listing);
+                        <article class="catalog-card marketplace-card @(IsFeaturedListingLayout ? "marketplace-card-featured" : string.Empty)">
                             <MapImageFrame ImageUrl="@listing.MapImage" AltText="@($"{listing.MapName} artwork")" FallbackText="@listing.MapName" Class="poster" />
 
                             <div class="catalog-card-body">
-                                <span class="catalog-card-kicker">Listed by @listing.Seller</span>
+                                <div class="marketplace-card-heading-row">
+                                    <span class="catalog-card-kicker">Listed by @listing.Seller</span>
+                                    <span class="marketplace-listed-at-chip">@listing.ListedAtDisplay</span>
+                                </div>
                                 <h3>@listing.MapName</h3>
-                                <p>@FormatThemeLabel(listing.Theme) | Listed @listing.ListedAtDisplay</p>
+                                <div class="marketplace-listing-chip-row">
+                                    <span class="catalog-card-meta-pill">Theme @FormatThemeLabel(listing.Theme)</span>
+                                    <span class="catalog-card-meta-pill">Size @listing.Size x @listing.Size</span>
+                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(listing.Difficulty)">@listing.Difficulty</span>
+                                </div>
 
-                                <strong class="catalog-card-price">@listing.Price.ToString("N0") MN</strong>
+                                <strong class="catalog-card-price marketplace-price-hero">@listing.Price.ToString("N0") MN</strong>
 
                                 <div class="catalog-card-meta">
-                                    <span>Value @listing.Value.ToString("N0")</span>
-                                    <span>Size @listing.Size x @listing.Size</span>
-                                    <span class="difficulty-badge difficulty-@GetDifficultyClass(listing.Difficulty)">@listing.Difficulty</span>
+                                    <span>Sector value @listing.Value.ToString("N0") MN</span>
+                                    <span>Last sale @DisplayLastSale(listing)</span>
                                 </div>
 
                                 <div class="marketplace-card-footer">
                                     <button class="inline-link-button" type="button" @onclick="() => OpenProfile(listing.Seller)">
                                         View seller
                                     </button>
-                                    <span class="marketplace-last-sale">Last sale @DisplayLastSale(listing)</span>
+                                    <span class="marketplace-last-sale">Seller @listing.Seller</span>
                                 </div>
 
-                                @if (IsOwnListing(listing))
+                                @if (isOwnListing)
                                 {
                                     <span class="profile-status-pill">Your listing</span>
                                     <div class="marketplace-owner-tools">
@@ -299,6 +366,10 @@ else
                                 }
                                 else
                                 {
+                                    @if (missingMn > 0)
+                                    {
+                                        <div class="marketplace-card-warning">You need @missingMn.ToString("N0") more MN to purchase this sector.</div>
+                                    }
                                     <button class="btn btn-primary" disabled="@(!CanBuy(listing) || IsActionBusy)" @onclick="() => BuyListingAsync(listing)">
                                         @GetBuyLabel(listing)
                                     </button>
@@ -307,8 +378,8 @@ else
                         </article>
                     }
                 </section>
-                }
             }
+
         }
         else
         {
@@ -322,23 +393,18 @@ else
                 </div>
 
                 <div class="marketplace-bullet-list marketplace-item-shop-copy">
-                    <article class="marketplace-faq-card"
-                             role="button"
-                             tabindex="0"
-                             @onclick="OpenMarketplaceFaq"
-                             @onkeydown="HandleMarketplaceFaqKeyDown">
-                        <div>
-                            <span class="profile-eyebrow">Marketplace FAQ</span>
-                            <h3>How item shop purchases work</h3>
-                            <p>Open the FAQ overlay for a quick numbered guide.</p>
-                        </div>
-                        <button type="button"
-                                class="btn btn-secondary marketplace-faq-open-button"
-                                @onclick="OpenMarketplaceFaq"
-                                @onclick:stopPropagation="true">
-                            View FAQ
-                        </button>
-                    </article>
+                    <details class="marketplace-faq-collapsible">
+                        <summary>Marketplace FAQ: item shop basics</summary>
+                        <ol class="marketplace-faq-list">
+                            @foreach (var faqEntry in ItemMarketplaceFaqEntries)
+                            {
+                                <li>
+                                    <strong>@faqEntry.Question</strong>
+                                    <p>@faqEntry.Answer</p>
+                                </li>
+                            }
+                        </ol>
+                    </details>
                 </div>
 
                 @if (ShopItems.Count == 0)
@@ -577,25 +643,6 @@ else
         </div>
     }
 
-    @if (IsMarketplaceFaqOpen)
-    {
-        <div class="enigma-modal-backdrop marketplace-faq-overlay-backdrop" @onclick="CloseMarketplaceFaq">
-            <aside class="enigma-modal-card marketplace-faq-overlay-card" @onclick:stopPropagation="true">
-                <button type="button" class="enigma-overlay-close" @onclick="CloseMarketplaceFaq">Close</button>
-                <header class="marketplace-item-overlay-head">
-                    <span class="catalog-card-kicker">Marketplace FAQ</span>
-                    <h2>Item Shop Guide</h2>
-                    <p>Use this quick reference to understand item purchases and run usage.</p>
-                </header>
-                <ol class="marketplace-faq-list">
-                    @foreach (var faqEntry in MarketplaceFaqEntries)
-                    {
-                        <li>@faqEntry</li>
-                    }
-                </ol>
-            </aside>
-        </div>
-    }
 }
 
 @code {
@@ -624,6 +671,7 @@ else
     private Dictionary<string, DateTimeOffset> StakedMapLockById { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _pollCancellation;
     private Task? _pollTask;
+    private DateTimeOffset? _lastMarketplaceRefreshAt;
     private string _mapSearchQuery = string.Empty;
     private string _mapDifficultyFilter = "all";
     private string _mapThemeFilter = "all";
@@ -710,13 +758,20 @@ else
     private string ItemSortBy { get; set; } = "name";
     private string ItemSortOrder { get; set; } = "asc";
     private ItemCatalogEntry? SelectedItemDetails { get; set; }
-    private bool IsMarketplaceFaqOpen { get; set; }
-
-    private static readonly IReadOnlyList<string> MarketplaceFaqEntries =
+    private static readonly IReadOnlyList<(string Question, string Answer)> ItemMarketplaceFaqEntries =
     [
-        "Item purchases update your inventory immediately.",
-        "Use the Play page to select items for your next run.",
-        "Item shop payments go 100% to Enigma Bank.",
+        (
+            "When do purchased items appear in inventory?",
+            "Item purchases are applied immediately and can be equipped on the Expeditions page for your next expedition."
+        ),
+        (
+            "Where does item-shop payment go?",
+            "Item shop purchases are paid in MN and routed to Enigma Bank."
+        ),
+        (
+            "What if an item is out of stock?",
+            "If stock reaches zero, the buy button is disabled until a restock rotates into the merchant pool."
+        ),
     ];
 
     private static readonly IReadOnlyList<SelectOption<string>> SortOrderOptions =
@@ -729,9 +784,9 @@ else
     [
         new("listed_at", "Recently Listed"),
         new("price", "Price"),
-        new("value", "Map Value"),
+        new("value", "Sector Value"),
         new("size", "Size"),
-        new("name", "Map Name"),
+        new("name", "Sector Name"),
     ];
 
     private static readonly IReadOnlyList<SelectOption<string>> ItemSortOptions =
@@ -819,8 +874,36 @@ else
     private int CurrentListingRankStart => AllFilteredListings.Count == 0 ? 0 : CurrentListingSectionOffset + 1;
     private int CurrentListingRankEnd => AllFilteredListings.Count == 0 ? 0 : Math.Min(CurrentListingSectionOffset + PagedFilteredListings.Count, AllFilteredListings.Count);
     private string MapListingSectionSummary => AllFilteredListings.Count == 0 ? "No results" : $"Showing {CurrentListingRankStart}-{CurrentListingRankEnd} of {AllFilteredListings.Count}";
-    private string MapListingSummary => AllFilteredListings.Count == 0 ? "No results" : $"Section {CurrentListingSectionIndex + 1} of {TotalListingSections} | {MapListingSectionSummary}";
+    private string MapListingSummary => AllFilteredListings.Count == 0
+        ? $"0 listings | Sorted by {GetMapSortSummaryLabel()}"
+        : $"{AllFilteredListings.Count} live listing(s) | Sorted by {GetMapSortSummaryLabel()}";
     private string ItemListingSummary => $"Showing {FilteredShopItems.Count} of {ShopItems.Count}";
+    private long TotalListingVolumeMn => Math.Max(0L, Listings.Sum(static listing => (long)Math.Max(0, listing.Price)));
+    private double AverageListingPriceMn => Listings.Count == 0 ? 0 : Listings.Average(static listing => Math.Max(0, listing.Price));
+    private bool IsFeaturedListingLayout => AllFilteredListings.Count == 1;
+    private bool HasActiveMapFilters =>
+        !string.IsNullOrWhiteSpace(MapSearchQuery)
+        || !string.Equals(MapDifficultyFilter, "all", StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(MapThemeFilter, "all", StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(MapSortBy, "listed_at", StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(MapSortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+    private string MapLiveSignal
+    {
+        get
+        {
+            if (AllFilteredListings.Count == 0)
+            {
+                return "No live sector listings are currently active.";
+            }
+
+            if (_lastMarketplaceRefreshAt is null)
+            {
+                return $"{AllFilteredListings.Count} listing(s) live right now.";
+            }
+
+            return $"{AllFilteredListings.Count} listing(s) live. Last refresh {FormatShortAge(_lastMarketplaceRefreshAt.Value)}.";
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -912,6 +995,7 @@ else
             ShopItems = (await Api.GetFromJsonAsync<ItemShopResponse>("api/auth/items/shop"))?.Items ?? [];
             await LoadStakingGateStateAsync();
             ClampListingSectionIndex();
+            _lastMarketplaceRefreshAt = DateTimeOffset.UtcNow;
 
             if (AvailableOwnedMaps.Count > 0)
             {
@@ -974,7 +1058,7 @@ else
                 mapName = SellRequest.MapName,
                 price = SellRequest.Price,
             }),
-            successFallback: "Map listed.");
+            successFallback: "Sector listed.");
 
         await LoadMarketplaceAsync();
     }
@@ -1158,19 +1242,19 @@ else
             return "Listing...";
         }
 
-        return CanListSelectedMap ? "List Map" : "Unavailable";
+        return CanListSelectedMap ? "List Sector" : "Unavailable";
     }
 
     private string GetMapListingBlockedReason()
     {
         if (CanListSelectedMap)
         {
-            return "List this map in the marketplace.";
+            return "List this sector on the anomaly exchange.";
         }
 
         if (!TryGetOwnedMapByName(SellRequest.MapName, out var selectedMap) || selectedMap is null)
         {
-            return "Select an eligible owned map to list.";
+            return "Select an eligible owned sector to list.";
         }
 
         if (IsOwnedMapStaked(selectedMap))
@@ -1183,41 +1267,41 @@ else
                 var remaining = lockUntil - DateTimeOffset.UtcNow;
                 if (remaining.TotalDays >= 1)
                 {
-                    return $"This map is staked and locked for {(int)remaining.TotalDays}d {remaining.Hours}h.";
+                    return $"This sector is under analysis and locked for {(int)remaining.TotalDays}d {remaining.Hours}h.";
                 }
 
                 if (remaining.TotalHours >= 1)
                 {
-                    return $"This map is staked and locked for {(int)remaining.TotalHours}h {remaining.Minutes}m.";
+                    return $"This sector is under analysis and locked for {(int)remaining.TotalHours}h {remaining.Minutes}m.";
                 }
 
-                return $"This map is staked and locked for {Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s.";
+                return $"This sector is under analysis and locked for {Math.Max(0, remaining.Minutes)}m {Math.Max(0, remaining.Seconds)}s.";
             }
 
-            return "This map is currently staked. Unstake it before listing.";
+            return "This sector is currently under analysis. Unstake it before listing.";
         }
 
         if (Listings.Any(listing => EqualsIgnoreCase(listing.MapName, selectedMap.MapName)))
         {
-            return "This map is already listed.";
+            return "This sector is already listed.";
         }
 
-        return "This map cannot be listed right now.";
+        return "This sector cannot be listed right now.";
     }
 
     private string GetMapListingEmptyStateMessage()
     {
         if ((Session?.MapsOwned.Count ?? 0) == 0)
         {
-            return "You do not own any maps yet.";
+            return "You do not own any sectors yet.";
         }
 
         if (StakedOwnedMapCount > 0)
         {
-            return "All unlisted owned maps are currently staked.";
+            return "All unlisted owned sectors are currently under analysis.";
         }
 
-        return "You do not have any unlisted owned maps available for sale.";
+        return "You do not have any unlisted owned sectors available for sale.";
     }
 
     private bool CanPurchase(ItemCatalogEntry item)
@@ -1238,6 +1322,80 @@ else
         ActiveMarketplaceTab = string.Equals(tab, ItemShopTab, StringComparison.OrdinalIgnoreCase)
             ? ItemShopTab
             : MapShopTab;
+    }
+
+    private void ResetMapFilters()
+    {
+        MapSearchQuery = string.Empty;
+        MapDifficultyFilter = "all";
+        MapThemeFilter = "all";
+        MapSortBy = "listed_at";
+        MapSortOrder = "desc";
+        ResetListingSection();
+    }
+
+    private IReadOnlyList<string> GetMapFilterChips()
+    {
+        var chips = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(MapSearchQuery))
+        {
+            chips.Add($"Search: {MapSearchQuery.Trim()}");
+        }
+
+        if (!string.Equals(MapDifficultyFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            chips.Add($"Difficulty: {ToDisplayLabel(MapDifficultyFilter)}");
+        }
+
+        if (!string.Equals(MapThemeFilter, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            chips.Add($"Theme: {FormatThemeLabel(MapThemeFilter)}");
+        }
+
+        if (!string.Equals(MapSortBy, "listed_at", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(MapSortOrder, "desc", StringComparison.OrdinalIgnoreCase))
+        {
+            chips.Add($"Sort: {GetMapSortSummaryLabel()}");
+        }
+
+        return chips;
+    }
+
+    private string GetMapSortSummaryLabel()
+    {
+        var sortOption = MapSortOptions.FirstOrDefault(option =>
+            string.Equals(option.Value, MapSortBy, StringComparison.OrdinalIgnoreCase));
+        var sortLabel = sortOption?.Label ?? "Recently Listed";
+        var orderLabel = string.Equals(MapSortOrder, "asc", StringComparison.OrdinalIgnoreCase)
+            ? "ascending"
+            : "descending";
+        return $"{sortLabel} ({orderLabel})";
+    }
+
+    private string GetMapListingGridClass()
+    {
+        if (IsFeaturedListingLayout)
+        {
+            return "catalog-card-grid marketplace-grid marketplace-grid-featured";
+        }
+
+        if (AllFilteredListings.Count <= 4)
+        {
+            return "catalog-card-grid marketplace-grid marketplace-grid-expanded";
+        }
+
+        return "catalog-card-grid marketplace-grid";
+    }
+
+    private long GetMissingMnForListing(MarketplaceListing listing)
+    {
+        if (Session is null || IsOwnListing(listing))
+        {
+            return 0;
+        }
+
+        return Math.Max(0L, (long)listing.Price - Session.MazeNuggets);
     }
 
     private int GetListingDraftPrice(MarketplaceListing listing)
@@ -1468,7 +1626,7 @@ else
         return
         [
             "Permanent account perk. Once claimed, it stays active with no run-use limit.",
-            $"+{rewardBonusPercent:0.#}% Maze Nugget rewards on run payouts.",
+            $"+{rewardBonusPercent:0.#}% Maze Nugget rewards on expedition payouts.",
             $"{feeReductionPercent:0.#}% reduction on gameplay dividend fees.",
         ];
     }
@@ -1524,24 +1682,6 @@ else
         }
     }
 
-    private void OpenMarketplaceFaq()
-    {
-        IsMarketplaceFaqOpen = true;
-    }
-
-    private void CloseMarketplaceFaq()
-    {
-        IsMarketplaceFaqOpen = false;
-    }
-
-    private void HandleMarketplaceFaqKeyDown(KeyboardEventArgs eventArgs)
-    {
-        if (eventArgs.Key is "Enter" or " ")
-        {
-            OpenMarketplaceFaq();
-        }
-    }
-
     private string GetPurchaseButtonClass(ItemCatalogEntry item)
     {
         return IsOnePerPersonOwned(item) ? "btn btn-secondary marketplace-buy-owned" : "btn btn-primary";
@@ -1582,22 +1722,22 @@ else
     {
         var steps = new List<string>
         {
-            "Buy this item in the marketplace and equip it from the Play screen before you start a run.",
+            "Buy this item in the exchange and equip it from the Expeditions page before you start an expedition.",
         };
 
         if (item.MaxPerRun <= 0)
         {
-            steps.Add("This is a permanent perk. It stays active after purchase and does not consume run uses.");
+            steps.Add("This is a permanent perk. It stays active after purchase and does not consume expedition uses.");
         }
         else
         {
             var usesText = item.MaxPerRun == 1 ? "1 use" : $"{item.MaxPerRun} uses";
-            steps.Add($"Run limit: {usesText} per maze run.");
+            steps.Add($"Expedition limit: {usesText} per sector expedition.");
         }
 
         steps.Add(item.SlotKind.Trim().ToLowerInvariant() switch
         {
-            "passive" => "Passive items auto-apply during the run.",
+            "passive" => "Passive items auto-apply during the expedition.",
             "high_power" => "High-power items are best saved for high-pressure moments.",
             "perk" => "Perk effects are always active and do not need manual activation.",
             _ => "Support items can be triggered when you need puzzle or traversal help.",
@@ -1779,8 +1919,29 @@ else
     private static string DisplayLastSale(MarketplaceListing listing)
     {
         return string.IsNullOrWhiteSpace(listing.LastBoughtDisplay) || listing.LastBoughtDisplay == "Unknown"
-            ? "none"
+            ? "No sale history"
             : listing.LastBoughtDisplay;
+    }
+
+    private static string FormatShortAge(DateTimeOffset timestampUtc)
+    {
+        var elapsed = DateTimeOffset.UtcNow - timestampUtc;
+        if (elapsed.TotalSeconds < 60)
+        {
+            return $"{Math.Max(1, (int)elapsed.TotalSeconds)}s ago";
+        }
+
+        if (elapsed.TotalMinutes < 60)
+        {
+            return $"{Math.Max(1, (int)elapsed.TotalMinutes)}m ago";
+        }
+
+        if (elapsed.TotalHours < 24)
+        {
+            return $"{Math.Max(1, (int)elapsed.TotalHours)}h ago";
+        }
+
+        return $"{Math.Max(1, (int)elapsed.TotalDays)}d ago";
     }
 
     private static string FormatThemeLabel(string? theme)
