@@ -912,8 +912,7 @@ PROMPT_PACKS: List[Dict[str, object]] = [
         },
     ),
     _pack_with_overrides(
-        UNCANNY_CAVE_THEME = {
-    "name": "uncanny_cave_depth",
+    "uncanny_cave_depth", {
     "PROMPT_COMPOSITION_ELITE": [
         "first-person descent through a vast cave chamber with no obvious end",
         "distributed geological weight with layered depth and no single dominant focal point",
@@ -1034,8 +1033,7 @@ PROMPT_PACKS: List[Dict[str, object]] = [
         },
     ),
     _pack_with_overrides(
-        ABANDONED_CITY_THEME = {
-    "name": "uncanny_abandoned_city",
+    "uncanny_abandoned_city", {
     "PROMPT_COMPOSITION_ELITE": [
         "first-person street-level urban desolation with long sightlines and layered building depth",
         "distributed decay across alleys, street edges, windows, and distant structures with no dominant center",
@@ -1155,8 +1153,7 @@ PROMPT_PACKS: List[Dict[str, object]] = [
 },
     ),
     _pack_with_overrides(
-ABANDONED_LAB_THEME = {
-    "name": "uncanny_abandoned_lab",
+        "uncanny_abandoned_lab",{
     "PROMPT_COMPOSITION_ELITE": [
         "first-person interior research facility depth with layered workstations, containment forms, and receding corridors",
         "distributed technical detail across benches, monitors, cables, and sealed doors without a single dominant anchor",
@@ -1276,8 +1273,7 @@ ABANDONED_LAB_THEME = {
 },
     ),
     _pack_with_overrides(
-UNCANNY_FOREST_THEME = {
-    "name": "uncanny_forest_depth",
+        "uncanny_forest_depth",{
     "PROMPT_COMPOSITION_ELITE": [
         "first-person path through a dense forest with heavy depth layering and no clear endpoint",
         "distributed tree density, root systems, mist, and branch complexity across the full frame",
@@ -1397,8 +1393,7 @@ UNCANNY_FOREST_THEME = {
 },
     ),
     _pack_with_overrides(
-DEEP_UNDERWATER_THEME = {
-    "name": "uncanny_abyssal_underwater",
+    "uncanny_abyssal_underwater",{
     "PROMPT_COMPOSITION_ELITE": [
         "first-person deep underwater descent through wreckage and structural ruins with vast empty distance",
         "distributed abyssal detail across drifting particles, broken structures, seabed debris, and open dark water",
