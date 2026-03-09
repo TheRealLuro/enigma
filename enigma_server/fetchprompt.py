@@ -1565,7 +1565,7 @@ def _validate_prompt_pack_schema() -> None:
 # - Set ACTIVE_PROMPT_PACK to "random" for random pack each generation
 # - You may also set ACTIVE_PROMPT_PACK to an integer index
 # 6 - 11
-ACTIVE_PROMPT_PACK: Union[str, int] = 6
+ACTIVE_PROMPT_PACK: Union[str, int] = "random"
 
 # Backward-compatible index selector (used only when ACTIVE_PROMPT_PACK is None).
 ACTIVE_PROMPT_PACK_INDEX: Optional[int] = None

@@ -51,17 +51,12 @@ def main() -> None:
     seed = f"{args.difficulty}-{raw_seed}"
     print(f"Seed: {seed}")
 
-    start = time.perf_counter()
-    noise_img = generate_map_image(seed=seed, use_diffusion=False)
-    noise_img.save(args.noise_out, format="PNG", optimize=True)
-    noise_time = time.perf_counter() - start
 
     start = time.perf_counter()
     final_img = generate_map_image(seed=seed, use_diffusion=True)
     final_img.save(args.final_out, format="PNG", optimize=True)
     final_time = time.perf_counter() - start
 
-    print(f"Saved noise image: {Path(args.noise_out).resolve()} ({noise_time:.2f}s)")
     print(f"Saved final image: {Path(args.final_out).resolve()} ({final_time:.2f}s)")
 
 

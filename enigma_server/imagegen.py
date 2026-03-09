@@ -1596,42 +1596,42 @@ def _build_forest_architecture_prompt(seed: str) -> str:
 def _build_underwater_detail_prompt(seed: str) -> str:
     rng = np.random.default_rng()
     accents = [
-        "broken shipwreck beams and corroded metal fragments resting across the seabed with drifting silt",
-        "collapsed underwater structure fading into open black water beyond the wreckage",
-        "tiny suspended particles filling the water column, weak cyan diffusion, and almost no visibility at distance",
-        "a massive vague silhouette extremely far away in the darkness, implied more than seen",
+        "broken shipwreck beams and corroded metal fragments resting naturally across the seabed with drifting silt and scattered debris",
+        "collapsed underwater structure partially buried in sediment with open dark water extending beyond it",
+        "tiny suspended particles filling the water column, weak blue-green diffusion, and very low visibility into the distance",
         "sediment clouds slowly moving around ruined debris and encrusted surfaces on the ocean floor",
+        "a faint massive silhouette extremely far away in the darkness, implied only at the limit of visibility",
     ]
     return ", ".join([
-        "standing or floating inside a deep underwater abyssal environment, first-person eye-level submerged perspective, NOT aerial NOT top-down NOT surface view",
-        "wreckage or destroyed structure nearby, dark open water ahead, heavy depth and low visibility",
-        "very dim cold underwater light with near-black distance, soft cyan diffusion only, darkness dominates",
-        "no humans, no divers, no active vehicles, no bright coral reef, no surface sunlight — isolated deep ocean atmosphere",
+        "first-person eye-level deep underwater environment, submerged near the seafloor, NOT aerial NOT top-down NOT surface view",
+        "realistic shipwreck or ruined structure nearby, visible seabed in the foreground, open water ahead, strong depth and low visibility",
+        "very dim natural underwater light attenuation, cold blue-green haze, near-black distance, darkness dominates",
+        "no humans, no divers, no submarines, no bright coral reef, no tropical fish, no surface sunlight",
         accents[rng.integers(0, len(accents))],
     ])
+
 
 def _build_underwater_architecture_prompt(seed: str) -> str:
     rng = np.random.default_rng()
     anchors = [
-        "first-person deep underwater view through wreckage and ruined structures into an open abyssal void",
-        "immersive abyssal underwater perspective with corroded debris, drifting sediment, and dark ocean depth",
-        "submerged ruin or shipwreck scene on the seafloor with broken beams and a distant black water horizonless expanse",
+        "first-person deep underwater view near the seafloor with wreckage in the foreground and open abyssal water ahead",
+        "immersive submerged perspective moving through ruined underwater structures toward a dark low-visibility void",
+        "realistic shipwreck scene on the ocean floor with broken beams, seabed debris, and open black water beyond",
     ]
     props = [
-        "suspended particulate matter and drifting silt clouding the water",
-        "corroded metal surfaces and collapsed structural remains on the seabed",
-        "faint weak bioluminescent residue or cold particulate glow in the dark water",
-        "large ambiguous silhouette implied far beyond the visible wreckage",
-        "sediment-covered debris and encrusted textures across broken surfaces",
+        "suspended particulate matter and drifting silt reducing visibility through the water",
+        "corroded metal surfaces and collapsed wreck structure resting across the seabed",
+        "sediment-covered debris and encrusted textures along broken surfaces",
+        "faint cold underwater diffusion with no direct light source visible",
+        "a very distant ambiguous large silhouette barely suggested far beyond the wreckage",
     ]
     return ", ".join([
         anchors[rng.integers(0, len(anchors))],
         props[rng.integers(0, len(props))],
         props[rng.integers(0, len(props))],
-        "dark abyssal palette, low visibility, heavy ocean depth dominates",
-        "ground-level or first-person submerged camera only, NOT aerial NOT top-down, no divers, no bright reef life, no surface light",
+        "clear underwater spatial composition with foreground seabed, midground structure, and background open water",
+        "first-person submerged camera only, NOT aerial NOT top-down, no divers, no surface horizon, no bright reef life",
     ])
-
 
 def _diffuse_cave_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
     prompt = _build_cave_architecture_prompt(seed)
@@ -1639,46 +1639,48 @@ def _diffuse_cave_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
     negative_prompt = BASE_NEGATIVE_PROMPT
     detail_prompt = _build_cave_detail_prompt(seed)
 
-    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    prompt = _clip_prompt_safe(
+        f"{prompt}, "
+        "first-person eye-level view inside a real cave tunnel, visible rocky floor in the foreground, "
+        "cave ceiling overhead, left and right rock walls, forward passage leading deeper into darkness, "
+        "strong human-height perspective, not top-down, not overhead, not circular composition, not a crater",
+        max_words=CLIP_MAIN_WORDS,
+        max_chars=260
+    )
+
     refiner_prompt = _clip_prompt_safe(
         f"{refiner_prompt}, "
-        "first-person eye-level perspective inside a vast uncanny cave chamber, "
-        "towering stalactites hanging above and thick stalagmites rising below, "
-        "wet slick stone floor with shallow puddles and faint ripples, "
-        "dark mineral walls receding into deep black cavern depth, "
-        "cold reflective highlights on damp stone and calcite surfaces, "
-        "subtle cave mist near the ground, natural geological realism, "
-        "hidden face-like rock formations and ambiguous stone pareidolia, "
-        "photorealistic, 8k detail, cinematic 35mm lens feel, global illumination, "
-        "grounded natural cave textures, high dynamic range, sharp focus, "
-        "no daylight, no artificial light, darkness dominates, immersive subterranean depth",
-        max_words=CLIP_REFINER_WORDS, max_chars=140
+        "photorealistic first-person cave interior, human eye level, realistic limestone cave, "
+        "floor below, ceiling above, walls on both sides, forward tunnel depth, damp rock, puddles, "
+        "stalactites overhead, stalagmites near edges, natural cave lighting, realistic geology, "
+        "documentary realism, no abstract texture look, no embossed stone effect, no top-down view",
+        max_words=CLIP_REFINER_WORDS,
+        max_chars=260
     )
-    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
     detail_prompt = _clip_prompt_safe(
         f"{detail_prompt}, "
-        "first person view, detailed wet rock textures, calcite buildup, mineral sheen, "
-        "fine cave wall erosion detail, shallow puddle reflections, dripping water, "
-        "mist in recesses, realistic cave ceiling formations, subtle rock-face pareidolia",
-        max_words=CLIP_DETAIL_WORDS, max_chars=170
+        "first person cave view, realistic damp limestone texture, calcite deposits, puddles on ground, "
+        "rock wall detail, cave ceiling detail, natural erosion, clear floor-to-ceiling separation, "
+        "real tunnel perspective, not overhead, not circular pit",
+        max_words=CLIP_DETAIL_WORDS,
+        max_chars=260
     )
 
     cave_negative = _clip_prompt_safe((
         f"{negative_prompt}, "
-        "aerial view, top-down view, birds-eye view, overhead perspective, drone shot, map view, "
-        "exterior mountain view, outside cave entrance, open sky, daylight, sunlight beams, "
-        "fantasy crystals, glowing gems, lava, magma, fire, magical cave, stylized rocks, "
-        "sci-fi corridor, architecture, bricks, carved temple, built structure, "
-        "humans, animals, insects, creatures, monsters, giant spiders, "
-        "bright colors, neon palette, cartoon style, painterly rendering, "
-        "clean flat walls, obvious tunnel symmetry, solid wall picture, third person view"
-    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+        "top-down cave, overhead cave, aerial view, birds-eye view, drone shot, map view, "
+        "circular crater, sinkhole, abstract geology, embossed texture, engraved stone, etched rock, "
+        "relief map, cutaway view, cross-section, macro rock surface, flat wall texture, "
+        "fantasy crystals, lava, magma, temple cave, stylized cave, illustration, painting, concept art, "
+        "cgi, 3d render, unreal engine, cartoon, plastic look, symmetrical pit"
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=260)
 
     base = pipe(
         prompt=prompt,
         negative_prompt=cave_negative,
         image=image.convert("RGB"),
-        strength=0.60,
+        strength=0.68,
         guidance_scale=6.2,
         num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
     ).images[0]
@@ -1687,8 +1689,8 @@ def _diffuse_cave_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
         prompt=detail_prompt,
         negative_prompt=cave_negative,
         image=base.convert("RGB"),
-        strength=0.17,
-        guidance_scale=5.6,
+        strength=0.14,
+        guidance_scale=5.1,
         num_inference_steps=12,
     ).images[0]
 
@@ -1696,22 +1698,18 @@ def _diffuse_cave_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
         prompt=refiner_prompt,
         negative_prompt=cave_negative,
         image=detail,
-        strength=0.21,
-        guidance_scale=4.8,
+        strength=0.15,
+        guidance_scale=4.3,
         num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
     ).images[0]
 
     result = result.convert("RGB")
-    result = _apply_spectral_grade(result, seed=seed)
     result = _solidify_color_fields(result)
     result = _lift_deep_blacks(result)
-    result = _solidify_color_fields(result)
-    result = result.filter(ImageFilter.SMOOTH_MORE)
-    result = result.filter(ImageFilter.GaussianBlur(0.10))
-    result = ImageEnhance.Color(result).enhance(0.82)
-    result = ImageEnhance.Contrast(result).enhance(1.20)
-    result = ImageEnhance.Brightness(result).enhance(0.90)
-    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=94, threshold=2))
+    result = ImageEnhance.Color(result).enhance(0.66)
+    result = ImageEnhance.Contrast(result).enhance(1.06)
+    result = ImageEnhance.Brightness(result).enhance(0.94)
+    result = result.filter(ImageFilter.UnsharpMask(radius=0.7, percent=55, threshold=3))
     return result
 
 
@@ -1721,44 +1719,48 @@ def _diffuse_city_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
     negative_prompt = BASE_NEGATIVE_PROMPT
     detail_prompt = _build_city_detail_prompt(seed)
 
-    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    prompt = _clip_prompt_safe(
+        f"{prompt}, "
+        "first-person eye-level view standing on a real abandoned city street or alley, "
+        "visible pavement in the foreground, buildings rising on left and right, forward path continuing into distance, "
+        "clear street-level perspective, realistic urban depth, not top-down, not overhead, not skyline view, not centered abstract composition, "
+        "not a wall close-up, not a facade close-up, open navigable path ahead",
+        max_words=CLIP_MAIN_WORDS, max_chars=300
+    )
+
     refiner_prompt = _clip_prompt_safe(
         f"{refiner_prompt}, "
-        "first-person eye-level perspective standing on an abandoned city street or alley, "
-        "tall empty buildings rising on both sides, dark broken windows, cracked asphalt, "
-        "rusted storefronts, debris along sidewalks, scattered broken glass, "
-        "faded signs, weak distant streetlight or failing neon glow, "
-        "urban silence and uncanny emptiness, subtle window pareidolia, "
-        "photorealistic, 8k detail, cinematic 35mm lens feel, realistic materials, "
-        "weathered concrete, dust, grime, oxidized metal, high dynamic range, sharp focus, "
-        "no people, no traffic, no bright daylight, immersive abandoned city atmosphere",
-        max_words=CLIP_REFINER_WORDS, max_chars=140
+        "photorealistic first-person abandoned city environment, true street-level human eye height, "
+        "foreground asphalt or sidewalk, left and right building faces, broken windows, dark interiors, aged storefronts, rusted metal, weathered concrete, "
+        "physically plausible low urban lighting, weak overcast or failing streetlight spill only, documentary realism, "
+        "authentic material wear, dust, grime, cracked pavement, realistic depth falloff, natural 35mm lens perspective, "
+        "no cyberpunk, no stylization, no concept-art look, no dramatic fantasy lighting, no blocked path",
+        max_words=CLIP_REFINER_WORDS, max_chars=320
     )
-    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
     detail_prompt = _clip_prompt_safe(
         f"{detail_prompt}, "
-        "first person view, detailed cracked pavement, rust streaks, dirty windows, "
-        "broken glass, weathered signage, curb debris, alley depth, "
-        "subtle dust drift, realistic concrete and asphalt texture, faint silhouette-like window shadows",
-        max_words=CLIP_DETAIL_WORDS, max_chars=170
+        "first person urban view, realistic cracked asphalt, dirty concrete, rust streaks, grime buildup, dirty glass, broken signage, curb debris, "
+        "open alley or street corridor ahead, natural building scale, subtle window reflections, realistic shadowed recesses, "
+        "clear separation between ground plane and vertical facades, not overhead, not facade close-up",
+        max_words=CLIP_DETAIL_WORDS, max_chars=300
     )
 
     city_negative = _clip_prompt_safe((
         f"{negative_prompt}, "
-        "aerial view, top-down view, birds-eye view, overhead perspective, drone shot, skyline shot, city map view, "
-        "busy traffic, cars moving, pedestrians, crowds, active storefronts, clean modern city, "
-        "bright blue sky, sunny day, vivid cyberpunk neon, sci-fi metropolis, futuristic holograms, "
-        "lush overgrown jungle city, dense plants, heavy vines everywhere, fantasy ruins, "
-        "cartoon style, illustrated look, painterly rendering, toy city look, "
-        "wide open plaza, giant monuments, third person view, exaggerated perspective"
-    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+        "aerial view, top-down view, birds-eye view, overhead perspective, drone shot, skyline, city map, isometric, miniature city, "
+        "close-up wall texture, facade close-up, single building front, blocked alley, dead end wall filling frame, centered abstract mass, "
+        "illustration, concept art, matte painting, cgi, 3d render, unreal engine, game art, stylized, cartoon, painterly, toy look, plastic texture, "
+        "cyberpunk neon, futuristic city, glossy clean architecture, busy traffic, pedestrians, crowds, moving cars, "
+        "bright daylight glamour shot, dramatic sunset, lens flare heavy, oversaturated colors, wide plaza, monument shot, indoor mall"
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=340)
 
     base = pipe(
         prompt=prompt,
         negative_prompt=city_negative,
         image=image.convert("RGB"),
-        strength=0.59,
-        guidance_scale=6.4,
+        strength=0.67,
+        guidance_scale=6.3,
         num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
     ).images[0]
 
@@ -1766,8 +1768,8 @@ def _diffuse_city_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
         prompt=detail_prompt,
         negative_prompt=city_negative,
         image=base.convert("RGB"),
-        strength=0.16,
-        guidance_scale=5.8,
+        strength=0.12,
+        guidance_scale=5.3,
         num_inference_steps=12,
     ).images[0]
 
@@ -1775,22 +1777,18 @@ def _diffuse_city_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
         prompt=refiner_prompt,
         negative_prompt=city_negative,
         image=detail,
-        strength=0.20,
-        guidance_scale=4.9,
+        strength=0.14,
+        guidance_scale=4.5,
         num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
     ).images[0]
 
     result = result.convert("RGB")
-    result = _apply_spectral_grade(result, seed=seed)
     result = _solidify_color_fields(result)
     result = _lift_deep_blacks(result)
-    result = _solidify_color_fields(result)
-    result = result.filter(ImageFilter.SMOOTH_MORE)
-    result = result.filter(ImageFilter.GaussianBlur(0.08))
-    result = ImageEnhance.Color(result).enhance(0.80)
-    result = ImageEnhance.Contrast(result).enhance(1.26)
-    result = ImageEnhance.Brightness(result).enhance(0.92)
-    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=98, threshold=2))
+    result = ImageEnhance.Color(result).enhance(0.64)
+    result = ImageEnhance.Contrast(result).enhance(1.10)
+    result = ImageEnhance.Brightness(result).enhance(0.94)
+    result = result.filter(ImageFilter.UnsharpMask(radius=0.8, percent=78, threshold=3))
     return result
 
 
@@ -1800,55 +1798,57 @@ def _diffuse_lab_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
     negative_prompt = BASE_NEGATIVE_PROMPT
     detail_prompt = _build_lab_detail_prompt(seed)
 
-    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    prompt = _clip_prompt_safe(
+        f"{prompt}, "
+        "first-person eye-level view inside a real abandoned laboratory, "
+        "visible floor in foreground, equipment and benches at human scale, walls and workstations on both sides, corridor or doorway forward, "
+        "clear interior room depth, not top-down, not overhead, not flat room texture, not abstract layout, "
+        "not a close-up of equipment, open navigable lab space ahead",
+        max_words=CLIP_MAIN_WORDS, max_chars=300
+    )
+
     refiner_prompt = _clip_prompt_safe(
         f"{refiner_prompt}, "
-        "first-person eye-level perspective inside an abandoned underground research laboratory, "
-        "metal workstations, broken monitors, dusty surfaces, hanging cables, containment glass, "
-        "sealed doors with warning labels, weak fluorescent flicker and faint dead monitor glow, "
-        "cold sterile atmosphere overtaken by decay, oxidized equipment and scattered papers, "
-        "subtle reflective pareidolia in glass and dark cabinets, "
-        "photorealistic, 8k detail, cinematic 35mm lens feel, realistic steel, plastic, and glass materials, "
-        "global illumination, high dynamic range, sharp focus, no daylight, no active machines, "
-        "immersive eerie scientific realism, sterile silence dominates",
-        max_words=CLIP_REFINER_WORDS, max_chars=140
+        "photorealistic first-person abandoned lab interior, true human eye height, "
+        "steel benches, dusty instruments, old monitors, cable runs, glass containment, warning labels, sealed industrial doors, worn floor coating, "
+        "practical weak fluorescent spill and dead monitor glow only, realistic low-light exposure, documentary realism, "
+        "authentic steel, glass, plastic, paper, dust and oxidation materials, clear floor-wall-ceiling separation, natural 35mm perspective, "
+        "no futuristic fantasy technology, no holograms, no stylization, no blocked composition, no centered abstract machinery cluster",
+        max_words=CLIP_REFINER_WORDS, max_chars=320
     )
-    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
     detail_prompt = _clip_prompt_safe(
         f"{detail_prompt}, "
-        "first person view, detailed dust on equipment, oxidized metal, cracked screens, "
-        "tarnished steel surfaces, reflective containment glass, warning label detail, "
-        "loose cables, dead monitor glow, subtle contamination-like stains, realistic abandoned lab textures",
-        max_words=CLIP_DETAIL_WORDS, max_chars=170
+        "first person laboratory view, realistic dust on surfaces, oxidized steel, cracked screens, fingerprints on glass, cable clutter, warning label detail, "
+        "worn linoleum or sealed lab flooring, practical equipment scale, open passage or doorway ahead, "
+        "realistic shadowing around benches and cabinets, not overhead, not macro equipment close-up",
+        max_words=CLIP_DETAIL_WORDS, max_chars=300
     )
 
     lab_negative = _clip_prompt_safe((
         f"{negative_prompt}, "
-        "aerial view, top-down view, birds-eye view, overhead perspective, drone shot, "
-        "bright hospital, clean modern lab, active scientists, robots, holograms, futuristic sci-fi corridor, "
-        "outdoor view, windows with sunlight, daylight flooding in, warm cozy lighting, "
-        "fantasy lab, glowing alien tech, magical effects, neon cyberpunk palette, "
-        "cartoon style, painterly rendering, illustrated look, toy plastic look, "
-        "humans, creatures, insects, obvious gore, third person view, exterior building view"
-    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+        "aerial view, top-down view, birds-eye view, overhead perspective, floor plan view, schematic view, isometric room, "
+        "equipment close-up, macro panel, abstract machine cluster, central glowing device, blocked corridor, wall filling frame, "
+        "illustration, concept art, matte painting, cgi, 3d render, unreal engine, game art, stylized, cartoon, painterly, plastic look, "
+        "sci-fi fantasy lab, holograms, glowing blue tech, alien machinery, robots, androids, pristine clean white lab, operating room, "
+        "bright sunlight through windows, office space, classroom, warehouse, people, gore, extreme blood"
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=340)
 
     base = pipe(
         prompt=prompt,
         negative_prompt=lab_negative,
         image=image.convert("RGB"),
-        strength=0.61,
-        guidance_scale=6.1,
+        strength=0.66,
+        guidance_scale=6.0,
         num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
     ).images[0]
-
-    base = base.filter(ImageFilter.GaussianBlur(radius=0.45))
 
     detail = pipe(
         prompt=detail_prompt,
         negative_prompt=lab_negative,
         image=base.convert("RGB"),
-        strength=0.17,
-        guidance_scale=5.3,
+        strength=0.11,
+        guidance_scale=5.0,
         num_inference_steps=12,
     ).images[0]
 
@@ -1856,22 +1856,18 @@ def _diffuse_lab_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image:
         prompt=refiner_prompt,
         negative_prompt=lab_negative,
         image=detail,
-        strength=0.22,
-        guidance_scale=4.6,
+        strength=0.14,
+        guidance_scale=4.3,
         num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
     ).images[0]
 
     result = result.convert("RGB")
-    result = _apply_spectral_grade(result, seed=seed)
     result = _solidify_color_fields(result)
     result = _lift_deep_blacks(result)
-    result = _solidify_color_fields(result)
-    result = result.filter(ImageFilter.SMOOTH_MORE)
-    result = result.filter(ImageFilter.GaussianBlur(0.10))
-    result = ImageEnhance.Color(result).enhance(0.76)
-    result = ImageEnhance.Contrast(result).enhance(1.22)
-    result = ImageEnhance.Brightness(result).enhance(0.88)
-    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=92, threshold=2))
+    result = ImageEnhance.Color(result).enhance(0.58)
+    result = ImageEnhance.Contrast(result).enhance(1.08)
+    result = ImageEnhance.Brightness(result).enhance(0.90)
+    result = result.filter(ImageFilter.UnsharpMask(radius=0.8, percent=72, threshold=3))
     return result
 
 
@@ -1881,43 +1877,46 @@ def _diffuse_forest_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image
     negative_prompt = BASE_NEGATIVE_PROMPT
     detail_prompt = _build_forest_detail_prompt(seed)
 
-    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    prompt = _clip_prompt_safe(
+        f"{prompt}, "
+        "first-person eye-level forest path view, visible ground in foreground, tree trunks on left and right, forward path or opening into depth, "
+        "clear woodland perspective, realistic path readability, not aerial, not overhead, not wide landscape panorama, not abstract tree wall, "
+        "not blocked by a single trunk, open navigable route ahead",
+        max_words=CLIP_MAIN_WORDS, max_chars=300
+    )
+
     refiner_prompt = _clip_prompt_safe(
         f"{refiner_prompt}, "
-        "first-person eye-level perspective inside a dense uncanny forest, "
-        "closely spaced tall tree trunks on both sides, twisted roots across the ground, "
-        "moss, damp bark, leaf litter, soft drifting fog between trees, "
-        "dim filtered canopy light, narrow path or natural opening extending ahead, "
-        "subtle bark pareidolia and distant silhouette-like tree groupings, "
-        "photorealistic, 8k detail, cinematic 35mm lens feel, realistic bark and foliage materials, "
-        "soft atmospheric depth, natural woodland realism, high dynamic range, sharp focus, "
-        "no buildings, no creatures, no fantasy glow, immersive eerie forest calm",
-        max_words=CLIP_REFINER_WORDS, max_chars=140
+        "photorealistic first-person forest interior, human eye height, "
+        "real bark, damp roots, leaf litter, moss, undergrowth, soft ground fog, path or natural opening ahead, "
+        "physically plausible canopy-filtered daylight, documentary woodland realism, authentic bark microtexture and forest floor detail, "
+        "clear depth layering from foreground ground plane to mid trunks to distant trees, natural 35mm perspective, "
+        "no fantasy glow, no enchanted forest look, no stylization, no blocked composition, no dense flat wall of leaves",
+        max_words=CLIP_REFINER_WORDS, max_chars=320
     )
-    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
     detail_prompt = _clip_prompt_safe(
         f"{detail_prompt}, "
-        "first person view, detailed bark texture, moss growth, root systems, "
-        "forest floor leaf litter, damp earth, fine fog layering, subtle fungal traces, "
-        "realistic branch structure, face-like bark impressions, deep woodland path detail",
-        max_words=CLIP_DETAIL_WORDS, max_chars=170
+        "first person woodland view, realistic bark fissures, damp soil, roots, leaf litter, moss patches, subtle fungal traces, branch structure, low fog, "
+        "open path depth, believable tree spacing, natural ground-plane readability, "
+        "not overhead, not macro bark close-up, not panoramic vista",
+        max_words=CLIP_DETAIL_WORDS, max_chars=300
     )
 
     forest_negative = _clip_prompt_safe((
         f"{negative_prompt}, "
-        "aerial forest view, top-down view, birds-eye view, overhead perspective, drone shot, landscape panorama, "
-        "bright fantasy forest, magical glow, fairy lights, enchanted woods, saturated neon greens, "
-        "sunny meadow, open field, clear blue sky dominating, tropical jungle, huge flowers, "
-        "animals, people, creatures, cabins, buildings, roads, modern objects, "
-        "cartoon style, painterly rendering, stylized art, third person view, wall of trees blocking entire frame"
-    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+        "aerial forest, top-down forest, birds-eye view, drone shot, landscape panorama, scenic overlook, horizon vista, "
+        "single giant tree blocking frame, flat wall of foliage, macro bark, abstract branch pattern, symmetrical tree tunnel, "
+        "illustration, concept art, matte painting, cgi, game art, stylized, cartoon, painterly, fantasy forest, enchanted woods, magical particles, "
+        "glowing plants, fairy lights, giant fantasy mushrooms, tropical jungle overload, meadow, cabin, road, people, animals"
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=340)
 
     base = pipe(
         prompt=prompt,
         negative_prompt=forest_negative,
         image=image.convert("RGB"),
-        strength=0.58,
-        guidance_scale=6.0,
+        strength=0.65,
+        guidance_scale=5.9,
         num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
     ).images[0]
 
@@ -1925,8 +1924,8 @@ def _diffuse_forest_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image
         prompt=detail_prompt,
         negative_prompt=forest_negative,
         image=base.convert("RGB"),
-        strength=0.16,
-        guidance_scale=5.4,
+        strength=0.11,
+        guidance_scale=5.0,
         num_inference_steps=12,
     ).images[0]
 
@@ -1934,20 +1933,18 @@ def _diffuse_forest_pipeline(pipe, image: Image.Image, seed: str) -> Image.Image
         prompt=refiner_prompt,
         negative_prompt=forest_negative,
         image=detail,
-        strength=0.20,
-        guidance_scale=4.7,
+        strength=0.13,
+        guidance_scale=4.2,
         num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
     ).images[0]
 
     result = result.convert("RGB")
     result = _solidify_color_fields(result)
     result = _lift_deep_blacks(result)
-    result = _solidify_color_fields(result)
-    result = result.filter(ImageFilter.SMOOTH_MORE)
-    result = ImageEnhance.Color(result).enhance(0.86)
-    result = ImageEnhance.Contrast(result).enhance(1.18)
-    result = ImageEnhance.Brightness(result).enhance(0.94)
-    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=94, threshold=2))
+    result = ImageEnhance.Color(result).enhance(0.72)
+    result = ImageEnhance.Contrast(result).enhance(1.06)
+    result = ImageEnhance.Brightness(result).enhance(0.97)
+    result = result.filter(ImageFilter.UnsharpMask(radius=0.8, percent=74, threshold=3))
     return result
 
 
@@ -1957,54 +1954,59 @@ def _diffuse_underwater_pipeline(pipe, image: Image.Image, seed: str) -> Image.I
     negative_prompt = BASE_NEGATIVE_PROMPT
     detail_prompt = _build_underwater_detail_prompt(seed)
 
-    prompt = _clip_prompt_safe(prompt, max_words=CLIP_MAIN_WORDS, max_chars=190)
+    prompt = _clip_prompt_safe(
+        f"{prompt}, "
+        "first-person underwater view near the seafloor, visible seabed in the foreground, wreckage at human-readable scale, "
+        "open water extending forward into darkness, clear submerged depth composition, "
+        "not aerial, not surface view, not top-down, not centered abstract mass, not a branching pattern, "
+        "not coral close-up, not metal texture close-up, not an organic web, open abyssal space ahead",
+        max_words=CLIP_MAIN_WORDS, max_chars=320
+    )
+
     refiner_prompt = _clip_prompt_safe(
         f"{refiner_prompt}, "
-        "first-person submerged perspective in a deep underwater abyss, "
-        "broken shipwreck or ruined structure on the seafloor, corroded beams and debris, "
-        "drifting silt clouds, suspended particles throughout the water, "
-        "cold cyan-blue diffusion with near-black distance, open abyss beyond the wreckage, "
-        "faint massive creature-like silhouette extremely far away and barely visible, "
-        "photorealistic, 8k detail, cinematic underwater realism, realistic corrosion and sediment, "
-        "volumetric depth haze, high dynamic range, sharp focus, "
-        "no divers, no bright reef, no surface sunlight, oppressive deep ocean atmosphere",
-        max_words=CLIP_REFINER_WORDS, max_chars=140
+        "photorealistic first-person deep underwater environment, realistic shipwreck or submerged ruin, corroded metal, sediment-coated surfaces, suspended particles, drifting silt clouds, "
+        "natural underwater light attenuation, low visibility, cold blue-green diffusion, realistic abyssal haze, documentary realism, "
+        "clear foreground seabed and midground wreck structure with open dark water beyond, natural submerged perspective, realistic scale, "
+        "no bright reef colors, no fantasy sea life, no stylization, no giant explicit monster close-up, no blocked frame, "
+        "no branching filaments, no coral lattice, no root network, no membrane webbing, no abstract line network",
+        max_words=CLIP_REFINER_WORDS, max_chars=360
     )
-    negative_prompt = _clip_prompt_safe(negative_prompt, max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+
     detail_prompt = _clip_prompt_safe(
         f"{detail_prompt}, "
-        "first person view, detailed corroded metal, sediment buildup, suspended particulate matter, "
-        "wreck textures, seabed debris, low visibility abyssal water, "
-        "subtle bioluminescent residue, distant gigantic silhouette ambiguity, realistic underwater light falloff",
-        max_words=CLIP_DETAIL_WORDS, max_chars=170
+        "first person underwater view, realistic corrosion, encrusted wreck surfaces, sediment drifts, suspended particulate matter, seabed debris, low-visibility water haze, "
+        "open dark water beyond structure, grounded underwater scale, clear foreground floor and midground wreck separation, "
+        "not top-down, not coral close-up, not surface postcard composition, not branching organic texture, not web-like pattern",
+        max_words=CLIP_DETAIL_WORDS, max_chars=340
     )
 
     underwater_negative = _clip_prompt_safe((
         f"{negative_prompt}, "
-        "aerial ocean view, top-down view, birds-eye view, overhead perspective, surface water view, beach view, "
-        "bright tropical reef, colorful fish schools, coral paradise, sunbeams from surface, scuba divers, submarines, "
-        "clear water, swimming pool look, fantasy sea monster close-up, explicit giant creature, "
-        "cartoon style, painterly rendering, stylized art, neon aquatic colors, "
-        "humans, boats above water, strong horizon line, third person view, clean modern underwater base"
-    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=170)
+        "aerial ocean, top-down ocean, birds-eye view, beach, horizon line, surface water view, postcard ocean scene, "
+        "coral close-up, tropical reef, colorful fish school, clear water paradise, branching coral, coral lattice, sea fan, root network, vein pattern, membrane web, organic webbing, neural web, mycelium, "
+        "single giant creature filling frame, blocked wreck wall, centered abstract underwater blob, abstract line network, tangled white filaments, "
+        "illustration, concept art, matte painting, cgi, game art, stylized, cartoon, painterly, fantasy sea monster, glowing fantasy ocean, "
+        "scuba diver, submarine, underwater base, bright sunlight shafts, swimming pool look, aquarium look"
+    ), max_words=CLIP_NEGATIVE_WORDS, max_chars=420)
 
     base = pipe(
         prompt=prompt,
         negative_prompt=underwater_negative,
         image=image.convert("RGB"),
-        strength=0.63,
-        guidance_scale=5.8,
+        strength=0.76,
+        guidance_scale=5.4,
         num_inference_steps=DIFFUSE_DUNGEON_BASE_STEPS,
     ).images[0]
 
-    base = base.filter(ImageFilter.GaussianBlur(radius=0.55))
+    base = base.filter(ImageFilter.GaussianBlur(radius=0.10))
 
     detail = pipe(
         prompt=detail_prompt,
         negative_prompt=underwater_negative,
         image=base.convert("RGB"),
-        strength=0.18,
-        guidance_scale=5.0,
+        strength=0.10,
+        guidance_scale=4.6,
         num_inference_steps=12,
     ).images[0]
 
@@ -2012,24 +2014,20 @@ def _diffuse_underwater_pipeline(pipe, image: Image.Image, seed: str) -> Image.I
         prompt=refiner_prompt,
         negative_prompt=underwater_negative,
         image=detail,
-        strength=0.23,
-        guidance_scale=4.4,
+        strength=0.11,
+        guidance_scale=3.9,
         num_inference_steps=DIFFUSE_DUNGEON_REFINER_STEPS,
     ).images[0]
 
     result = result.convert("RGB")
-    result = _apply_spectral_grade(result, seed=seed)
     result = _solidify_color_fields(result)
     result = _lift_deep_blacks(result)
-    result = _solidify_color_fields(result)
-    result = result.filter(ImageFilter.SMOOTH_MORE)
-    result = result.filter(ImageFilter.GaussianBlur(0.16))
-    result = ImageEnhance.Color(result).enhance(0.72)
-    result = ImageEnhance.Contrast(result).enhance(1.16)
-    result = ImageEnhance.Brightness(result).enhance(0.84)
-    result = result.filter(ImageFilter.UnsharpMask(radius=1.0, percent=88, threshold=2))
+    result = result.filter(ImageFilter.GaussianBlur(0.06))
+    result = ImageEnhance.Color(result).enhance(0.46)
+    result = ImageEnhance.Contrast(result).enhance(1.04)
+    result = ImageEnhance.Brightness(result).enhance(0.90)
+    result = result.filter(ImageFilter.UnsharpMask(radius=0.55, percent=42, threshold=3))
     return result
-
 
 def diffuse_abstract(image: Image.Image, seed: str) -> Image.Image:
     pipe = get_pipe()
