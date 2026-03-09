@@ -38,14 +38,24 @@ public sealed class AdvancedPuzzleVisualContractTests
 
         Assert.Contains("dialviz:variant", view.Board.Keys);
         Assert.Contains("cipher_wheel:encoded_fragment", view.Board.Keys);
+        Assert.Contains("cipher_wheel:current_fragment", view.Board.Keys);
+        Assert.Contains("cipher_wheel:target_fragment", view.Board.Keys);
         Assert.Contains(view.Actions, action => action.Command.StartsWith("dial:", StringComparison.OrdinalIgnoreCase));
 
-        if (difficulty == MazeDifficulty.Medium)
+        if (difficulty == MazeDifficulty.Easy)
         {
+            Assert.Equal("DIRECT", view.Board["dialviz:summary_token"]);
+            Assert.Equal(view.Board["cipher_wheel:encoded_fragment"], view.Board["cipher_wheel:current_fragment"]);
+            Assert.Equal(view.Board["cipher_wheel:token_stream"], view.Board["cipher_wheel:target_fragment"]);
+        }
+        else if (difficulty == MazeDifficulty.Medium)
+        {
+            Assert.StartsWith("SHIFT +", view.Board["dialviz:summary_token"], StringComparison.Ordinal);
             Assert.StartsWith("SHIFT +", view.Board["cipher_wheel:rule_hint"], StringComparison.Ordinal);
         }
         else if (difficulty == MazeDifficulty.Hard)
         {
+            Assert.Equal("MASKED", view.Board["dialviz:summary_token"]);
             Assert.Equal("masked", view.Board["cipher_wheel:mask_state"]);
             Assert.DoesNotContain("tgt:k1", view.Board.Keys);
             Assert.False(string.IsNullOrWhiteSpace(view.Board["cipher_wheel:semantic_hint"]));

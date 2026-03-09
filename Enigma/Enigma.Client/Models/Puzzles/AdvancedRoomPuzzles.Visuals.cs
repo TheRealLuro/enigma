@@ -98,12 +98,19 @@ public sealed partial class SoloPanelBiblePuzzle
                 board["dead_reckoning:destination"] = $"{(SumTargetValues() % 360):000} deg";
                 break;
             case "cipher_wheel":
-                board["cipher_wheel:token_stream"] = _showTarget ? BuildGlyphStream(_target.Values) : BuildGlyphMask(_orderedKeys.Count);
+                var targetFragment = _showTarget
+                    ? BuildGlyphStreamFromKeys(_orderedKeys, _target)
+                    : BuildGlyphMask(_orderedKeys.Count);
+                var currentFragment = BuildGlyphStreamFromKeys(_orderedKeys, _current);
+                board["dialviz:summary_token"] = BuildCipherWheelSummaryToken();
+                board["cipher_wheel:token_stream"] = targetFragment;
+                board["cipher_wheel:target_fragment"] = targetFragment;
                 board["cipher_wheel:mask_state"] = _showTarget ? "revealed" : "masked";
                 board["cipher_wheel:rule_hint"] = _difficulty == MazeDifficulty.Medium
                     ? ExtractCipherWheelRuleHint()
                     : string.Empty;
-                board["cipher_wheel:encoded_fragment"] = BuildGlyphStream(_current.Values);
+                board["cipher_wheel:encoded_fragment"] = currentFragment;
+                board["cipher_wheel:current_fragment"] = currentFragment;
                 board["cipher_wheel:semantic_hint"] = _difficulty == MazeDifficulty.Hard
                     ? BuildCipherWheelSemanticHint()
                     : "Direct decode";
@@ -371,11 +378,35 @@ public sealed partial class SoloPanelBiblePuzzle
         return builder.Length == 0 ? "VOID" : builder.ToString();
     }
 
+    private string BuildCipherWheelSummaryToken() => _difficulty switch
+    {
+        MazeDifficulty.Easy => "DIRECT",
+        MazeDifficulty.Medium => ExtractCipherWheelRuleHint(),
+        MazeDifficulty.Hard => "MASKED",
+        _ => "DIRECT",
+    };
+
     private static string BuildGlyphStream(IEnumerable<int> values)
     {
         var builder = new StringBuilder();
         foreach (var value in values.Take(6))
         {
+            builder.Append((char)('A' + (Math.Abs(value) % 26)));
+        }
+
+        return builder.Length == 0 ? "LOCK" : builder.ToString();
+    }
+
+    private static string BuildGlyphStreamFromKeys(IEnumerable<string> keys, IReadOnlyDictionary<string, int> values)
+    {
+        var builder = new StringBuilder();
+        foreach (var key in keys.Take(6))
+        {
+            if (!values.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
             builder.Append((char)('A' + (Math.Abs(value) % 26)));
         }
 

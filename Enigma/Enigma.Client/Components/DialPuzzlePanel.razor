@@ -11,7 +11,7 @@
                 <p>@Subtitle</p>
             </div>
             <div class="enigma-advanced-stage-badges">
-                <span class="enigma-advanced-stage-pill">@SummaryToken</span>
+                <span class="enigma-advanced-stage-pill">@StageBadgeToken</span>
                 <span class="enigma-advanced-stage-pill muted">@TargetVisibilityLabel</span>
             </div>
         </header>
@@ -76,8 +76,8 @@
                                         class="wheel-node target" />
                             }
                         }
-                        @BuildSvgText(210d, 136d, "center-token", SummaryToken)
-                        @BuildSvgText(210d, 176d, "center-caption", CipherStream)
+                        @BuildSvgText(210d, 136d, "center-token", CipherCurrentFragment)
+                        @BuildSvgText(210d, 176d, "center-caption", CipherCaption)
                     </svg>
                 }
                 else if (IsGravityWell)
@@ -273,7 +273,17 @@
     private string FamilyTitle => GetBoardText("visual:family_title", View.FamilyId.Replace('_', ' '));
     private string Subtitle => GetBoardText("dialviz:subtitle", "Channel telemetry");
     private string SummaryToken => GetBoardText("dialviz:summary_token", "LOCK");
-    private string CipherStream => GetBoardText("cipher_wheel:token_stream", SummaryToken);
+    private string StageBadgeToken => IsCipherWheel ? CipherBadgeToken : SummaryToken;
+    private string CipherCurrentFragment => GetBoardText("cipher_wheel:current_fragment", GetBoardText("cipher_wheel:encoded_fragment", SummaryToken));
+    private string CipherTargetFragment => GetBoardText("cipher_wheel:target_fragment", GetBoardText("cipher_wheel:token_stream", SummaryToken));
+    private string CipherRuleHint => GetBoardText("cipher_wheel:rule_hint", string.Empty);
+    private string CipherSemanticHint => GetBoardText("cipher_wheel:semantic_hint", string.Empty);
+    private string CipherBadgeToken => SummaryToken;
+    private string CipherCaption => ShowTarget
+        ? $"Target {CipherTargetFragment}"
+        : !string.IsNullOrWhiteSpace(CipherRuleHint)
+            ? CipherRuleHint
+            : CipherSemanticHint;
     private string ReceiverArc => GetBoardText("gravity_well:receiver_arc", "000 deg");
     private string BounceWindowLabel => $"Bounce {GetBoardText("echo_chamber:bounce_window", "3")}";
     private string StressBand => $"Stress {GetBoardText("fault_line:stress_band", "00%")}";
@@ -282,7 +292,7 @@
     private string VariantHeadline => View.FamilyId switch
     {
         "dead_reckoning" => "Route Plot",
-        "cipher_wheel" => "Decoder Drum",
+        "cipher_wheel" => "Decode Guidance",
         "gravity_well" => "Projected Trajectory",
         "echo_chamber" => "Beam Return",
         "fault_line" => "Seam Alignment",
@@ -292,7 +302,7 @@
     {
         "gravity_well" => "Drag the scrub bar to bend the live route through each well and into the receiver window.",
         "dead_reckoning" => "Scrub each vector until the live route overlays the target route.",
-        "cipher_wheel" => "Drag each drum for coarse movement, then use Down and Up for fine correction.",
+        "cipher_wheel" => BuildCipherInteractionHint(),
         "echo_chamber" => "Adjust reflector banks until the live beam path lands on the receiver.",
         "fault_line" => "Shift each seam until the live fault profile settles on the target line.",
         _ => "Use the scrub bar for coarse tuning and the buttons for fine adjustment.",
@@ -306,6 +316,21 @@
     private SoloPanelActionItem? CommitAction => FindAction("commit");
     private SoloPanelActionItem? ResetAction => FindAction("reset");
     private SoloPanelActionItem? HintAction => FindAction("hint");
+
+    private string BuildCipherInteractionHint()
+    {
+        if (!string.IsNullOrWhiteSpace(CipherRuleHint))
+        {
+            return $"{CipherRuleHint}. Drag each drum for coarse movement, then use Down and Up for fine correction.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(CipherSemanticHint) && !string.Equals(CipherSemanticHint, "Direct decode", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{CipherSemanticHint}. Drag each drum for coarse movement, then use Down and Up for fine correction.";
+        }
+
+        return "Match the live fragment to the target fragment. Drag each drum for coarse movement, then use Down and Up for fine correction.";
+    }
 
     protected override void OnParametersSet()
     {

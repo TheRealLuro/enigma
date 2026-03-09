@@ -29,6 +29,8 @@
     let userSessionHandler = null;
     let audioContext = null;
     let radarPingAudio = null;
+    let radarPingBuffer = null;
+    let radarPingBufferPromise = null;
     let runAmbianceAudio = null;
     let runAmbianceSessionId = null;
     let runAmbianceCycleToken = 0;
@@ -818,6 +820,99 @@
         return radarPingAudio;
     }
 
+    function decodeAudioDataAsync(context, arrayBuffer) {
+        return new Promise(function (resolve, reject) {
+            let settled = false;
+            const finishResolve = function (value) {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                resolve(value);
+            };
+            const finishReject = function (error) {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                reject(error);
+            };
+
+            try {
+                const maybePromise = context.decodeAudioData(arrayBuffer, finishResolve, finishReject);
+                if (maybePromise && typeof maybePromise.then === "function") {
+                    maybePromise.then(finishResolve).catch(finishReject);
+                }
+            } catch (error) {
+                finishReject(error);
+            }
+        });
+    }
+
+    function ensureRadarPingBuffer() {
+        const context = ensureAudioContext();
+        if (!context) {
+            return Promise.resolve(null);
+        }
+
+        if (radarPingBuffer) {
+            return Promise.resolve(radarPingBuffer);
+        }
+
+        if (radarPingBufferPromise) {
+            return radarPingBufferPromise;
+        }
+
+        if (typeof window.fetch !== "function") {
+            return Promise.resolve(null);
+        }
+
+        radarPingBufferPromise = window.fetch(radarPingAudioPath, { cache: "force-cache" })
+            .then(function (response) {
+                if (!response || !response.ok) {
+                    throw new Error("Unable to fetch radar ping audio.");
+                }
+
+                return response.arrayBuffer();
+            })
+            .then(function (buffer) {
+                return decodeAudioDataAsync(context, buffer.slice(0));
+            })
+            .then(function (decodedBuffer) {
+                radarPingBuffer = decodedBuffer;
+                return decodedBuffer;
+            })
+            .catch(function () {
+                return null;
+            })
+            .finally(function () {
+                radarPingBufferPromise = null;
+            });
+
+        return radarPingBufferPromise;
+    }
+
+    function playRadarPingBuffer(context) {
+        if (!context || !radarPingBuffer) {
+            return false;
+        }
+
+        try {
+            const source = context.createBufferSource();
+            const gainNode = context.createGain();
+            source.buffer = radarPingBuffer;
+            gainNode.gain.setValueAtTime(0.42, context.currentTime);
+            source.connect(gainNode);
+            gainNode.connect(context.destination);
+            source.start(context.currentTime);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     function playOscillatorTone(context, frequency, peakGain, duration, type) {
         const oscillator = context.createOscillator();
         const gainNode = context.createGain();
@@ -1257,10 +1352,14 @@
 
             setStorageItem("session", runAudioApprovalKey, "true");
             resumeAudioContextIfNeeded();
+            ensureRadarPingBuffer().catch(() => {});
+            ensureRadarPingAudio();
         },
 
         primeAudio: function () {
             resumeAudioContextIfNeeded();
+            ensureRadarPingBuffer().catch(() => {});
+            ensureRadarPingAudio();
         },
 
         startTutorial: function () {
@@ -1427,6 +1526,16 @@
                 } catch {
                 }
             };
+
+            if (playRadarPingBuffer(context)) {
+                return;
+            }
+
+            if (context) {
+                ensureRadarPingBuffer().catch(() => {});
+                playFallback();
+                return;
+            }
 
             const pingAudio = ensureRadarPingAudio();
             if (pingAudio) {

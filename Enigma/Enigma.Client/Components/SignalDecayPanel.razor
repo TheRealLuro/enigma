@@ -69,11 +69,14 @@
                     var cardClass = component.Aligned ? "aligned" : component.Delta >= 0.8d ? "near" : "off";
                     <article class="enigma-signal-component-card @cardClass">
                         <header>
-                            <div>
+                            <div class="enigma-signal-component-title">
                                 <span class="enigma-kicker">@component.KeyLabel</span>
-                                <strong>@(component.Aligned ? "Locked" : $"{Math.Round(component.Delta * 100d):0}% aligned")</strong>
+                                <strong>Channel Alignment</strong>
                             </div>
-                            <span class="enigma-signal-component-state">@component.WaveLabel</span>
+                            <div class="enigma-signal-component-meta">
+                                <span class="enigma-signal-component-align @cardClass">@(component.Aligned ? "Locked" : $"{Math.Round(component.Delta * 100d):0}%")</span>
+                                <span class="enigma-signal-component-state">@component.WaveLabel</span>
+                            </div>
                         </header>
 
                         <div class="enigma-signal-wave-buttons">
@@ -136,9 +139,12 @@
         <aside class="enigma-signal-console-right">
             <section class="enigma-signal-level-card">
                 <span class="enigma-kicker">@LevelTitle</span>
-                <strong>@(ReadyToCommit ? "Lock Window Stable" : "Waveform Reconstruction")</strong>
+                <strong>Waveform Reconstruction</strong>
+                <span class="enigma-signal-level-pill @(ReadyToCommit ? "ready" : "tracking")">
+                    @(ReadyToCommit ? "Lock Window Stable" : "Tracking Drift")
+                </span>
                 <p>@LevelDescription</p>
-                <small>@View.StatusText</small>
+                <small class="enigma-signal-level-status">@View.StatusText</small>
             </section>
 
             <section class="enigma-signal-stat-grid">
@@ -167,10 +173,7 @@
             <div class="enigma-signal-preview-pill @(PreviewVisible ? "visible" : "hidden")">
                 <span class="dot"></span>
                 <strong>@GhostLabel</strong>
-                @if (PreviewSeconds > 0d)
-                {
-                    <small>@PreviewRemaining.ToString("0.0", CultureInfo.InvariantCulture)s</small>
-                }
+                <small>@(PreviewSeconds > 0d ? $"{PreviewRemaining.ToString("0.0", CultureInfo.InvariantCulture)}s" : "SYNC")</small>
             </div>
 
             <div class="enigma-signal-action-stack">

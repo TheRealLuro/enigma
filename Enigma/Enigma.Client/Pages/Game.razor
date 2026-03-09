@@ -38,12 +38,22 @@ else
                      tabindex="0"
                      class="enigma-room-stage"
                      style="@GetRoomStageStyle()">
+                        <div class="enigma-room-stage-base" aria-hidden="true"></div>
+                        <div class="enigma-room-stage-art" style="@GetRoomArtStyle()" aria-hidden="true"></div>
+                        <div class="enigma-room-stage-tint" aria-hidden="true"></div>
                         @foreach (var segment in GetWallSegments())
                         {
                             <div class="enigma-wall @segment.CssClass" style="@segment.Style"></div>
                         }
                         <div class="enigma-radar-darkness @(IsRadarInterferenceVisible ? "interference" : string.Empty)" aria-hidden="true"></div>
-                        <div class="enigma-radar-pulse @(IsRadarInterferenceVisible ? "interference" : string.Empty)" aria-hidden="true"></div>
+                        <div class="enigma-radar-wave-stack @(IsRadarInterferenceVisible ? "interference" : string.Empty)" aria-hidden="true">
+                            <span class="enigma-radar-ring primary ring-a"></span>
+                            <span class="enigma-radar-ring primary ring-b"></span>
+                            <span class="enigma-radar-ring ripple ripple-a"></span>
+                            <span class="enigma-radar-ring ripple ripple-b"></span>
+                            <span class="enigma-radar-ring ripple ripple-c"></span>
+                            <span class="enigma-radar-ring ripple ripple-d"></span>
+                        </div>
 
                         @if (IsCoopRun && HasCoopStageElements)
                         {

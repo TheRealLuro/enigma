@@ -37,9 +37,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private const double WallThickness = 42d;
     private const double HorizontalWallCollisionInset = WallThickness * ((RoomSize - PlayerSize) / (RenderWidth - PlayerSize));
     private const double PuzzleConsoleSize = 116d;
-    private const double RadarCoreRadius = 96d;
-    private const double RadarDetailRadius = 224d;
-    private const double RadarOuterRadius = 360d;
+    private const double RadarCoreRadius = 64d;
+    private const double RadarDetailRadius = 138d;
+    private const double RadarOuterRadius = 216d;
     private const double RadarPulseCycleSeconds = 5.6d;
     private const int RadarPulseEventsPerCycle = 2;
     private const double RadarPingLeadFraction = 0.04d;
@@ -49,14 +49,12 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private const double EasyWorldInteractionRangeScale = 0.82d;
     private const double BehaviorAdaptationCap = 0.35d;
     private const string BehaviorStoragePrefix = "enigma.behavior";
-    private static readonly PlayAreaRect[] PuzzleConsoleCandidates =
-    [
-        new(72d, 882d, PuzzleConsoleSize, PuzzleConsoleSize),
-        new(72d, 482d, PuzzleConsoleSize, PuzzleConsoleSize),
-        new(72d, 82d, PuzzleConsoleSize, PuzzleConsoleSize),
-        new(892d, 82d, PuzzleConsoleSize, PuzzleConsoleSize),
-        new(892d, 482d, PuzzleConsoleSize, PuzzleConsoleSize),
-    ];
+    private const string DefaultRoomTintStart = "#293140";
+    private const string DefaultRoomTintEnd = "#151b26";
+    private const double PuzzleConsoleHorizontalMargin = 94d;
+    private const double PuzzleConsoleTopMargin = 96d;
+    private const double PuzzleConsoleBottomMargin = 124d;
+    private const double PuzzleConsoleCenterExclusionRadius = 188d;
     private const double CoopConsoleMinSeparation = 300d;
     private const string CompletionSummaryStorageKey = "enigma.game.summary";
     private static readonly TimeSpan PlayerStateSyncInterval = TimeSpan.FromMilliseconds(120);
@@ -138,23 +136,42 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected List<RunLoadoutSelection> EquippedLoadout { get; private set; } = [];
     protected bool IsPuzzleOverlayOpen { get; private set; }
 
-    protected IReadOnlyDictionary<char, string> RoomBackgrounds { get; } = new Dictionary<char, string>
+    protected IReadOnlyDictionary<char, string> RoomArtImages { get; } = new Dictionary<char, string>
     {
-        ['A'] = BuildRoomBackground("A", "#22344fb8", "#142033d6"),
-        ['B'] = BuildRoomBackground("B", "#27413ab8", "#15231fd6"),
-        ['C'] = BuildRoomBackground("C", "#3a2f4cb8", "#1a1628d6"),
-        ['D'] = BuildRoomBackground("D", "#49372bb8", "#1f1610d6"),
-        ['E'] = BuildRoomBackground("E", "#2f4547b8", "#182326d6"),
-        ['F'] = BuildRoomBackground("F", "#4b2f3cb8", "#20131ad6"),
-        ['G'] = BuildRoomBackground("G", "#405129b8", "#1a2110d6"),
-        ['H'] = BuildRoomBackground("H", "#1f4153b8", "#0f202ad6"),
-        ['I'] = BuildRoomBackground("I", "#3d304fb8", "#191424d6"),
-        ['J'] = BuildRoomBackground("J", "#26494ab8", "#132021d6"),
-        ['K'] = BuildRoomBackground("K", "#524a28b8", "#211d10d6"),
-        ['L'] = BuildRoomBackground("L", "#42313cb8", "#1d151ad6"),
-        ['M'] = BuildRoomBackground("M", "#2a4b36b8", "#142219d6"),
-        ['N'] = BuildRoomBackground("N", "#4a3526b8", "#1c140ed6"),
-        ['O'] = BuildRoomBackground("O", "#3d4f58b8", "#182026d6"),
+        ['A'] = "/images/room-art/A.png",
+        ['B'] = "/images/room-art/B.png",
+        ['C'] = "/images/room-art/C.png",
+        ['D'] = "/images/room-art/D.png",
+        ['E'] = "/images/room-art/E.png",
+        ['F'] = "/images/room-art/F.png",
+        ['G'] = "/images/room-art/G.png",
+        ['H'] = "/images/room-art/H.png",
+        ['I'] = "/images/room-art/I.png",
+        ['J'] = "/images/room-art/J.png",
+        ['K'] = "/images/room-art/K.png",
+        ['L'] = "/images/room-art/L.png",
+        ['M'] = "/images/room-art/M.png",
+        ['N'] = "/images/room-art/N.png",
+        ['O'] = "/images/room-art/O.png",
+    };
+
+    protected IReadOnlyDictionary<char, (string Start, string End)> RoomArtTints { get; } = new Dictionary<char, (string Start, string End)>
+    {
+        ['A'] = ("#22344f", "#142033"),
+        ['B'] = ("#27413a", "#15231f"),
+        ['C'] = ("#3a2f4c", "#1a1628"),
+        ['D'] = ("#49372b", "#1f1610"),
+        ['E'] = ("#2f4547", "#182326"),
+        ['F'] = ("#4b2f3c", "#20131a"),
+        ['G'] = ("#405129", "#1a2110"),
+        ['H'] = ("#1f4153", "#0f202a"),
+        ['I'] = ("#3d304f", "#191424"),
+        ['J'] = ("#26494a", "#132021"),
+        ['K'] = ("#524a28", "#211d10"),
+        ['L'] = ("#42313c", "#1d151a"),
+        ['M'] = ("#2a4b36", "#142219"),
+        ['N'] = ("#4a3526", "#1c140e"),
+        ['O'] = ("#3d4f58", "#182026"),
     };
 
     protected IReadOnlyDictionary<PlayerDirection, string> PlayerAnimationDirections { get; } = new Dictionary<PlayerDirection, string>
@@ -190,10 +207,15 @@ public partial class Game : ComponentBase, IAsyncDisposable
         string.Equals(Tutorial, "1", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(Tutorial, "yes", StringComparison.OrdinalIgnoreCase);
 
-    private static string BuildRoomBackground(string roomKey, string tintStart, string tintEnd) =>
-        "linear-gradient(180deg, rgba(6, 11, 18, 0.12) 0%, rgba(3, 6, 10, 0.54) 100%), " +
-        $"linear-gradient(145deg, {tintStart} 0%, {tintEnd} 100%), " +
-        $"url('/images/room-art/{roomKey}.png') center center / cover no-repeat";
+    protected string GetRoomArtStyle()
+    {
+        if (CurrentRoom is null || !RoomArtImages.TryGetValue(CurrentRoom.ConnectionKey, out var imageUrl))
+        {
+            return "background-image:none;";
+        }
+
+        return $"background-image:url('{imageUrl}');";
+    }
 
     protected override void OnParametersSet()
     {
@@ -1138,9 +1160,9 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     protected string GetRoomStageStyle()
     {
-        var background = CurrentRoom is not null && RoomBackgrounds.TryGetValue(CurrentRoom.ConnectionKey, out var style)
-            ? style
-            : "linear-gradient(145deg, #293140 0%, #151b26 100%)";
+        var tint = CurrentRoom is not null && RoomArtTints.TryGetValue(CurrentRoom.ConnectionKey, out var palette)
+            ? palette
+            : (Start: DefaultRoomTintStart, End: DefaultRoomTintEnd);
 
         var playerCenterX = PlayerX + (PlayerSize / 2d);
         var playerCenterY = PlayerY + (PlayerSize / 2d);
@@ -1149,11 +1171,15 @@ public partial class Game : ComponentBase, IAsyncDisposable
         var radarOuterRadius = GetCurrentRadarOuterRadius();
         var radarPulseStrength = GetRadarPulseStrength();
         var radarWallProximity = GetRadarWallProximityScale(playerCenterX, playerCenterY);
-        var proximityCoreScale = 0.82d + (radarWallProximity * 0.18d);
-        var proximityDetailScale = 0.78d + (radarWallProximity * 0.22d);
-        var proximityOuterScale = 0.74d + (radarWallProximity * 0.26d);
+        var proximityCoreScale = 0.88d + (radarWallProximity * 0.12d);
+        var proximityDetailScale = 0.86d + (radarWallProximity * 0.14d);
+        var proximityOuterScale = 0.84d + (radarWallProximity * 0.16d);
         var proximityPulseScale = 0.86d + (radarWallProximity * 0.14d);
-        var openSpaceBoost = 1d + (Math.Max(0d, radarWallProximity - 0.72d) * 0.55d);
+        var openSpaceBoost = 1d + (Math.Max(0d, radarWallProximity - 0.72d) * 0.08d);
+        var radarCycleSeconds = RadarPulseCycleSeconds;
+        var radarPrimarySpacing = radarCycleSeconds / RadarPulseEventsPerCycle;
+        var radarSecondarySpacing = radarPrimarySpacing / 3d;
+        var radarCycleOffset = GetRadarVisualCycleOffsetSeconds();
 
         radarCoreRadius *= proximityCoreScale * openSpaceBoost;
         radarDetailRadius *= proximityDetailScale * openSpaceBoost;
@@ -1162,17 +1188,22 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         radarDetailRadius = Math.Max(radarCoreRadius + 12d, radarDetailRadius);
         radarOuterRadius = Math.Max(radarDetailRadius + 26d, radarOuterRadius);
-        var radarPulseScale = Math.Clamp((radarOuterRadius / 220d), 1.7d, 3.0d);
+        var radarPulseScale = Math.Clamp((radarOuterRadius / Math.Max(radarCoreRadius, 1d)) * 0.86d, 2.45d, 3.3d);
         var radarInterference = IsRadarInterferenceActive() ? 1d : 0d;
 
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"background: {background}; " +
+            $"--room-stage-tint-start: {tint.Start}; " +
+            $"--room-stage-tint-end: {tint.End}; " +
             $"--radar-x: {ToPositionPercentX(playerCenterX, 0d):0.###}%; " +
             $"--radar-y: {ToPercentY(playerCenterY):0.###}%; " +
             $"--radar-core-radius: {ToPercentY(radarCoreRadius):0.###}%; " +
             $"--radar-detail-radius: {ToPercentY(radarDetailRadius):0.###}%; " +
             $"--radar-outer-radius: {ToPercentY(radarOuterRadius):0.###}%; " +
+            $"--radar-cycle: {radarCycleSeconds:0.###}s; " +
+            $"--radar-primary-spacing: {radarPrimarySpacing:0.###}s; " +
+            $"--radar-secondary-spacing: {radarSecondarySpacing:0.###}s; " +
+            $"--radar-cycle-offset: {radarCycleOffset:0.###}s; " +
             $"--radar-pulse-scale: {radarPulseScale:0.###}; " +
             $"--radar-pulse-strength: {radarPulseStrength:0.###}; " +
             $"--radar-wall-proximity: {radarWallProximity:0.###}; " +
@@ -1214,13 +1245,13 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     private double GetCurrentRadarDetailRadius()
     {
-        var pulseExpansion = GetRadarPulseStrength() * 20d;
+        var pulseExpansion = GetRadarPulseStrength() * 9d;
         return (RadarDetailRadius * GetCurrentRadarRangeMultiplier()) + pulseExpansion;
     }
 
     private double GetCurrentRadarOuterRadius()
     {
-        var pulseExpansion = GetRadarPulseStrength() * 32d;
+        var pulseExpansion = GetRadarPulseStrength() * 15d;
         return (RadarOuterRadius * GetCurrentRadarRangeMultiplier()) + pulseExpansion;
     }
 
@@ -1243,10 +1274,26 @@ public partial class Game : ComponentBase, IAsyncDisposable
         return (nowSeconds % RadarPulseCycleSeconds) / RadarPulseCycleSeconds;
     }
 
+    private static double GetRadarPingAlignedCycleProgress()
+    {
+        var alignedProgress = GetRadarPulseCycleProgress() - (1d - RadarPingLeadFraction);
+        if (alignedProgress < 0d)
+        {
+            alignedProgress += 1d;
+        }
+
+        return alignedProgress;
+    }
+
+    private static double GetRadarVisualCycleOffsetSeconds()
+    {
+        return -(GetRadarPingAlignedCycleProgress() * RadarPulseCycleSeconds);
+    }
+
     private double GetRadarPulseStrength()
     {
-        var cycleProgress = GetRadarPulseCycleProgress();
-        var pulsePeak = Math.Exp(-Math.Pow((cycleProgress - 0.16d) / 0.13d, 2d));
+        var localPulseProgress = (GetRadarPingAlignedCycleProgress() * RadarPulseEventsPerCycle) % 1d;
+        var pulsePeak = Math.Exp(-Math.Pow((localPulseProgress - 0.08d) / 0.12d, 2d));
         return Math.Clamp(pulsePeak, 0d, 1d);
     }
 
@@ -2724,12 +2771,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
     {
         if (CurrentRoom is null || ParsedSeed is null)
         {
-            return PuzzleConsoleCandidates[0];
+            return CreateFallbackConsoleBounds();
         }
 
         var stableKey = $"{ParsedSeed.RawSeed}|{CurrentRoom.Coordinates.X}|{CurrentRoom.Coordinates.Y}|{CurrentRoom.ConnectionKey}|{CurrentRoom.PuzzleKey}";
-        var candidateIndex = GetStableHash(stableKey) % PuzzleConsoleCandidates.Length;
-        return PuzzleConsoleCandidates[candidateIndex];
+        return CreateStableConsoleBounds(stableKey, 0);
     }
 
     private PlayAreaRect GetLocalPuzzleConsoleBounds()
@@ -2745,59 +2791,36 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     private (PlayAreaRect OwnerConsole, PlayAreaRect GuestConsole) GetCoopConsolePairBounds()
     {
-        if (CurrentRoom is null || ParsedSeed is null || PuzzleConsoleCandidates.Length < 2)
+        if (CurrentRoom is null || ParsedSeed is null)
         {
-            return (PuzzleConsoleCandidates[0], PuzzleConsoleCandidates[Math.Min(1, PuzzleConsoleCandidates.Length - 1)]);
+            var fallback = CreateFallbackConsoleBounds();
+            return (fallback, new PlayAreaRect(fallback.X + 280d, fallback.Y, fallback.Width, fallback.Height));
         }
 
         var stableKey = $"{ParsedSeed.RawSeed}|{CurrentRoom.Coordinates.X}|{CurrentRoom.Coordinates.Y}|{CurrentRoom.ConnectionKey}|{CurrentRoom.PuzzleKey}|coop-console";
-        var ownerIndex = GetStableHash(stableKey) % PuzzleConsoleCandidates.Length;
-        var ownerConsole = PuzzleConsoleCandidates[ownerIndex];
-        var guestIndex = -1;
-
-        var scanSeed = GetStableHash($"{stableKey}|guest-scan");
-        for (var offset = 1; offset < PuzzleConsoleCandidates.Length; offset++)
+        var ownerConsole = CreateStableConsoleBounds(stableKey, 0);
+        PlayAreaRect? guestConsole = null;
+        for (var salt = 1; salt <= 24; salt++)
         {
-            var candidateIndex = (ownerIndex + offset + scanSeed) % PuzzleConsoleCandidates.Length;
-            if (candidateIndex == ownerIndex)
-            {
-                continue;
-            }
-
-            var candidate = PuzzleConsoleCandidates[candidateIndex];
+            var candidate = CreateStableConsoleBounds(stableKey, salt);
             if (Distance(ownerConsole, candidate) >= CoopConsoleMinSeparation)
             {
-                guestIndex = candidateIndex;
+                guestConsole = candidate;
                 break;
             }
         }
 
-        if (guestIndex < 0)
+        if (guestConsole is null)
         {
-            var farthestDistance = double.MinValue;
-            for (var index = 0; index < PuzzleConsoleCandidates.Length; index++)
-            {
-                if (index == ownerIndex)
-                {
-                    continue;
-                }
-
-                var candidate = PuzzleConsoleCandidates[index];
-                var candidateDistance = Distance(ownerConsole, candidate);
-                if (candidateDistance > farthestDistance)
-                {
-                    farthestDistance = candidateDistance;
-                    guestIndex = index;
-                }
-            }
+            guestConsole = CreateMirroredConsoleBounds(ownerConsole);
         }
 
-        if (guestIndex < 0)
+        if (Distance(ownerConsole, guestConsole.Value) < CoopConsoleMinSeparation)
         {
-            guestIndex = (ownerIndex + 1) % PuzzleConsoleCandidates.Length;
+            guestConsole = CreateFallbackSeparatedConsole(ownerConsole);
         }
 
-        return (ownerConsole, PuzzleConsoleCandidates[guestIndex]);
+        return (ownerConsole, guestConsole.Value);
     }
 
     private bool IsLocalCoopOwner()
@@ -2816,6 +2839,57 @@ public partial class Game : ComponentBase, IAsyncDisposable
         var dy = a.CenterY - b.CenterY;
         return Math.Sqrt((dx * dx) + (dy * dy));
     }
+
+    private static PlayAreaRect CreateFallbackConsoleBounds() => new(112d, 824d, PuzzleConsoleSize, PuzzleConsoleSize);
+
+    private static PlayAreaRect CreateStableConsoleBounds(string stableKey, int salt)
+    {
+        var xMin = HorizontalWallCollisionInset + PuzzleConsoleHorizontalMargin;
+        var xMax = RoomSize - HorizontalWallCollisionInset - PuzzleConsoleSize - PuzzleConsoleHorizontalMargin;
+        var yMin = WallThickness + PuzzleConsoleTopMargin;
+        var yMax = RoomSize - WallThickness - PuzzleConsoleSize - PuzzleConsoleBottomMargin;
+        var centerX = (RoomSize - PuzzleConsoleSize) / 2d;
+        var centerY = (RoomSize - PuzzleConsoleSize) / 2d;
+
+        for (var attempt = 0; attempt < 24; attempt++)
+        {
+            var sampleSeed = $"{stableKey}|slot:{salt}|attempt:{attempt}";
+            var xHash = GetStableHash($"{sampleSeed}|x");
+            var yHash = GetStableHash($"{sampleSeed}|y");
+            var x = Lerp(xMin, xMax, NormalizeHash(xHash));
+            var y = Lerp(yMin, yMax, NormalizeHash(yHash));
+            var candidate = new PlayAreaRect(x, y, PuzzleConsoleSize, PuzzleConsoleSize);
+
+            if (Distance(candidate, new PlayAreaRect(centerX, centerY, PuzzleConsoleSize, PuzzleConsoleSize)) >= PuzzleConsoleCenterExclusionRadius)
+            {
+                return candidate;
+            }
+        }
+
+        return CreateFallbackConsoleBounds();
+    }
+
+    private static PlayAreaRect CreateMirroredConsoleBounds(PlayAreaRect source)
+    {
+        var mirroredX = Math.Clamp(RoomSize - source.Right, HorizontalWallCollisionInset + PuzzleConsoleHorizontalMargin, RoomSize - HorizontalWallCollisionInset - PuzzleConsoleSize - PuzzleConsoleHorizontalMargin);
+        var mirroredY = Math.Clamp(RoomSize - source.Bottom, WallThickness + PuzzleConsoleTopMargin, RoomSize - WallThickness - PuzzleConsoleSize - PuzzleConsoleBottomMargin);
+        return new PlayAreaRect(mirroredX, mirroredY, PuzzleConsoleSize, PuzzleConsoleSize);
+    }
+
+    private static PlayAreaRect CreateFallbackSeparatedConsole(PlayAreaRect source)
+    {
+        var targetX = source.CenterX < (RoomSize / 2d)
+            ? RoomSize - HorizontalWallCollisionInset - PuzzleConsoleSize - PuzzleConsoleHorizontalMargin
+            : HorizontalWallCollisionInset + PuzzleConsoleHorizontalMargin;
+        var targetY = source.CenterY < (RoomSize / 2d)
+            ? RoomSize - WallThickness - PuzzleConsoleSize - PuzzleConsoleBottomMargin
+            : WallThickness + PuzzleConsoleTopMargin;
+        return new PlayAreaRect(targetX, targetY, PuzzleConsoleSize, PuzzleConsoleSize);
+    }
+
+    private static double NormalizeHash(int hash) => hash / (double)int.MaxValue;
+
+    private static double Lerp(double min, double max, double t) => min + ((max - min) * Math.Clamp(t, 0d, 1d));
 
     private static IEnumerable<PlayAreaRect> GetPuzzleConsoleBarrierBounds(PlayAreaRect consoleBounds)
     {
