@@ -915,6 +915,46 @@
             }
         },
 
+        getElementBounds: function (element) {
+            if (!element || typeof element.getBoundingClientRect !== "function") {
+                return null;
+            }
+
+            const rect = element.getBoundingClientRect();
+            return {
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                height: rect.height
+            };
+        },
+
+        capturePointer: function (element, pointerId) {
+            if (!element || typeof element.setPointerCapture !== "function") {
+                return;
+            }
+
+            try {
+                element.setPointerCapture(pointerId);
+            } catch {
+            }
+        },
+
+        releasePointer: function (element, pointerId) {
+            if (!element || typeof element.releasePointerCapture !== "function") {
+                return;
+            }
+
+            try {
+                if (typeof element.hasPointerCapture === "function" && !element.hasPointerCapture(pointerId)) {
+                    return;
+                }
+
+                element.releasePointerCapture(pointerId);
+            } catch {
+            }
+        },
+
         sessionSetJson: function (key, value) {
             setStorageItem("session", key, JSON.stringify(value));
         },

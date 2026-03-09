@@ -42,6 +42,7 @@ public partial class Game
     protected bool IsCurrentCoopRewardCollected => _coopSession?.CurrentRoomProgress?.RewardPickupCollected == true;
     protected bool IsCoopSocketOpen => _coopSocketOpen;
     protected bool RequiresContinuousCoopSync =>
+        IsCoopPuzzleV2 ||
         string.Equals(CurrentCoopPuzzle?.ViewType, "pressure_systems", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(CurrentCoopPuzzle?.ViewType, "spatial_sync", StringComparison.OrdinalIgnoreCase);
 

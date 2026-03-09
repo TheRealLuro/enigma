@@ -8,6 +8,9 @@ public sealed class MultiplayerPuzzleCatalogResponse
     [JsonPropertyName("status")]
     public string Status { get; set; } = string.Empty;
 
+    [JsonPropertyName("schema_version")]
+    public int SchemaVersion { get; set; }
+
     [JsonPropertyName("catalog")]
     public Dictionary<string, Dictionary<string, MultiplayerPuzzleDefinition>> Catalog { get; set; } = [];
 }
@@ -22,6 +25,18 @@ public sealed class MultiplayerPuzzleDefinition
 
     [JsonPropertyName("core_mechanic")]
     public string CoreMechanic { get; set; } = string.Empty;
+
+    [JsonPropertyName("family_id")]
+    public string FamilyId { get; set; } = string.Empty;
+
+    [JsonPropertyName("accent_color")]
+    public string AccentColor { get; set; } = string.Empty;
+
+    [JsonPropertyName("mechanic_type")]
+    public string MechanicType { get; set; } = string.Empty;
+
+    [JsonPropertyName("schema_version")]
+    public int SchemaVersion { get; set; }
 }
 
 public sealed class MultiplayerSessionEnvelope
@@ -61,6 +76,12 @@ public sealed class MultiplayerSessionState
 
     [JsonPropertyName("source")]
     public string Source { get; set; } = "new";
+
+    [JsonPropertyName("puzzle_protocol")]
+    public string PuzzleProtocol { get; set; } = "v1";
+
+    [JsonPropertyName("run_nonce")]
+    public string? RunNonce { get; set; }
 
     [JsonPropertyName("difficulty")]
     public string Difficulty { get; set; } = string.Empty;

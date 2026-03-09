@@ -1,0 +1,175 @@
+@using System.Globalization
+@using Enigma.Client.Models.Gameplay
+
+<div class="enigma-advanced-panel-shell enigma-memory-template @DifficultyCss">
+    <section class="enigma-advanced-stage-card">
+        <header class="enigma-advanced-stage-head">
+            <div>
+                <span class="enigma-kicker">@DifficultyLabel Archive</span>
+                <strong>@FamilyTitle</strong>
+                <p>Recover matching fragments before the archive destabilizes.</p>
+            </div>
+            <div class="enigma-advanced-stage-badges">
+                <span class="enigma-advanced-stage-pill">@ArchiveSector</span>
+                <span class="enigma-advanced-stage-pill muted">@FragmentMode</span>
+            </div>
+        </header>
+
+        <div class="enigma-memory-template-main">
+            <div class="enigma-memory-wall"
+                 style="@($"--memory-cols:{Columns};")">
+                @foreach (var card in Cards)
+                {
+                    <button class="enigma-memory-card state-@card.State"
+                            disabled="@(!card.Enabled)"
+                            @onclick="(() => DispatchAsync(card.Command))">
+                        <span class="enigma-memory-card-back">
+                            <small>ARCHIVE</small>
+                            <strong>@card.IndexLabel</strong>
+                        </span>
+                        <span class="enigma-memory-card-face">
+                            <small>@card.Fragment</small>
+                            <strong>@card.Glyph</strong>
+                        </span>
+                    </button>
+                }
+            </div>
+
+            <aside class="enigma-advanced-telemetry-panel">
+                <div class="enigma-advanced-telemetry-grid">
+                    <article>
+                        <span>Matched</span>
+                        <strong>@($"{MatchedCount}/{TotalPairs}")</strong>
+                    </article>
+                    <article>
+                        <span>Open</span>
+                        <strong>@OpenCount</strong>
+                    </article>
+                    <article>
+                        <span>Timer</span>
+                        <strong>@($"{Math.Max(0, Math.Ceiling(View.TimerRemainingSeconds)):0}s")</strong>
+                    </article>
+                    <article>
+                        <span>Status</span>
+                        <strong>@View.Status.ToString().ToUpperInvariant()</strong>
+                    </article>
+                </div>
+
+                <div class="enigma-advanced-status-card">
+                    <span class="enigma-kicker">Archive State</span>
+                    <strong>@ArchiveSector</strong>
+                    <p>@View.StatusText</p>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <div class="enigma-advanced-action-row">
+        @if (ResetAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-reset"
+                    disabled="@(!ResetAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(ResetAction.Value.Command))">
+                Reset
+            </button>
+        }
+        @if (HintAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-hint"
+                    disabled="@(!HintAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(HintAction.Value.Command))">
+                Hint
+            </button>
+        }
+        @if (CommitAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-commit"
+                    disabled="@(!CommitAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(CommitAction.Value.Command))">
+                Validate
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required SoloPanelView View { get; set; }
+
+    [Parameter, EditorRequired]
+    public required EventCallback<string> OnAction { get; set; }
+
+    private readonly record struct CardVm(string? Command, string State, string Glyph, string Fragment, string IndexLabel, bool Enabled);
+
+    private string DifficultyCss => $"diff-{GetBoardText("visual:difficulty", "medium")}";
+    private string DifficultyLabel => GetBoardText("visual:difficulty_label", "MEDIUM");
+    private string FamilyTitle => GetBoardText("visual:family_title", "Memory Palace");
+    private string ArchiveSector => GetBoardText("memory_palace:archive_sector", "Sector 1");
+    private string FragmentMode => GetBoardText("memory_palace:fragment_mode", "indexed").ToUpperInvariant();
+    private int Columns => Math.Max(2, GetBoardInt("memoryviz:columns", 4));
+    private int MatchedCount => Math.Max(0, GetBoardInt("memoryviz:matched_count", 0));
+    private int OpenCount => Math.Max(0, GetBoardInt("memoryviz:open_count", 0));
+    private int CardCount => Math.Max(0, GetBoardInt("memoryviz:card_count", 0));
+    private int TotalPairs => Math.Max(1, CardCount / 2);
+    private SoloPanelActionItem? ResetAction => FindAction("reset");
+    private SoloPanelActionItem? HintAction => FindAction("hint");
+    private SoloPanelActionItem? CommitAction => FindAction("commit");
+
+    private IReadOnlyList<CardVm> Cards
+    {
+        get
+        {
+            var actions = View.Actions
+                .Where(action => TryParseCardCommand(action.Command, out _))
+                .ToDictionary(
+                    action => TryParseCardCommand(action.Command, out var index) ? index : -1,
+                    action => action,
+                    EqualityComparer<int>.Default);
+
+            var cards = new List<CardVm>(CardCount);
+            for (var index = 0; index < CardCount; index++)
+            {
+                actions.TryGetValue(index, out var action);
+                cards.Add(new CardVm(
+                    Command: action.Command,
+                    State: GetBoardText($"memoryviz:card:{index}:state", "hidden"),
+                    Glyph: GetBoardText($"memoryviz:card:{index}:glyph", "FRAGMENT"),
+                    Fragment: GetBoardText($"memoryviz:card:{index}:fragment", $"CARD-{index + 1:00}"),
+                    IndexLabel: (index + 1).ToString("00", CultureInfo.InvariantCulture),
+                    Enabled: action.Command is not null && action.Enabled));
+            }
+
+            return cards;
+        }
+    }
+
+    private SoloPanelActionItem? FindAction(string command) =>
+        View.Actions.FirstOrDefault(action => string.Equals(action.Command, command, StringComparison.OrdinalIgnoreCase));
+
+    private async Task DispatchAsync(string? command)
+    {
+        if (!OnAction.HasDelegate || string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        await OnAction.InvokeAsync(command);
+    }
+
+    private static bool TryParseCardCommand(string command, out int index)
+    {
+        index = -1;
+        return command.StartsWith("card:", StringComparison.OrdinalIgnoreCase) &&
+               int.TryParse(command[5..], NumberStyles.Integer, CultureInfo.InvariantCulture, out index);
+    }
+
+    private int GetBoardInt(string key, int fallback = 0) =>
+        View.Board.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private string GetBoardText(string key, string fallback = "") =>
+        View.Board.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+}

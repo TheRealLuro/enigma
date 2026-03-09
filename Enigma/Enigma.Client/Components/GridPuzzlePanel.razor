@@ -1,0 +1,295 @@
+@using System.Globalization
+@using System.Text
+@using Enigma.Client.Models.Gameplay
+
+<div class="enigma-advanced-panel-shell enigma-grid-template @FamilyCss @DifficultyCss @DensityCss">
+    <section class="enigma-advanced-stage-card">
+        <header class="enigma-advanced-stage-head">
+            <div>
+                <span class="enigma-kicker">@DifficultyLabel Matrix</span>
+                <strong>@FamilyTitle</strong>
+                <p>@VariantDescription</p>
+            </div>
+            <div class="enigma-advanced-stage-badges">
+                <span class="enigma-advanced-stage-pill">@PageLabel</span>
+                <span class="enigma-advanced-stage-pill muted">@TargetMode</span>
+            </div>
+        </header>
+
+        <div class="enigma-grid-template-main concise">
+            <div class="enigma-grid-rail simplified">
+                <div class="enigma-grid-directive">
+                    <strong>@Directive</strong>
+                    <small>@(ShowTarget
+                        ? "Top and left guides show live count / target count."
+                        : "Use live and target totals to infer the hidden layout before committing.")</small>
+                </div>
+
+                <div class="enigma-grid-guide-strip top">
+                    <span class="cap">COL</span>
+                    @foreach (var guide in ColumnGuides)
+                    {
+                        <div class="enigma-grid-guide-chip @(guide.Aligned ? "aligned" : string.Empty)">
+                            <strong>@guide.CountText</strong>
+                            <small>@guide.Label</small>
+                        </div>
+                    }
+                </div>
+
+                <div class="enigma-grid-matrix-shell">
+                    <div class="enigma-grid-guide-column">
+                        @foreach (var guide in RowGuides)
+                        {
+                            <div class="enigma-grid-guide-chip row @(guide.Aligned ? "aligned" : string.Empty)">
+                                <strong>@guide.CountText</strong>
+                                <small>@guide.Label</small>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="enigma-grid-board simplified"
+                         style="@($"--grid-cols:{GridCols};--grid-rows:{GridRows};")">
+                        @foreach (var cell in Cells)
+                        {
+                            <button class="enigma-grid-node simplified @(cell.Aligned ? "aligned" : "mismatch") @(cell.LiveOn ? "active" : string.Empty) @(cell.Focus ? "focus" : string.Empty)"
+                                    disabled="@(!cell.Enabled)"
+                                    @onclick="(() => DispatchAsync(cell.Command))">
+                                <span class="enigma-grid-node-label">@cell.ShortLabel</span>
+                                <span class="enigma-grid-node-live @(cell.LiveOn ? "on" : "off")"></span>
+                                @if (cell.ShowTarget)
+                                {
+                                    <span class="enigma-grid-node-target @(cell.TargetOn ? "on" : "off")"></span>
+                                }
+                                <div class="enigma-grid-node-legend">
+                                    <strong>@(cell.LiveOn ? "Live On" : "Live Off")</strong>
+                                    <small>@(cell.ShowTarget ? (cell.TargetOn ? "Target On" : "Target Off") : "Hidden Target")</small>
+                                </div>
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <aside class="enigma-advanced-telemetry-panel compact">
+                <div class="enigma-advanced-telemetry-grid compact">
+                    <article>
+                        <span>Aligned</span>
+                        <strong>@($"{AlignedCount}/{CellsTotal}")</strong>
+                    </article>
+                    <article>
+                        <span>Page</span>
+                        <strong>@($"{CurrentPage}/{PageTotal}")</strong>
+                    </article>
+                    <article>
+                        <span>Timer</span>
+                        <strong>@($"{Math.Max(0, Math.Ceiling(View.TimerRemainingSeconds)):0}s")</strong>
+                    </article>
+                </div>
+
+                <div class="enigma-advanced-status-card">
+                    <span class="enigma-kicker">Solve Read</span>
+                    <strong>@StatusHeadline</strong>
+                    <p>@View.StatusText</p>
+                    @if (!string.IsNullOrWhiteSpace(FocusKey))
+                    {
+                        <small class="enigma-grid-focus-note">Mismatch focus: @FocusKey.ToUpperInvariant()</small>
+                    }
+                </div>
+
+                <div class="enigma-advanced-inline-actions stretch">
+                    @if (PrevPageAction is not null)
+                    {
+                        <button class="btn enigma-panel-action tone-nav"
+                                disabled="@(!PrevPageAction.Value.Enabled)"
+                                @onclick="(() => DispatchAsync(PrevPageAction.Value.Command))">
+                            Prev
+                        </button>
+                    }
+                    @if (NextPageAction is not null)
+                    {
+                        <button class="btn enigma-panel-action tone-nav"
+                                disabled="@(!NextPageAction.Value.Enabled)"
+                                @onclick="(() => DispatchAsync(NextPageAction.Value.Command))">
+                            Next
+                        </button>
+                    }
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <div class="enigma-advanced-action-row">
+        @if (CommitAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-commit"
+                    disabled="@(!CommitAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(CommitAction.Value.Command))">
+                Commit
+            </button>
+        }
+        @if (ResetAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-reset"
+                    disabled="@(!ResetAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(ResetAction.Value.Command))">
+                Reset
+            </button>
+        }
+        @if (HintAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-hint"
+                    disabled="@(!HintAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(HintAction.Value.Command))">
+                Hint
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required SoloPanelView View { get; set; }
+
+    [Parameter, EditorRequired]
+    public required EventCallback<string> OnAction { get; set; }
+
+    private readonly record struct CellVm(
+        string Key,
+        string Command,
+        string ShortLabel,
+        bool LiveOn,
+        bool TargetOn,
+        bool Aligned,
+        bool ShowTarget,
+        bool Enabled,
+        bool Focus);
+
+    private readonly record struct GuideVm(string Label, string CountText, bool Aligned);
+
+    private string FamilyCss => $"family-{View.FamilyId}";
+    private string DifficultyCss => $"diff-{DifficultyKey}";
+    private string DensityCss => $"density-{GetBoardText("visual:density", "balanced")}";
+    private string DifficultyKey => GetBoardText("visual:difficulty", "medium");
+    private string DifficultyLabel => GetBoardText("visual:difficulty_label", DifficultyKey.ToUpperInvariant());
+    private string FamilyTitle => GetBoardText("visual:family_title", View.FamilyId.Replace('_', ' '));
+    private string PageLabel => GetBoardText("gridviz:page_label", $"Page {CurrentPage}");
+    private string Directive => GetBoardText("gridviz:directive", "Match live cells to the target state.");
+    private string TargetMode => ShowTarget ? "Target Visible" : "Target Hidden";
+    private string VariantDescription => View.FamilyId == "temporal_grid"
+        ? "Lock the active epoch using row and column phase totals."
+        : "Balance the lattice by matching live pressure to the required mask.";
+    private string StatusHeadline => View.FamilyId == "temporal_grid" ? "Temporal Guide" : "Pressure Guide";
+    private string FocusKey => GetBoardText("gridviz:mismatch_focus", string.Empty);
+    private bool ShowTarget => GetBoardText("gridviz:show_target", "1") == "1";
+    private int GridRows => Math.Max(1, GetBoardInt("gridviz:page_rows", 4));
+    private int GridCols => Math.Max(1, GetBoardInt("gridviz:page_cols", 4));
+    private int CurrentPage => Math.Max(1, GetBoardInt("page", 1));
+    private int PageTotal => Math.Max(1, GetBoardInt("page_total", 1));
+    private int CellsTotal => Math.Max(1, GetBoardInt("cells_total", 1));
+    private int AlignedCount => Math.Max(0, GetBoardInt("aligned", 0));
+    private SoloPanelActionItem? CommitAction => FindAction("commit");
+    private SoloPanelActionItem? ResetAction => FindAction("reset");
+    private SoloPanelActionItem? HintAction => FindAction("hint");
+    private SoloPanelActionItem? PrevPageAction => FindAction("page:prev");
+    private SoloPanelActionItem? NextPageAction => FindAction("page:next");
+
+    private IReadOnlyList<CellVm> Cells =>
+        View.Actions
+            .Where(action => TryParseCellCommand(action.Command, out _))
+            .OrderBy(action => TryParseCellCommand(action.Command, out var key) ? ExtractNumericSuffix(key) : int.MaxValue)
+            .Select(action =>
+            {
+                TryParseCellCommand(action.Command, out var key);
+                return BuildCell(key, action);
+            })
+            .ToArray();
+
+    private IReadOnlyList<GuideVm> RowGuides =>
+        Enumerable.Range(0, GridRows)
+            .Select(row => BuildGuide("R", row, axis: "row"))
+            .ToArray();
+
+    private IReadOnlyList<GuideVm> ColumnGuides =>
+        Enumerable.Range(0, GridCols)
+            .Select(col => BuildGuide("C", col, axis: "col"))
+            .ToArray();
+
+    private CellVm BuildCell(string key, SoloPanelActionItem action)
+    {
+        var liveOn = GetBoardText($"gridviz:{key}:live_on", "0") == "1";
+        var targetOn = GetBoardText($"gridviz:{key}:target_on", "0") == "1";
+        var aligned = GetBoardText($"gridviz:{key}:aligned", "0") == "1";
+        return new CellVm(
+            Key: key,
+            Command: action.Command,
+            ShortLabel: key.ToUpperInvariant(),
+            LiveOn: liveOn,
+            TargetOn: targetOn,
+            Aligned: aligned,
+            ShowTarget: ShowTarget,
+            Enabled: action.Enabled,
+            Focus: string.Equals(FocusKey, key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private GuideVm BuildGuide(string prefix, int index, string axis)
+    {
+        var current = GetBoardInt($"gridviz:{axis}:{index}:current_active", 0);
+        var target = GetBoardInt($"gridviz:{axis}:{index}:target_active", 0);
+        var aligned = GetBoardText($"gridviz:{axis}:{index}:aligned", "0") == "1";
+        var countText = ShowTarget
+            ? $"{current}/{target}"
+            : $"{current} | {target}";
+        return new GuideVm($"{prefix}{index + 1}", countText, aligned);
+    }
+
+    private SoloPanelActionItem? FindAction(string command) =>
+        View.Actions.FirstOrDefault(action => string.Equals(action.Command, command, StringComparison.OrdinalIgnoreCase));
+
+    private async Task DispatchAsync(string? command)
+    {
+        if (!OnAction.HasDelegate || string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        await OnAction.InvokeAsync(command);
+    }
+
+    private static bool TryParseCellCommand(string command, out string key)
+    {
+        key = string.Empty;
+        if (!command.StartsWith("cell:", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        key = command[5..];
+        return !string.IsNullOrWhiteSpace(key);
+    }
+
+    private static int ExtractNumericSuffix(string value)
+    {
+        var builder = new StringBuilder();
+        foreach (var character in value)
+        {
+            if (char.IsDigit(character))
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.Length == 0 || !int.TryParse(builder.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? int.MaxValue
+            : parsed;
+    }
+
+    private int GetBoardInt(string key, int fallback = 0) =>
+        View.Board.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private string GetBoardText(string key, string fallback = "") =>
+        View.Board.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+}

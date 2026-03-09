@@ -17,12 +17,19 @@ from apis.maze.maze import parse_seed, room_types
 
 from .db import maps_collection, users_collection
 from .economy_rules import compute_loss_fee, compute_multiplayer_rewards, credit_bank_dividend
-from .multiplayer_puzzles import CO_OP_PUZZLE_CATALOG
+from .multiplayer_puzzles import (
+    CO_OP_PUZZLE_CATALOG as CO_OP_PUZZLE_CATALOG_V2,
+    CO_OP_PUZZLE_CATALOG_V1,
+)
 from .multiplayer_runtime import (
-    apply_puzzle_action,
-    ensure_current_room_puzzle_state,
-    serialize_current_room_puzzle,
-    update_position_puzzle_state,
+    apply_puzzle_action as apply_puzzle_action_v1,
+    apply_puzzle_action_v2,
+    ensure_current_room_puzzle_state as ensure_current_room_puzzle_state_v1,
+    ensure_current_room_puzzle_state_v2,
+    serialize_current_room_puzzle as serialize_current_room_puzzle_v1,
+    serialize_current_room_puzzle_v2,
+    update_position_puzzle_state as update_position_puzzle_state_v1,
+    update_position_puzzle_state_v2,
 )
 from .redis_store import (
     COMPLETED_SESSION_TTL_SECONDS,
@@ -50,6 +57,43 @@ ROOM_SIZE = 1080.0
 PLAYER_SIZE = 60.0
 SPAWN_EDGE_INSET = 6.0
 SPAWN_LANE_OFFSET = 34.0
+
+
+def _get_puzzle_protocol(session: dict[str, Any]) -> str:
+    protocol = str(session.get("puzzle_protocol") or "v1").strip().lower()
+    return "v2" if protocol == "v2" else "v1"
+
+
+def _ensure_runtime_protocol_defaults(session: dict[str, Any]) -> str:
+    protocol = _get_puzzle_protocol(session)
+    if protocol == "v2":
+        run_nonce = str(session.get("run_nonce") or "").strip()
+        if not run_nonce:
+            session["run_nonce"] = f"legacy-{session.get('session_id', 'session')}"
+    return protocol
+
+
+def _ensure_current_room_puzzle_state_by_protocol(session: dict[str, Any]) -> dict[str, Any]:
+    protocol = _ensure_runtime_protocol_defaults(session)
+    return ensure_current_room_puzzle_state_v2(session) if protocol == "v2" else ensure_current_room_puzzle_state_v1(session)
+
+
+def _serialize_current_room_puzzle_by_protocol(session: dict[str, Any], username: str) -> dict[str, Any]:
+    protocol = _ensure_runtime_protocol_defaults(session)
+    return serialize_current_room_puzzle_v2(session, username) if protocol == "v2" else serialize_current_room_puzzle_v1(session, username)
+
+
+def _update_position_puzzle_state_by_protocol(session: dict[str, Any]) -> None:
+    protocol = _ensure_runtime_protocol_defaults(session)
+    if protocol == "v2":
+        update_position_puzzle_state_v2(session)
+    else:
+        update_position_puzzle_state_v1(session)
+
+
+def _apply_puzzle_action_by_protocol(session: dict[str, Any], username: str, action: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+    protocol = _ensure_runtime_protocol_defaults(session)
+    return apply_puzzle_action_v2(session, username, action, args) if protocol == "v2" else apply_puzzle_action_v1(session, username, action, args)
 
 
 class MultiplayerCreatePayload(BaseModel):
@@ -272,7 +316,7 @@ def _finalize_room_puzzle_progress(session: dict[str, Any], room_key: str) -> No
     if room_progress.get("puzzle_solved"):
         return
 
-    current_puzzle = ensure_current_room_puzzle_state(session)
+    current_puzzle = _ensure_current_room_puzzle_state_by_protocol(session)
     if not current_puzzle.get("completed"):
         return
 
@@ -752,7 +796,7 @@ def _serialize_session_for_user(session: dict[str, Any], username: str) -> dict[
     room_key = f"{current_room.get('x')},{current_room.get('y')}"
     current_room_progress = _get_room_progress(session, room_key)
     current_room_puzzle = (
-        serialize_current_room_puzzle(session, username)
+        _serialize_current_room_puzzle_by_protocol(session, username)
         if len(players) == 2 and session.get("guest_username")
         else None
     )
@@ -768,6 +812,8 @@ def _serialize_session_for_user(session: dict[str, Any], username: str) -> dict[
         "seed": session.get("seed"),
         "map_name": session.get("map_name"),
         "source": session.get("source"),
+        "puzzle_protocol": _get_puzzle_protocol(session),
+        "run_nonce": session.get("run_nonce"),
         "difficulty": session.get("difficulty"),
         "size": session.get("size"),
         "team_gold": int(session.get("team_gold", 0) or 0),
@@ -872,7 +918,7 @@ def _update_multiplayer_state_locked(session: dict[str, Any], payload: Multiplay
     room_state = session.get("room_lookup", {}).get(room_key) or {}
     room_progress = _get_room_progress(session, room_key)
     team_gold = int(session.get("team_gold", 0) or 0)
-    update_position_puzzle_state(session)
+    _update_position_puzzle_state_by_protocol(session)
     _finalize_room_puzzle_progress(session, room_key)
 
     if payload.puzzle_solved and not room_progress.get("puzzle_solved"):
@@ -899,7 +945,7 @@ def _apply_multiplayer_puzzle_action_locked(session: dict[str, Any], payload: Mu
     if session.get("status") != "active":
         raise HTTPException(status_code=409, detail="Puzzle actions are only allowed in active sessions.")
 
-    apply_puzzle_action(session, username, payload.action, payload.args)
+    _apply_puzzle_action_by_protocol(session, username, payload.action, payload.args)
     room_key = _room_key(session)
     _finalize_room_puzzle_progress(session, room_key)
 
@@ -1083,7 +1129,12 @@ def _leave_multiplayer_session_locked(session_id: str, session: dict[str, Any], 
 @router.get("/puzzle_catalog")
 @limiter.limit("30/minute")
 def get_multiplayer_puzzle_catalog(request: Request):
-    return {"status": "success", "catalog": CO_OP_PUZZLE_CATALOG}
+    return {
+        "status": "success",
+        "schema_version": 2,
+        "catalog": CO_OP_PUZZLE_CATALOG_V2,
+        "legacy_catalog": CO_OP_PUZZLE_CATALOG_V1,
+    }
 
 
 @router.post("/session/create")
@@ -1115,6 +1166,8 @@ def create_multiplayer_session(request: Request, payload: MultiplayerCreatePaylo
         "difficulty": parsed_layout["difficulty"],
         "size": parsed_layout["size"],
         "seed_existed": map_doc is not None,
+        "puzzle_protocol": "v2",
+        "run_nonce": uuid4().hex[:12],
         "created_at": _utc_now_iso(),
         "started_at": None,
         "completed_at": None,

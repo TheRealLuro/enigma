@@ -1,0 +1,348 @@
+﻿@using System.Globalization
+@using Enigma.Client.Models.Gameplay
+
+<div class="enigma-signal-console-shell">
+    <div class="enigma-signal-console-main">
+        <div class="enigma-signal-console-left">
+            <section class="enigma-signal-scope-card">
+                <header class="enigma-signal-scope-head">
+                    <div>
+                        <span class="enigma-kicker">Signal Decay Terminal</span>
+                        <strong>Composite Waveform Monitor</strong>
+                    </div>
+                    <span class="enigma-signal-scope-badge">@GhostLabel</span>
+                </header>
+                <div class="enigma-signal-scope-frame @(PreviewVisible ? "preview-live" : "preview-faded")">
+                    <svg viewBox="0 0 @ScopeWidth @ScopeHeight" class="enigma-signal-scope-svg" aria-hidden="true">
+                        @for (var column = 0; column <= 10; column++)
+                        {
+                            var x = Math.Round((ScopeWidth / 10d) * column, 2);
+                            <line x1="@x" y1="0" x2="@x" y2="@ScopeHeight" class="scope-grid-major" />
+                        }
+                        @for (var row = 0; row <= 6; row++)
+                        {
+                            var y = Math.Round((ScopeHeight / 6d) * row, 2);
+                            <line x1="0" y1="@y" x2="@ScopeWidth" y2="@y" class="scope-grid-major" />
+                        }
+                        @if (PreviewVisible)
+                        {
+                            <path d="@TargetPath" class="scope-trace target" />
+                        }
+                        <path d="@CurrentPath" class="scope-trace current" />
+                    </svg>
+                    <div class="enigma-signal-scope-overlay">
+                        <div class="enigma-signal-scope-match">
+                            <span>Match</span>
+                            <strong>@MatchPercent%</strong>
+                        </div>
+                        <div class="enigma-signal-hold-wrap">
+                            <span>Hold</span>
+                            <div class="enigma-signal-hold-bar">
+                                <div class="enigma-signal-hold-fill" style="width:@($"{HoldPercent}%")"></div>
+                            </div>
+                            <strong>@HoldProgress.ToString("0.0", CultureInfo.InvariantCulture)s / @HoldRequired.ToString("0.0", CultureInfo.InvariantCulture)s</strong>
+                        </div>
+                    </div>
+                </div>
+                @if (ShowFft)
+                {
+                    <div class="enigma-signal-fft-card">
+                        <header>
+                            <span class="enigma-kicker">Spectrum Analysis</span>
+                            <strong>Target Bias</strong>
+                        </header>
+                        <div class="enigma-signal-fft-bars">
+                            @for (var index = 0; index < FftBins.Count; index++)
+                            {
+                                var barHeight = Math.Round(FftBins[index] * 100d, 1, MidpointRounding.AwayFromZero);
+                                <span class="enigma-signal-fft-bar @(index == DominantFftIndex ? "dominant" : string.Empty)"
+                                      style="height:@($"{barHeight}%")"></span>
+                            }
+                        </div>
+                    </div>
+                }
+            </section>
+
+            <section class="enigma-signal-component-stack">
+                @foreach (var component in Components)
+                {
+                    var cardClass = component.Aligned ? "aligned" : component.Delta >= 0.8d ? "near" : "off";
+                    <article class="enigma-signal-component-card @cardClass">
+                        <header>
+                            <div>
+                                <span class="enigma-kicker">@component.KeyLabel</span>
+                                <strong>@(component.Aligned ? "Locked" : $"{Math.Round(component.Delta * 100d):0}% aligned")</strong>
+                            </div>
+                            <span class="enigma-signal-component-state">@component.WaveLabel</span>
+                        </header>
+
+                        <div class="enigma-signal-wave-buttons">
+                            @foreach (var waveType in WaveTypes)
+                            {
+                                var selected = string.Equals(component.WaveType, waveType.Key, StringComparison.OrdinalIgnoreCase);
+                                var setWaveCommand = $"signal:set:{component.Key}:type:{waveType.Key}";
+                                <button class="enigma-signal-wave-button @(selected ? "selected" : string.Empty)"
+                                        disabled="@InputsDisabled"
+                                        @onclick="(() => DispatchAsync(setWaveCommand))">
+                                    <span>@waveType.Glyph</span>
+                                    @if (ShowWaveLabels)
+                                    {
+                                        <small>@waveType.Label</small>
+                                    }
+                                </button>
+                            }
+                        </div>
+
+                        <div class="enigma-signal-slider-grid">
+                            <label>
+                                <span>Amplitude</span>
+                                <strong>@component.AmplitudeText</strong>
+                                <input type="range"
+                                       min="0.10"
+                                       max="0.90"
+                                       step="0.05"
+                                       value="@component.AmplitudeText"
+                                       disabled="@InputsDisabled"
+                                       @oninput="((ChangeEventArgs args) => DispatchAmplitudeAsync(component.Key, args.Value))" />
+                            </label>
+                            <label>
+                                <span>Frequency</span>
+                                <strong>@component.FrequencyText</strong>
+                                <input type="range"
+                                       min="1"
+                                       max="8"
+                                       step="1"
+                                       value="@component.FrequencyValue"
+                                       disabled="@InputsDisabled"
+                                       @oninput="((ChangeEventArgs args) => DispatchFrequencyAsync(component.Key, args.Value))" />
+                            </label>
+                            <label>
+                                <span>Phase</span>
+                                <strong>@component.PhaseText</strong>
+                                <input type="range"
+                                       min="0"
+                                       max="355"
+                                       step="@PhaseStep"
+                                       value="@component.PhaseValue"
+                                       disabled="@InputsDisabled"
+                                       @oninput="((ChangeEventArgs args) => DispatchPhaseAsync(component.Key, args.Value))" />
+                            </label>
+                        </div>
+                    </article>
+                }
+            </section>
+        </div>
+
+        <aside class="enigma-signal-console-right">
+            <section class="enigma-signal-level-card">
+                <span class="enigma-kicker">@LevelTitle</span>
+                <strong>@(ReadyToCommit ? "Lock Window Stable" : "Waveform Reconstruction")</strong>
+                <p>@LevelDescription</p>
+                <small>@View.StatusText</small>
+            </section>
+
+            <section class="enigma-signal-stat-grid">
+                <div class="enigma-signal-stat-card">
+                    <span>Coherence</span>
+                    <strong>@MatchPercent%</strong>
+                </div>
+                <div class="enigma-signal-stat-card">
+                    <span>Timer</span>
+                    <strong>@Math.Max(0, Math.Ceiling(View.TimerRemainingSeconds))s</strong>
+                </div>
+                <div class="enigma-signal-stat-card">
+                    <span>Threshold</span>
+                    <strong>@Math.Round(Threshold * 100d)%</strong>
+                </div>
+                <div class="enigma-signal-stat-card">
+                    <span>Hold</span>
+                    <strong>@HoldProgress.ToString("0.0", CultureInfo.InvariantCulture)s / @HoldRequired.ToString("0.0", CultureInfo.InvariantCulture)s</strong>
+                </div>
+            </section>
+
+            <div class="enigma-signal-timer-track">
+                <div class="enigma-signal-timer-fill" style="width:@($"{TimerPercent}%")"></div>
+            </div>
+
+            <div class="enigma-signal-preview-pill @(PreviewVisible ? "visible" : "hidden")">
+                <span class="dot"></span>
+                <strong>@GhostLabel</strong>
+                @if (PreviewSeconds > 0d)
+                {
+                    <small>@PreviewRemaining.ToString("0.0", CultureInfo.InvariantCulture)s</small>
+                }
+            </div>
+
+            <div class="enigma-signal-action-stack">
+                @if (CommitAction is not null)
+                {
+                    <button class="btn enigma-panel-action tone-commit"
+                            disabled="@(!CommitAction.Value.Enabled)"
+                            @onclick="(() => DispatchAsync(CommitAction.Value.Command))">
+                        Stabilize Signal
+                    </button>
+                }
+                @if (ResetAction is not null)
+                {
+                    <button class="btn enigma-panel-action tone-reset"
+                            disabled="@(!ResetAction.Value.Enabled)"
+                            @onclick="(() => DispatchAsync(ResetAction.Value.Command))">
+                        Recalibrate System
+                    </button>
+                }
+                @if (HintAction is not null)
+                {
+                    <button class="btn enigma-panel-action tone-hint"
+                            disabled="@(!HintAction.Value.Enabled)"
+                            @onclick="(() => DispatchAsync(HintAction.Value.Command))">
+                        Scan Diagnostic
+                    </button>
+                }
+            </div>
+        </aside>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required SoloPanelView View { get; set; }
+
+    [Parameter, EditorRequired]
+    public required EventCallback<string> OnAction { get; set; }
+
+    private static readonly (string Key, string Label, string Glyph)[] WaveTypes =
+    [
+        ("sine", "Sine", "~"),
+        ("square", "Square", "[]"),
+        ("saw", "Saw", "/"),
+    ];
+
+    private readonly record struct SignalComponentVm(string Key, string KeyLabel, string WaveType, string WaveLabel, string AmplitudeText, int FrequencyValue, string FrequencyText, string PhaseText, int PhaseValue, double Delta, bool Aligned);
+
+    private IReadOnlyList<SignalComponentVm> Components =>
+        Enumerable.Range(1, GetBoardInt("signal:component_count"))
+            .Select(index => BuildComponentVm($"k{index}"))
+            .ToArray();
+
+    private SoloPanelActionItem? CommitAction => FindAction("signal:commit");
+    private SoloPanelActionItem? ResetAction => FindAction("signal:reset");
+    private SoloPanelActionItem? HintAction => FindAction("signal:hint");
+    private bool InputsDisabled => View.Status is PuzzleStatus.Solved or PuzzleStatus.Cooldown or PuzzleStatus.Resetting;
+    private int ScopeWidth => Math.Max(1, GetBoardInt("signal:scope_width", 720));
+    private int ScopeHeight => Math.Max(1, GetBoardInt("signal:scope_height", 240));
+    private string TargetPath => GetBoardText("signal:path_target");
+    private string CurrentPath => GetBoardText("signal:path_current");
+    private bool PreviewVisible => GetBoardInt("signal:preview_visible", 1) == 1;
+    private bool ShowFft => GetBoardInt("signal:fft_visible", 0) == 1;
+    private bool ShowWaveLabels => GetBoardInt("signal:wave_labels_visible", 1) == 1;
+    private double Threshold => GetBoardDouble("signal:threshold");
+    private double HoldRequired => GetBoardDouble("signal:hold_required");
+    private double HoldProgress => GetBoardDouble("signal:hold_progress");
+    private double HoldPercent => HoldRequired <= 0d ? 0d : Math.Clamp((HoldProgress / HoldRequired) * 100d, 0d, 100d);
+    private double PreviewSeconds => GetBoardDouble("signal:preview_seconds");
+    private double PreviewRemaining => GetBoardDouble("signal:preview_remaining");
+    private int MatchPercent => Math.Clamp(GetBoardInt("signal:match_percent", (int)Math.Round(GetBoardDouble("signal:coherence") * 100d)), 0, 100);
+    private bool ReadyToCommit => GetBoardInt("signal:ready", 0) == 1;
+    private string LevelTitle => GetBoardText("signal:level_title", $"LEVEL 0{View.TierLevel}");
+    private string LevelDescription => GetBoardText("signal:level_desc", "Reconstruct the target waveform by tuning the live channels.");
+    private string GhostLabel => GetBoardText("signal:ghost_label", PreviewVisible ? "Ghost Signal Visible" : "Ghost Signal Faded");
+    private int PhaseStep => Math.Max(5, GetBoardInt("signal:phase_step", 15));
+    private double TimerPercent => Math.Clamp((View.TimerRemainingSeconds / Math.Max(1d, GetBoardDouble("signal:timer_total", View.TimerRemainingSeconds))) * 100d, 0d, 100d);
+    private IReadOnlyList<double> FftBins => ParseFftBins();
+    private int DominantFftIndex => FftBins.Count == 0 ? -1 : FftBins.Select((value, index) => new { value, index }).OrderByDescending(entry => entry.value).First().index;
+
+    private SignalComponentVm BuildComponentVm(string key)
+    {
+        var waveType = GetBoardText($"signal:{key}:type", "sine");
+        var amplitude = GetBoardText($"signal:{key}:amp", "0.10");
+        var frequency = GetBoardInt($"signal:{key}:freq", 1);
+        var phaseValue = GetBoardInt($"signal:{key}:phase", 0);
+        var delta = GetBoardDouble($"signal:{key}:delta");
+        var aligned = GetBoardInt($"signal:{key}:aligned", 0) == 1;
+        return new SignalComponentVm(
+            Key: key,
+            KeyLabel: key.ToUpperInvariant(),
+            WaveType: waveType,
+            WaveLabel: ShowWaveLabels ? waveType.ToUpperInvariant() : "Profile Hidden",
+            AmplitudeText: amplitude,
+            FrequencyValue: frequency,
+            FrequencyText: $"{frequency} Hz",
+            PhaseText: $"{phaseValue} deg",
+            PhaseValue: phaseValue,
+            Delta: delta,
+            Aligned: aligned);
+    }
+
+    private SoloPanelActionItem? FindAction(string command) =>
+        View.Actions.FirstOrDefault(action => string.Equals(action.Command, command, StringComparison.OrdinalIgnoreCase));
+
+    private async Task DispatchAsync(string command)
+    {
+        if (!OnAction.HasDelegate || string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        await OnAction.InvokeAsync(command);
+    }
+
+    private Task DispatchSliderAsync(string key, string field, object? rawValue)
+    {
+        if (rawValue is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var text = Convert.ToString(rawValue, CultureInfo.InvariantCulture) ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return Task.CompletedTask;
+        }
+
+        return field switch
+        {
+            "amp" when double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var amplitude) =>
+                DispatchAsync($"signal:set:{key}:amp:{Math.Clamp(Math.Round(amplitude, 2, MidpointRounding.AwayFromZero), 0.10d, 0.90d).ToString("0.00", CultureInfo.InvariantCulture)}"),
+            "freq" when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var frequency) =>
+                DispatchAsync($"signal:set:{key}:freq:{Math.Clamp(frequency, 1, 8).ToString(CultureInfo.InvariantCulture)}"),
+            "phase" when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var phase) =>
+                DispatchAsync($"signal:set:{key}:phase:{Math.Clamp(phase, 0, 355).ToString(CultureInfo.InvariantCulture)}"),
+            _ => Task.CompletedTask,
+        };
+    }
+
+    private Task DispatchAmplitudeAsync(string key, object? rawValue) => DispatchSliderAsync(key, "amp", rawValue);
+
+    private Task DispatchFrequencyAsync(string key, object? rawValue) => DispatchSliderAsync(key, "freq", rawValue);
+
+    private Task DispatchPhaseAsync(string key, object? rawValue) => DispatchSliderAsync(key, "phase", rawValue);
+
+    private IReadOnlyList<double> ParseFftBins()
+    {
+        var bins = GetBoardText("signal:fft_bins", string.Empty);
+        if (string.IsNullOrWhiteSpace(bins))
+        {
+            return Array.Empty<double>();
+        }
+
+        return bins
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ? Math.Clamp(parsed, 0d, 1d) : 0d)
+            .ToArray();
+    }
+
+    private int GetBoardInt(string key, int fallback = 0) =>
+        View.Board.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private double GetBoardDouble(string key, double fallback = 0d) =>
+        View.Board.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private string GetBoardText(string key, string fallback = "") =>
+        View.Board.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+}

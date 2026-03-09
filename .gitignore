@@ -1,5 +1,14 @@
 ﻿
 /.vs
+.build/
+.publish-check/
+.publish-check2/
+.publish-test/
+.docker-build/
+__pycache__/
+*.pyc
+bin_verify/
+obj_verify/
 bin/
 obj/
 *.user

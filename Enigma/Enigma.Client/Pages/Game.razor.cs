@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Enigma.Client.Models;
 using Enigma.Client.Models.Gameplay;
 using Enigma.Client.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 
 namespace Enigma.Client.Pages;
@@ -35,15 +37,16 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private const double WallThickness = 42d;
     private const double HorizontalWallCollisionInset = WallThickness * ((RoomSize - PlayerSize) / (RenderWidth - PlayerSize));
     private const double PuzzleConsoleSize = 116d;
-    private const double RadarCoreRadius = 60d;
-    private const double RadarDetailRadius = 138d;
-    private const double RadarOuterRadius = 220d;
+    private const double RadarCoreRadius = 96d;
+    private const double RadarDetailRadius = 224d;
+    private const double RadarOuterRadius = 360d;
     private const double RadarPulseCycleSeconds = 5.6d;
     private const int RadarPulseEventsPerCycle = 2;
     private const double RadarPingLeadFraction = 0.04d;
     private const double RadarInterferenceDistance = 248d;
     private const double RadarWallCollisionPadding = 8d;
-    private const double WorldInteractableMinimumSize = 56d;
+    private const double WorldInteractableMinimumSize = 44d;
+    private const double EasyWorldInteractionRangeScale = 0.82d;
     private const double BehaviorAdaptationCap = 0.35d;
     private const string BehaviorStoragePrefix = "enigma.behavior";
     private static readonly PlayAreaRect[] PuzzleConsoleCandidates =
@@ -78,7 +81,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private Task? _loopTask;
     private DateTime _bannerExpiresAtUtc = DateTime.MinValue;
     private DateTime _lastPlayerStateSyncUtc = DateTime.MinValue;
-    private string? _loadedSeed;
     private string _runNonce = Guid.NewGuid().ToString("N");
     private bool _completionTriggered;
     private bool _abandonTriggered;
@@ -94,11 +96,15 @@ public partial class Game : ComponentBase, IAsyncDisposable
     private GridPoint? _tutorialStartRoomCoordinates;
     private bool _tutorialRoomTransitionReported;
     private string? _nearestWorldInteractableId;
+    private string? _dragDialKey;
+    private double _dragDialLastClientX;
     private bool _behaviorProfileLoaded;
     private bool _behaviorProfileDirty;
     private DateTime _lastBehaviorProfilePersistUtc = DateTime.MinValue;
     private BehaviorProfileSnapshot _globalBehaviorProfile = new();
     private BehaviorProfileSnapshot _seedBehaviorProfile = new();
+    private const double DialDragStepPixels = 14d;
+    private SoloPanelView? _lastSoloPanelView;
 
     [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
@@ -182,17 +188,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         ? HasCoopPuzzle
         : CurrentRoomState?.Puzzle is not null && CurrentRoomState.Puzzle is not IWorldInteractivePuzzle;
     protected bool IsCurrentPuzzleSolved => IsCoopRun ? IsCurrentCoopRoomSolved : CurrentRoomState?.Puzzle.IsCompleted == true;
-    protected bool UsesRoomNativePuzzleInteraction => !IsCoopRun &&
-        CurrentRoomState?.Puzzle is
-            (IWorldInteractivePuzzle
-            or PressurePlatePuzzle
-            or PhaseRelayPuzzle
-            or HarmonicPhasePuzzle
-            or WeightGridPuzzleBase
-            or ZoneActivationPuzzle
-            or DelayedActivationSequencePuzzle
-            or RecursiveActivationSequencePuzzle
-            or CrossingPathPuzzle);
+    protected bool UsesRoomNativePuzzleInteraction => false;
     protected bool CanInteractWithPuzzleConsole => CanShowRoom && HasPuzzleOverlayContent && !IsCurrentPuzzleSolved && !UsesRoomNativePuzzleInteraction;
     protected bool HasHotkeyUsableItems => GetActiveLoadoutItems().Count > 0;
     protected bool PortalReady => IsCoopRun
@@ -209,11 +205,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
         {
             LoadError = "Open a generated or loaded seed from the Play page before starting the game.";
             IsLoaded = false;
-            return;
-        }
-
-        if (string.Equals(_loadedSeed, Seed, StringComparison.Ordinal))
-        {
             return;
         }
 
@@ -243,6 +234,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
             CurrentRoom = ParsedSeed.StartRoom;
             CurrentRoomState = _roomStates[CurrentRoom.Coordinates];
+            EnsureCurrentSoloPanelTierAssigned();
             if (IsTutorialRun)
             {
                 _tutorialStartRoomCoordinates = CurrentRoom.Coordinates;
@@ -251,7 +243,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
             _sessionStopwatch.Restart();
             IsLoaded = true;
             LoadError = null;
-            _loadedSeed = Seed;
             ShowBanner("Every room is locked until its puzzle is solved.", 2.8d);
             _playerStateDirty = true;
             ApplyBehaviorProfileToEasyPuzzles();
@@ -371,42 +362,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return HandleCoopPuzzleKeyChangeAsync(keyCode, isPressed);
         }
 
-        if (IsPuzzleOverlayOpen && CurrentRoomState?.Puzzle is UnlockPatternPuzzle unlockPattern && !unlockPattern.IsCompleted)
-        {
-            _pressedKeys.Clear();
-
-            if (isPressed && TryMapDirectionKey(keyCode, out var patternDirection))
-            {
-                unlockPattern.Press(patternDirection);
-            }
-
-            return Task.CompletedTask;
-        }
-
-        if (IsPuzzleOverlayOpen && CurrentRoomState?.Puzzle is DirectionalEchoPuzzle directionalEcho && !directionalEcho.IsCompleted)
-        {
-            _pressedKeys.Clear();
-
-            if (isPressed && TryMapDirectionKey(keyCode, out var echoDirection))
-            {
-                directionalEcho.Press(echoDirection);
-            }
-
-            return Task.CompletedTask;
-        }
-
-        if (IsPuzzleOverlayOpen && CurrentRoomState?.Puzzle is DimensionalPatternShiftPuzzle dimensionalShift && !dimensionalShift.IsCompleted)
-        {
-            _pressedKeys.Clear();
-
-            if (isPressed && TryMapDirectionKey(keyCode, out var shiftDirection))
-            {
-                dimensionalShift.Press(shiftDirection);
-            }
-
-            return Task.CompletedTask;
-        }
-
         if (isPressed)
         {
             _pressedKeys.Add(keyCode);
@@ -459,22 +414,37 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return [];
         }
 
-        var interactables = worldPuzzle.GetWorldInteractables()
-            .Where(interactable => interactable.Clickable)
-            .ToList();
+        var interactables = worldPuzzle.GetWorldInteractables().ToList();
         _nearestWorldInteractableId = TryFindNearestWorldInteractableCandidate(worldPuzzle, null)?.Interactable.Id;
         return interactables;
     }
 
     protected string GetWorldInteractableStyle(PuzzleWorldInteractable interactable)
     {
-        var expandedBounds = ExpandWorldInteractableBounds(interactable.Bounds);
-        return GetRectStyle(expandedBounds);
+        var renderBounds = interactable.Clickable
+            ? ExpandWorldInteractableBounds(interactable.Bounds)
+            : interactable.Bounds;
+        return GetRectStyle(renderBounds);
     }
 
     protected string GetWorldInteractableClass(PuzzleWorldInteractable interactable)
     {
         var classes = $"enigma-world-interactable {interactable.CssClass}";
+        if (ShouldUseColorCodedInteractables())
+        {
+            classes += $" color-coded color-slot-{GetWorldInteractableColorSlot(interactable.Id)}";
+            classes += $" icon-{GetWorldInteractableIconToken(interactable.Id)}";
+            if (CurrentRoomState?.Puzzle is RoomPuzzle puzzle)
+            {
+                classes += $" family-{char.ToLowerInvariant(puzzle.PuzzleKey)}";
+            }
+        }
+
+        if (!interactable.Clickable)
+        {
+            classes += " decorative";
+        }
+
         if (!interactable.Enabled)
         {
             classes += " disabled";
@@ -519,6 +489,16 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     protected string GetWorldInteractableRenderLabel(PuzzleWorldInteractable interactable)
     {
+        if (ShouldUseColorCodedInteractables())
+        {
+            return string.Empty;
+        }
+
+        if (!interactable.Clickable && string.IsNullOrWhiteSpace(interactable.Label))
+        {
+            return string.Empty;
+        }
+
         if (!string.IsNullOrWhiteSpace(interactable.Label))
         {
             return interactable.Label;
@@ -546,6 +526,13 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
 
         if (TryParseInteractableIndex(interactable.Id, "hidden-", out _))
+        {
+            return string.Empty;
+        }
+
+        if (interactable.Id.StartsWith("socket-", StringComparison.OrdinalIgnoreCase) ||
+            interactable.Id.StartsWith("beta-socket-", StringComparison.OrdinalIgnoreCase) ||
+            interactable.Id.StartsWith("route-link-", StringComparison.OrdinalIgnoreCase))
         {
             return string.Empty;
         }
@@ -753,39 +740,35 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return "replay the echo";
         }
 
-        if (string.Equals(id, "heat-up", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(id, "cargo-replay", StringComparison.OrdinalIgnoreCase))
         {
-            return "increase heat";
-        }
-
-        if (string.Equals(id, "heat-down", StringComparison.OrdinalIgnoreCase))
-        {
-            return "decrease heat";
-        }
-
-        if (string.Equals(id, "pressure-up", StringComparison.OrdinalIgnoreCase))
-        {
-            return "increase pressure";
-        }
-
-        if (string.Equals(id, "pressure-down", StringComparison.OrdinalIgnoreCase))
-        {
-            return "decrease pressure";
+            return "replay the imprint";
         }
 
         return id switch
         {
-            var value when value.StartsWith("relay-", StringComparison.OrdinalIgnoreCase) => "toggle relay",
-            var value when value.StartsWith("echo-pad-", StringComparison.OrdinalIgnoreCase) => "imprint this pad",
-            var value when value.StartsWith("alpha-", StringComparison.OrdinalIgnoreCase) => "lock alpha node",
-            var value when value.StartsWith("beta-", StringComparison.OrdinalIgnoreCase) => "lock beta node",
-            var value when value.StartsWith("behavior-", StringComparison.OrdinalIgnoreCase) => "commit terminal",
-            var value when value.StartsWith("recursive-", StringComparison.OrdinalIgnoreCase) => "confirm anchor",
-            var value when value.StartsWith("grid-", StringComparison.OrdinalIgnoreCase) => "pulse cell",
-            var value when value.StartsWith("symbol-", StringComparison.OrdinalIgnoreCase) => "invoke symbol",
-            var value when value.StartsWith("time-gate-", StringComparison.OrdinalIgnoreCase) => "capture gate window",
-            var value when value.StartsWith("false-", StringComparison.OrdinalIgnoreCase) => "probe terminal",
-            var value when value.StartsWith("hidden-", StringComparison.OrdinalIgnoreCase) => "test tile",
+            "heat-up" => "raise the fault axis",
+            "heat-down" => "lower the fault axis",
+            "pressure-up" => "raise stratum pressure",
+            "pressure-down" => "lower stratum pressure",
+            var value when value.StartsWith("cargo-", StringComparison.OrdinalIgnoreCase) => "acquire token",
+            var value when value.StartsWith("socket-", StringComparison.OrdinalIgnoreCase) => "dock token",
+            var value when value.StartsWith("alpha-cargo-", StringComparison.OrdinalIgnoreCase) => "acquire waypoint",
+            var value when value.StartsWith("beta-socket-", StringComparison.OrdinalIgnoreCase) => "commit waypoint",
+            var value when value.StartsWith("canister-", StringComparison.OrdinalIgnoreCase) => "acquire canister",
+            "manifold-heat" => "inject heat manifold",
+            "manifold-pressure" => "inject pressure manifold",
+            var value when value.StartsWith("relay-", StringComparison.OrdinalIgnoreCase) => "tune lock channel",
+            var value when value.StartsWith("echo-pad-", StringComparison.OrdinalIgnoreCase) => "sample node",
+            var value when value.StartsWith("alpha-", StringComparison.OrdinalIgnoreCase) => "mark alpha anchor",
+            var value when value.StartsWith("beta-", StringComparison.OrdinalIgnoreCase) => "mark beta anchor",
+            var value when value.StartsWith("behavior-", StringComparison.OrdinalIgnoreCase) => "pulse pressure node",
+            var value when value.StartsWith("recursive-", StringComparison.OrdinalIgnoreCase) => "rotate cipher anchor",
+            var value when value.StartsWith("grid-", StringComparison.OrdinalIgnoreCase) => "tune gravity node",
+            var value when value.StartsWith("symbol-", StringComparison.OrdinalIgnoreCase) => "rotate mirror",
+            var value when value.StartsWith("time-gate-", StringComparison.OrdinalIgnoreCase) => "route flow gate",
+            var value when value.StartsWith("false-", StringComparison.OrdinalIgnoreCase) => "reveal memory node",
+            var value when value.StartsWith("hidden-", StringComparison.OrdinalIgnoreCase) => "lock temporal cell",
             _ => "interact",
         };
     }
@@ -810,7 +793,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
 
         var rangeBoost = DateTime.UtcNow < _visionBoostUntilUtc ? 1.25d : 1d;
-        var range = Math.Max(64d, interactable.InteractionRange * rangeBoost);
+        var easyRangeScale = ShouldUseColorCodedInteractables() ? EasyWorldInteractionRangeScale : 1d;
+        var range = Math.Max(56d, interactable.InteractionRange * rangeBoost * easyRangeScale);
         return distance <= range;
     }
 
@@ -852,6 +836,121 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
 
         return int.TryParse(interactableId[prefix.Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out index);
+    }
+
+    private bool ShouldUseColorCodedInteractables() =>
+        !IsCoopRun &&
+        CurrentRoomState?.Puzzle is IWorldInteractivePuzzle;
+
+    private static int GetWorldInteractableColorSlot(string interactableId)
+    {
+        if (TryGetFirstNumericToken(interactableId, out var numericToken))
+        {
+            return Math.Abs(numericToken % 8);
+        }
+
+        unchecked
+        {
+            var hash = 19;
+            foreach (var character in interactableId)
+            {
+                hash = (hash * 31) + char.ToUpperInvariant(character);
+            }
+
+            return (hash & int.MaxValue) % 8;
+        }
+    }
+
+    private static bool TryGetFirstNumericToken(string value, out int token)
+    {
+        token = 0;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var startIndex = -1;
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (char.IsDigit(value[index]))
+            {
+                startIndex = index;
+                break;
+            }
+        }
+
+        if (startIndex < 0)
+        {
+            return false;
+        }
+
+        var endIndex = startIndex;
+        while (endIndex < value.Length && char.IsDigit(value[endIndex]))
+        {
+            endIndex++;
+        }
+
+        return int.TryParse(
+            value[startIndex..endIndex],
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out token);
+    }
+
+    private static string GetWorldInteractableIconToken(string interactableId)
+    {
+        var value = interactableId.ToLowerInvariant();
+        if (value.Contains("relay") || value.Contains("false-"))
+        {
+            return "route";
+        }
+
+        if (value.Contains("echo"))
+        {
+            return "echo";
+        }
+
+        if (value.Contains("layer") || value.StartsWith("alpha-") || value.StartsWith("beta-"))
+        {
+            return "shift";
+        }
+
+        if (value.Contains("behavior"))
+        {
+            return "commit";
+        }
+
+        if (value.Contains("recursive"))
+        {
+            return "loop";
+        }
+
+        if (value.Contains("grid") || value.Contains("hidden"))
+        {
+            return "grid";
+        }
+
+        if (value.Contains("symbol"))
+        {
+            return "cipher";
+        }
+
+        if (value.Contains("time"))
+        {
+            return "time";
+        }
+
+        if (value.Contains("heat"))
+        {
+            return "heat";
+        }
+
+        if (value.Contains("pressure"))
+        {
+            return "pressure";
+        }
+
+        return "node";
     }
 
     protected bool ShowRoomInteractionProgress => TryGetRoomInteractionProgressState(out _);
@@ -946,56 +1045,40 @@ public partial class Game : ComponentBase, IAsyncDisposable
             return [];
         }
 
-        return CurrentRoomState.Puzzle switch
+        var puzzle = CurrentRoomState.Puzzle;
+        var metaStats = BuildWorldPuzzleMetaStats();
+        if (puzzle is IWorldPuzzleTelemetry telemetry)
         {
-            SignalRoutingChamberPuzzle signal => [
-                new WorldPuzzleStat("Stable", $"{signal.MatchedRelayCount}/{Math.Max(1, signal.RequiredRelayCount)}"),
-                new WorldPuzzleStat("Active", signal.ActiveRelayCount.ToString(CultureInfo.InvariantCulture)),
-                new WorldPuzzleStat("Overload", signal.OverloadRelayCount.ToString(CultureInfo.InvariantCulture)),
-            ],
-            EchoMemoryChamberPuzzle echo => [
-                new WorldPuzzleStat("Sequence", $"{echo.EnteredCount}/{echo.SequenceLength}"),
-                new WorldPuzzleStat("Replay", echo.ReplayChargesRemaining.ToString(CultureInfo.InvariantCulture)),
-            ],
-            DualLayerRealityPuzzle dualLayer => [
-                new WorldPuzzleStat("Sync", $"{dualLayer.PairStep}/{Math.Max(1, dualLayer.PairCount)}"),
-                new WorldPuzzleStat("Layer", dualLayer.IsAlphaLayerActive ? "A" : "B"),
-            ],
-            BehaviorAdaptivePuzzle behavior => [
-                new WorldPuzzleStat("Depth", $"{behavior.SequenceStep}/{Math.Max(1, behavior.SequenceLength)}"),
-                new WorldPuzzleStat("Bias", $"{behavior.AdaptedHorizontalBias:+0.00;-0.00;0.00}"),
-            ],
-            RecursiveRoomMutationPuzzle recursive => [
-                new WorldPuzzleStat("Loop", $"{recursive.LoopIndex}/{Math.Max(1, recursive.LoopCount)}"),
-                new WorldPuzzleStat("Signal", recursive.IsRevealVisible ? "Visible" : "Hidden"),
-            ],
-            LivingGridPuzzle grid => [
-                new WorldPuzzleStat("Aligned", $"{grid.MatchedCells}/{Math.Max(1, grid.CellCount)}"),
-                new WorldPuzzleStat("Moves", grid.MoveCount.ToString(CultureInfo.InvariantCulture)),
-            ],
-            SymbolDecoderPuzzle symbol => [
-                new WorldPuzzleStat("Phase", symbol.CurrentValue.ToString("00", CultureInfo.InvariantCulture)),
-                new WorldPuzzleStat("Target", symbol.TargetValue.ToString("00", CultureInfo.InvariantCulture)),
-                new WorldPuzzleStat("Coherence", symbol.Coherence.ToString(CultureInfo.InvariantCulture)),
-            ],
-            TimeWindowPuzzle timeWindow => [
-                new WorldPuzzleStat("Window", $"{timeWindow.Step}/{Math.Max(1, timeWindow.StepCount)}"),
-                new WorldPuzzleStat("Gate", (timeWindow.OpenGateIndex + 1).ToString(CultureInfo.InvariantCulture)),
-            ],
-            FalseSolutionPuzzle falseRoute => [
-                new WorldPuzzleStat("Trusted", $"{falseRoute.RealStep}/{Math.Max(1, falseRoute.SequenceLength)}"),
-                new WorldPuzzleStat("Decoy", falseRoute.DecoyPressure.ToString(CultureInfo.InvariantCulture)),
-            ],
-            HeatPressureBalancePuzzle heatPressure => [
-                new WorldPuzzleStat("Heat", Math.Round(heatPressure.Heat).ToString("0", CultureInfo.InvariantCulture)),
-                new WorldPuzzleStat("Pressure", Math.Round(heatPressure.Pressure).ToString("0", CultureInfo.InvariantCulture)),
-                new WorldPuzzleStat("Band", heatPressure.IsInStableBand ? "Stable" : "Adjust"),
-            ],
-            HiddenRulePrimePuzzle hiddenRule => [
-                new WorldPuzzleStat("Confirmed", $"{hiddenRule.Progress}/{Math.Max(1, hiddenRule.RequiredCount)}"),
-            ],
-            _ => [],
-        };
+            var telemetryStats = telemetry.GetTelemetryStats();
+            if (telemetryStats.Count > 0)
+            {
+                var normalizedStats = telemetryStats
+                    .Select(stat => new WorldPuzzleStat(stat.Label, stat.Value))
+                    .ToArray();
+                return metaStats.Count == 0
+                    ? normalizedStats
+                    : [.. metaStats, .. normalizedStats];
+            }
+        }
+
+        return metaStats;
+    }
+
+    private List<WorldPuzzleStat> BuildWorldPuzzleMetaStats()
+    {
+        var stats = new List<WorldPuzzleStat>(4);
+        if (CurrentRoomState?.Puzzle is ISoloPanelPuzzle soloPanelPuzzle)
+        {
+            var view = GetSoloPanelView(soloPanelPuzzle);
+            if (view is not null)
+            {
+                stats.Add(new WorldPuzzleStat("Family", view.FamilyId));
+                stats.Add(new WorldPuzzleStat("Tier", $"L{view.TierLevel}"));
+                stats.Add(new WorldPuzzleStat("Phase", view.Phase.ToString()));
+                stats.Add(new WorldPuzzleStat("State", view.Status.ToString()));
+            }
+        }
+        return stats;
     }
 
     protected string MovementHintText => CanInteractWithPuzzleConsole
@@ -1031,6 +1114,8 @@ public partial class Game : ComponentBase, IAsyncDisposable
         {
             return;
         }
+
+        EnsureCurrentSoloPanelTierAssigned();
 
         if (CurrentRoomState?.Puzzle is IRevealOnOpenPuzzle revealPuzzle)
         {
@@ -1068,19 +1153,20 @@ public partial class Game : ComponentBase, IAsyncDisposable
         var radarOuterRadius = GetCurrentRadarOuterRadius();
         var radarPulseStrength = GetRadarPulseStrength();
         var radarWallProximity = GetRadarWallProximityScale(playerCenterX, playerCenterY);
-        var proximityCoreScale = 0.7d + (radarWallProximity * 0.3d);
-        var proximityDetailScale = 0.62d + (radarWallProximity * 0.38d);
-        var proximityOuterScale = 0.56d + (radarWallProximity * 0.44d);
-        var proximityPulseScale = 0.54d + (radarWallProximity * 0.46d);
+        var proximityCoreScale = 0.82d + (radarWallProximity * 0.18d);
+        var proximityDetailScale = 0.78d + (radarWallProximity * 0.22d);
+        var proximityOuterScale = 0.74d + (radarWallProximity * 0.26d);
+        var proximityPulseScale = 0.86d + (radarWallProximity * 0.14d);
+        var openSpaceBoost = 1d + (Math.Max(0d, radarWallProximity - 0.72d) * 0.55d);
 
-        radarCoreRadius *= proximityCoreScale;
-        radarDetailRadius *= proximityDetailScale;
-        radarOuterRadius *= proximityOuterScale;
+        radarCoreRadius *= proximityCoreScale * openSpaceBoost;
+        radarDetailRadius *= proximityDetailScale * openSpaceBoost;
+        radarOuterRadius *= proximityOuterScale * openSpaceBoost;
         radarPulseStrength *= proximityPulseScale;
 
-        radarDetailRadius = Math.Max(radarCoreRadius + 8d, radarDetailRadius);
-        radarOuterRadius = Math.Max(radarDetailRadius + 20d, radarOuterRadius);
-        var radarPulseScale = Math.Clamp((radarOuterRadius / 176d), 2.1d, 4.4d);
+        radarDetailRadius = Math.Max(radarCoreRadius + 12d, radarDetailRadius);
+        radarOuterRadius = Math.Max(radarDetailRadius + 26d, radarOuterRadius);
+        var radarPulseScale = Math.Clamp((radarOuterRadius / 220d), 1.7d, 3.0d);
         var radarInterference = IsRadarInterferenceActive() ? 1d : 0d;
 
         return string.Create(
@@ -1350,114 +1436,35 @@ public partial class Game : ComponentBase, IAsyncDisposable
     protected string GetPlayerClass() =>
         $"facing-{PlayerAnimationDirections[PlayerFacing]} {PlayerSpriteStates[PlayerFacing]} {(IsMoving ? "is-moving" : string.Empty)}";
 
+    protected bool ShowCarriedPayloadIndicator => TryGetCarriedPayloadLabel(out _);
+
+    protected string GetCarriedPayloadLabel() =>
+        TryGetCarriedPayloadLabel(out var payloadLabel) ? payloadLabel : string.Empty;
+
+    protected string GetCarriedPayloadStyle()
+    {
+        if (!TryGetCarriedPayloadLabel(out _))
+        {
+            return string.Empty;
+        }
+
+        const double badgeWidth = 88d;
+        const double badgeHeight = 30d;
+        var left = Math.Clamp(PlayerX + (PlayerSize / 2d) - (badgeWidth / 2d), 10d, RoomSize - badgeWidth - 10d);
+        var top = Math.Clamp(PlayerY - badgeHeight - 12d, 8d, RoomSize - badgeHeight - 8d);
+        return $"left: {ToPositionPercentX(left, badgeWidth)}%; top: {ToPercentY(top)}%; width: {ToLengthPercentX(badgeWidth)}%;";
+    }
+
+    private bool TryGetCarriedPayloadLabel(out string payloadLabel)
+    {
+        payloadLabel = string.Empty;
+        return false;
+    }
+
     protected string GetRectStyle(PlayAreaRect rect) =>
         AppendRadarSignalStyle(
             $"left: {ToPositionPercentX(rect.X, rect.Width)}%; top: {ToPercentY(rect.Y)}%; width: {ToLengthPercentX(rect.Width)}%; height: {ToPercentY(rect.Height)}%;",
             rect);
-
-    protected IEnumerable<(double X1, double Y1, double X2, double Y2)> GetYarnLineSegments(YarnUntanglePuzzle puzzle)
-    {
-        if (puzzle.StrandOrder.Length == 0)
-        {
-            yield break;
-        }
-
-        for (var index = 0; index < puzzle.StrandOrder.Length; index++)
-        {
-            yield return (14d, GetYarnNodeCenter(index, puzzle.StrandOrder.Length), 86d, GetYarnNodeCenter(puzzle.GetRightSlotForLeftIndex(index), puzzle.StrandOrder.Length));
-        }
-    }
-
-    protected string GetYarnPathData(int leftIndex, int totalCount, int rightSlotIndex)
-    {
-        var startX = 18d;
-        var endX = 82d;
-        var startY = GetYarnNodeCenter(leftIndex, totalCount);
-        var endY = GetYarnNodeCenter(rightSlotIndex, totalCount);
-        var controlLeftX = 38d;
-        var controlRightX = 62d;
-
-        return FormattableString.Invariant(
-            $"M {startX:F2} {startY:F2} C {controlLeftX:F2} {startY:F2}, {controlRightX:F2} {endY:F2}, {endX:F2} {endY:F2}");
-    }
-
-    protected string GetYarnLineClass(YarnUntanglePuzzle puzzle, int leftIndex)
-    {
-        var classes = new List<string> { "enigma-yarn-line" };
-        if (HasYarnCrossing(puzzle, leftIndex))
-        {
-            classes.Add("crossed");
-        }
-
-        if (puzzle.SelectedIndex == leftIndex)
-        {
-            classes.Add("selected");
-        }
-
-        return string.Join(" ", classes);
-    }
-
-    protected string GetYarnLineStyle(YarnUntanglePuzzle puzzle, int leftIndex)
-    {
-        var color = YarnStrandColors[leftIndex % YarnStrandColors.Length];
-        var opacity = puzzle.SelectedIndex == leftIndex ? 1d : HasYarnCrossing(puzzle, leftIndex) ? 0.96d : 0.82d;
-        return FormattableString.Invariant($"stroke: {color}; opacity: {opacity:F2};");
-    }
-
-    protected int GetLeftIndexForRightSlot(YarnUntanglePuzzle puzzle, int rightSlotIndex)
-    {
-        for (var leftIndex = 0; leftIndex < puzzle.StrandOrder.Length; leftIndex++)
-        {
-            if (puzzle.GetRightSlotForLeftIndex(leftIndex) == rightSlotIndex)
-            {
-                return leftIndex;
-            }
-        }
-
-        return rightSlotIndex;
-    }
-
-    protected bool HasYarnCrossing(YarnUntanglePuzzle puzzle, int leftIndex)
-    {
-        if (leftIndex < 0 || leftIndex >= puzzle.StrandOrder.Length)
-        {
-            return false;
-        }
-
-        var targetOrder = puzzle.StrandOrder[leftIndex];
-        for (var otherIndex = 0; otherIndex < puzzle.StrandOrder.Length; otherIndex++)
-        {
-            if (otherIndex == leftIndex)
-            {
-                continue;
-            }
-
-            var otherOrder = puzzle.StrandOrder[otherIndex];
-            if ((leftIndex < otherIndex && targetOrder > otherOrder) ||
-                (leftIndex > otherIndex && targetOrder < otherOrder))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    protected double GetYarnNodeTopPercent(int index, int totalCount)
-    {
-        var center = GetYarnNodeCenter(index, totalCount);
-        return Math.Clamp(center - 6d, 0d, 94d);
-    }
-
-    private static double GetYarnNodeCenter(int index, int totalCount)
-    {
-        if (totalCount <= 1)
-        {
-            return 50d;
-        }
-
-        return 12d + ((76d / (totalCount - 1)) * index);
-    }
 
     protected IEnumerable<WallSegment> GetWallSegments()
     {
@@ -1487,252 +1494,562 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
     }
 
-    protected void AttemptQuickTimeStop()
+
+    protected SoloPanelView? GetSoloPanelView(ISoloPanelPuzzle puzzle)
     {
-        if (CurrentRoomState?.Puzzle is QuickTimePuzzle puzzle)
+        EnsureCurrentSoloPanelTierAssigned();
+        var view = puzzle.BuildPanelView(_sessionStopwatch.Elapsed.TotalSeconds);
+        _lastSoloPanelView = view;
+        return view;
+    }
+
+    protected void ApplySoloPanelAction(string command)
+    {
+        if (CurrentRoomState?.Puzzle is not ISoloPanelPuzzle puzzle)
         {
-            puzzle.AttemptStop();
+            return;
+        }
+
+        EnsureCurrentSoloPanelTierAssigned();
+        if (puzzle.ApplyAction(command, _sessionStopwatch.Elapsed.TotalSeconds))
+        {
+            _playerStateDirty = true;
         }
     }
 
-    protected void ChooseRiddleAnswer(int index)
+    protected string GetSoloPanelStatusClass(PuzzleStatus status) => status switch
     {
-        if (CurrentRoomState?.Puzzle is RiddlePuzzle puzzle)
+        PuzzleStatus.Solved => "solved",
+        PuzzleStatus.Cooldown => "cooldown",
+        PuzzleStatus.FailedTemporary => "failed",
+        PuzzleStatus.Resetting => "resetting",
+        _ => "active",
+    };
+
+    protected string GetSoloPanelActionClass(SoloPanelActionItem action)
+    {
+        var classes = new List<string> { "btn", "enigma-panel-action" };
+        classes.Add(action.Active ? "is-active" : "is-idle");
+        if (!action.Enabled)
         {
-            puzzle.Choose(index);
+            classes.Add("is-disabled");
         }
+        classes.Add($"tone-{action.Tone}");
+        return string.Join(" ", classes);
     }
 
-    protected void PressSequenceRune(string symbol)
+    protected string GetSoloPanelFamilyClass(string familyId) =>
+        string.IsNullOrWhiteSpace(familyId)
+            ? "family-unknown"
+            : $"family-{familyId.Replace("_", "-", StringComparison.OrdinalIgnoreCase)}";
+
+    protected string GetSoloPanelFamilyIcon(string familyId) => familyId switch
     {
-        if (CurrentRoomState?.Puzzle is SequenceMemoryPuzzle puzzle)
+        "chromatic_lock" => "CH",
+        "signal_decay" => "SG",
+        "dead_reckoning" => "DR",
+        "pressure_grid" => "PG",
+        "cipher_wheel" => "CW",
+        "gravity_well" => "GW",
+        "echo_chamber" => "EC",
+        "token_flood" => "TF",
+        "memory_palace" => "MP",
+        "fault_line" => "FL",
+        "temporal_grid" => "TG",
+        _ => "PX",
+    };
+
+    protected IReadOnlyList<string> GetSoloPanelDialKeys(SoloPanelView view) =>
+        view.Actions
+            .Select(action => TryParseDialCommand(action.Command, out var key, out _) ? key : null)
+            .Where(static key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static key => ExtractNumericSuffix(key!), Comparer<int>.Default)
+            .Cast<string>()
+            .ToArray();
+
+    protected IReadOnlyList<SoloPanelActionItem> GetSoloPanelCellActions(SoloPanelView view) =>
+        view.Actions
+            .Where(action => TryParseCellCommand(action.Command, out _))
+            .OrderBy(action => TryParseCellCommand(action.Command, out var key) ? ExtractNumericSuffix(key) : int.MaxValue)
+            .ToArray();
+
+    protected IReadOnlyList<SoloPanelActionItem> GetSoloPanelCardActions(SoloPanelView view) =>
+        view.Actions
+            .Where(action => TryParseCardCommand(action.Command, out _))
+            .OrderBy(action => TryParseCardCommand(action.Command, out var index) ? index : int.MaxValue)
+            .ToArray();
+
+    protected IReadOnlyList<SoloPanelActionItem> GetSoloPanelPipeActions(SoloPanelView view) =>
+        view.Actions
+            .Where(action => TryParsePipeCommand(action.Command, out _, out _))
+            .OrderBy(action => TryParsePipeCommand(action.Command, out var row, out var col) ? (row * 100) + col : int.MaxValue)
+            .ToArray();
+
+    protected IReadOnlyList<SoloPanelActionItem> GetSoloPanelSystemActions(SoloPanelView view) =>
+        view.Actions
+            .Where(action =>
+                !TryParseDialCommand(action.Command, out _, out _) &&
+                !TryParseCellCommand(action.Command, out _) &&
+                !TryParsePipeCommand(action.Command, out _, out _) &&
+                !TryParseCardCommand(action.Command, out _))
+            .ToArray();
+
+    protected bool TryGetSoloPanelDialAction(
+        SoloPanelView view,
+        string key,
+        string direction,
+        out SoloPanelActionItem action)
+    {
+        foreach (var candidate in view.Actions)
         {
-            puzzle.Press(symbol);
+            if (!TryParseDialCommand(candidate.Command, out var candidateKey, out var candidateDirection))
+            {
+                continue;
+            }
+
+            if (string.Equals(candidateKey, key, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(candidateDirection, direction, StringComparison.OrdinalIgnoreCase))
+            {
+                action = candidate;
+                return true;
+            }
         }
+
+        action = default;
+        return false;
     }
 
-    protected void RotateTile(int index)
+    protected int GetSoloPanelBoardInt(SoloPanelView view, string key, int fallback = 0) =>
+        view.Board.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    protected double GetSoloPanelBoardDouble(SoloPanelView view, string key, double fallback = 0d) =>
+        view.Board.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    protected string GetSoloPanelBoardText(SoloPanelView view, string key, string fallback = "--") =>
+        view.Board.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+
+    protected string GetSoloPanelCellLabel(SoloPanelActionItem action) =>
+        TryParseCellCommand(action.Command, out var key)
+            ? ExtractNumericSuffix(key).ToString(CultureInfo.InvariantCulture)
+            : action.Label;
+
+    protected string GetSoloPanelCardLabel(SoloPanelActionItem action) =>
+        TryParseCardCommand(action.Command, out var index)
+            ? (index + 1).ToString(CultureInfo.InvariantCulture)
+            : action.Label;
+
+    protected string GetSoloPanelCellActionClass(SoloPanelActionItem action)
     {
-        if (CurrentRoomState?.Puzzle is TileRotationPuzzle puzzle)
+        var classes = new List<string> { "enigma-solo-cell-action" };
+        if (action.Active)
         {
-            puzzle.Rotate(index);
+            classes.Add("active");
         }
+        if (!action.Enabled)
+        {
+            classes.Add("disabled");
+        }
+
+        return string.Join(" ", classes);
     }
 
-    protected void RotateSignalTile(int index)
+    protected string GetSoloPanelDialRingStyle(SoloPanelView view, string key)
     {
-        if (CurrentRoomState?.Puzzle is SignalRotationNetworkPuzzle puzzle)
-        {
-            puzzle.Rotate(index);
-        }
+        var current = GetSoloPanelBoardInt(view, $"cur:{key}");
+        var target = GetSoloPanelBoardInt(view, $"tgt:{key}", -1);
+        var max = Math.Max(1, GetSoloPanelBoardInt(view, $"max:{key}", 1));
+
+        var currentAngle = Math.Round((current / (double)max) * 360d, 2, MidpointRounding.AwayFromZero);
+        var targetAngle = target < 0
+            ? -1d
+            : Math.Round((target / (double)max) * 360d, 2, MidpointRounding.AwayFromZero);
+        var targetVisibility = target < 0 ? "none" : "block";
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"--dial-angle:{currentAngle:0.##}deg; --dial-target-angle:{targetAngle:0.##}deg; --dial-target-visible:{targetVisibility};");
     }
 
-    protected void PressPatternDirection(PlayerDirection direction)
+    protected string GetSoloPanelDialValueText(SoloPanelView view, string key)
     {
-        if (CurrentRoomState?.Puzzle is UnlockPatternPuzzle puzzle)
+        var current = GetSoloPanelBoardInt(view, $"cur:{key}");
+        if (string.Equals(view.FamilyId, "signal_decay", StringComparison.OrdinalIgnoreCase))
         {
-            puzzle.Press(direction);
+            return current.ToString(CultureInfo.InvariantCulture);
         }
+
+        var target = GetSoloPanelBoardInt(view, $"tgt:{key}", -1);
+        if (target < 0)
+        {
+            return current.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return $"{current} / {target}";
     }
 
-    protected void ToggleValve(int index)
+    protected string GetSoloPanelCellGlyph(SoloPanelActionItem action, string familyId)
     {
-        if (CurrentRoomState?.Puzzle is ValveFlowPuzzle puzzle)
+        var index = TryParseCellCommand(action.Command, out var key)
+            ? Math.Max(1, ExtractNumericSuffix(key))
+            : 1;
+
+        if (string.Equals(familyId, "token_flood", StringComparison.OrdinalIgnoreCase))
         {
-            puzzle.Toggle(index);
+            var pipeGlyphs = new[] { "┼", "┬", "┴", "├", "┤", "┌", "┐", "└", "┘", "─", "│" };
+            return pipeGlyphs[index % pipeGlyphs.Length];
         }
-        else if (CurrentRoomState?.Puzzle is FlowRedistributionPuzzle redistribution)
+
+        if (string.Equals(familyId, "pressure_grid", StringComparison.OrdinalIgnoreCase))
         {
-            redistribution.Pulse(index);
+            return index % 2 == 0 ? "▣" : "◫";
         }
-        else if (CurrentRoomState?.Puzzle is ConservationNetworkPuzzle conservation)
+
+        if (string.Equals(familyId, "temporal_grid", StringComparison.OrdinalIgnoreCase))
         {
-            conservation.Pulse(index);
+            var temporalGlyphs = new[] { "◴", "◷", "◶", "◵" };
+            return temporalGlyphs[index % temporalGlyphs.Length];
         }
+
+        return action.Active ? "◉" : "○";
     }
 
-    protected void ToggleWeight(int index)
+    protected string GetSoloPanelCardGlyph(SoloPanelActionItem action, string familyId)
     {
-        if (CurrentRoomState?.Puzzle is WeightBalancePuzzle puzzle)
+        var index = TryParseCardCommand(action.Command, out var parsedIndex) ? parsedIndex : 0;
+        if (string.Equals(familyId, "memory_palace", StringComparison.OrdinalIgnoreCase))
         {
-            puzzle.Toggle(index);
+            var glyphs = new[] { "◈", "◇", "◆", "◍", "◌", "◉", "⬢", "⬡" };
+            return glyphs[index % glyphs.Length];
         }
+
+        return "◈";
     }
 
-    protected void ToggleXorInput(int index)
+    protected string GetSoloPanelActionGlyph(SoloPanelActionItem action)
     {
-        if (CurrentRoomState?.Puzzle is XorLogicPuzzle puzzle)
+        if (action.Command.StartsWith("page:", StringComparison.OrdinalIgnoreCase))
         {
-            puzzle.Toggle(index);
+            return action.Command.EndsWith("prev", StringComparison.OrdinalIgnoreCase) ? "◀" : "▶";
         }
+
+        return action.Command switch
+        {
+            "commit" => "⏎",
+            "reset" => "↺",
+            "hint" => "◔",
+            _ => "•",
+        };
     }
 
-    protected void SelectYarnStrand(int index)
+    protected string GetSoloPanelFailureClass(SoloPanelView view) =>
+        string.IsNullOrWhiteSpace(view.FailureCode) ? "neutral" : "fault";
+
+    protected string GetSoloPanelStageClass(SoloPanelView view) =>
+        string.IsNullOrWhiteSpace(view.StageVisualProfile) ? "stage-intro" : $"stage-{view.StageVisualProfile}";
+
+    protected string GetSoloPanelProgressLabel(SoloPanelView view) =>
+        string.IsNullOrWhiteSpace(view.ProgressLabel) ? "System Progress" : view.ProgressLabel;
+
+    protected int GetSoloPanelProgressPercent(SoloPanelView view) =>
+        Math.Clamp((int)Math.Round(view.ProgressValue * 100d), 0, 100);
+
+    protected string GetSoloPanelProgressTrendClass(SoloPanelView view) => view.ProgressTrend switch
     {
-        if (CurrentRoomState?.Puzzle is YarnUntanglePuzzle puzzle)
-        {
-            puzzle.Select(index);
-        }
-        else if (CurrentRoomState?.Puzzle is KnotTopologyPuzzle knot)
-        {
-            knot.Select(index);
-        }
+        "up" => "trend-up",
+        "down" => "trend-down",
+        _ => "trend-steady",
+    };
+
+    protected string GetSoloPanelProgressTrendLabel(SoloPanelView view) => view.ProgressTrend switch
+    {
+        "up" => "Improving",
+        "down" => "Degrading",
+        _ => "Stable",
+    };
+
+    protected bool IsSoloPanelChromaticLock(SoloPanelView view) =>
+        string.Equals(view.FamilyId, "chromatic_lock", StringComparison.OrdinalIgnoreCase);
+
+    protected bool IsSoloPanelSignalDecay(SoloPanelView view) =>
+        string.Equals(view.FamilyId, "signal_decay", StringComparison.OrdinalIgnoreCase);
+
+    protected bool IsSoloPanelSystemTemplate(SoloPanelView view) =>
+        view.FamilyId is "dead_reckoning" or "gravity_well" or "echo_chamber" or "fault_line";
+
+    protected bool IsSoloPanelDialTemplate(SoloPanelView view) =>
+        string.Equals(view.FamilyId, "cipher_wheel", StringComparison.OrdinalIgnoreCase);
+
+    protected bool IsSoloPanelGridTemplate(SoloPanelView view) =>
+        view.FamilyId is "pressure_grid" or "temporal_grid";
+
+    protected bool IsSoloPanelFlowTemplate(SoloPanelView view) =>
+        string.Equals(view.FamilyId, "token_flood", StringComparison.OrdinalIgnoreCase);
+
+    protected bool IsSoloPanelMemoryTemplate(SoloPanelView view) =>
+        string.Equals(view.FamilyId, "memory_palace", StringComparison.OrdinalIgnoreCase);
+
+    protected bool HasDedicatedSoloPanel(SoloPanelView view) =>
+        IsSoloPanelChromaticLock(view) ||
+        IsSoloPanelSignalDecay(view) ||
+        IsSoloPanelSystemTemplate(view) ||
+        IsSoloPanelDialTemplate(view) ||
+        IsSoloPanelGridTemplate(view) ||
+        IsSoloPanelFlowTemplate(view) ||
+        IsSoloPanelMemoryTemplate(view);
+
+    protected string GetSoloPanelSignalReadout(SoloPanelView view)
+    {
+        var coherence = GetSoloPanelBoardDouble(view, "signal_coherence", view.ProgressValue);
+        var percent = Math.Clamp((int)Math.Round(coherence * 100d), 0, 100);
+        var ready = string.Equals(GetSoloPanelBoardText(view, "signal_ready", "0"), "1", StringComparison.Ordinal);
+        return ready
+            ? $"System Coherence: {percent}% ready to commit."
+            : coherence >= 0.9d
+                ? $"System Coherence: {percent}% unstable."
+                : $"System Coherence: {percent}%";
     }
 
-    protected void ToggleDualPulseA()
+    protected string GetSoloPanelSignalWaveStyle(SoloPanelView view)
     {
-        if (CurrentRoomState?.Puzzle is DualPulseLockPuzzle puzzle)
-        {
-            puzzle.ToggleMeterA();
-        }
+        var noise = Math.Clamp(GetSoloPanelBoardDouble(view, "signal_wave_noise", 1d - view.ProgressValue), 0d, 1d);
+        var speed = Math.Clamp(1.2d - (view.ProgressValue * 0.7d), 0.45d, 1.2d);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"--signal-noise:{noise:0.000}; --signal-speed:{speed:0.000}s;");
     }
 
-    protected void ToggleDualPulseB()
+    protected string GetSoloPanelSignalAlignStyle(SoloPanelView view, string key)
     {
-        if (CurrentRoomState?.Puzzle is DualPulseLockPuzzle puzzle)
-        {
-            puzzle.ToggleMeterB();
-        }
+        var current = GetSoloPanelBoardInt(view, $"cur:{key}");
+        var target = GetSoloPanelBoardInt(view, $"tgt:{key}");
+        var max = Math.Max(1, GetSoloPanelBoardInt(view, $"max:{key}", 100));
+        var tolerance = Math.Max(1, GetSoloPanelBoardInt(view, $"tol:{key}", GetSoloPanelBoardInt(view, "signal_tolerance", 3)));
+        var span = max + 1d;
+        var currentPercent = Math.Clamp((current / span) * 100d, 0d, 100d);
+        var targetPercent = Math.Clamp((target / span) * 100d, 0d, 100d);
+        var tolerancePercent = Math.Clamp((tolerance / span) * 100d, 1d, 48d);
+        var windowPercent = Math.Clamp(tolerancePercent * 2d, 2d, 96d);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"--signal-current:{currentPercent:0.###}%; --signal-target:{targetPercent:0.###}%; --signal-window:{windowPercent:0.###}%;");
     }
 
-    protected void SelectSymbolLogicSymbol(string symbol)
+    protected string GetSoloPanelSignalAlignClass(SoloPanelView view, string key)
     {
-        if (CurrentRoomState?.Puzzle is SymbolLogicPuzzle puzzle)
+        var aligned = GetSoloPanelBoardInt(view, $"aligned:{key}", 0) == 1;
+        if (aligned)
         {
-            puzzle.SelectSymbol(symbol);
+            return "aligned";
         }
+
+        var distance = GetSoloPanelBoardInt(view, $"dist:{key}", int.MaxValue);
+        var tolerance = Math.Max(1, GetSoloPanelBoardInt(view, $"tol:{key}", GetSoloPanelBoardInt(view, "signal_tolerance", 3)));
+        return distance <= tolerance * 2 ? "near" : "off";
     }
 
-    protected void ClearSymbolLogicSelection()
+    protected string GetSoloPanelPipeActionClass(SoloPanelView view, SoloPanelActionItem action)
     {
-        if (CurrentRoomState?.Puzzle is SymbolLogicPuzzle puzzle)
+        var classes = new List<string> { "enigma-solo-pipe-tile" };
+        if (action.Active)
         {
-            puzzle.ClearSelection();
+            classes.Add("flowing");
         }
+
+        if (!action.Enabled)
+        {
+            classes.Add("disabled");
+        }
+
+        if (TryParsePipeCommand(action.Command, out var row, out var col))
+        {
+            var key = $"r{row}c{col}";
+            if (string.Equals(GetSoloPanelBoardText(view, "pipe_source", string.Empty), key, StringComparison.OrdinalIgnoreCase))
+            {
+                classes.Add("source");
+            }
+            else if (string.Equals(GetSoloPanelBoardText(view, "pipe_sink", string.Empty), key, StringComparison.OrdinalIgnoreCase))
+            {
+                classes.Add("sink");
+            }
+
+            if (GetSoloPanelBoardInt(view, $"flow:{key}", 0) == 1)
+            {
+                classes.Add("route-active");
+            }
+        }
+
+        return string.Join(" ", classes);
     }
 
-    protected void PressEchoDirection(PlayerDirection direction)
+    protected string GetSoloPanelPipeGlyph(SoloPanelView view, SoloPanelActionItem action)
     {
-        if (CurrentRoomState?.Puzzle is DirectionalEchoPuzzle puzzle)
+        if (!TryParsePipeCommand(action.Command, out var row, out var col))
         {
-            puzzle.Press(direction);
+            return ".";
         }
-        else if (CurrentRoomState?.Puzzle is DimensionalPatternShiftPuzzle dimensional)
+
+        var key = $"r{row}c{col}";
+        var mask = GetSoloPanelBoardInt(view, $"mask:{key}", 0);
+        var turns = GetSoloPanelBoardInt(view, $"cur:{key}", 0);
+        var rotated = RotatePipeMask(mask, turns);
+        return rotated switch
         {
-            dimensional.Press(direction);
-        }
+            0 => ".",
+            1 => "╹",
+            2 => "╺",
+            3 => "└",
+            4 => "╻",
+            5 => "│",
+            6 => "┌",
+            7 => "├",
+            8 => "╸",
+            9 => "┘",
+            10 => "─",
+            11 => "┴",
+            12 => "┐",
+            13 => "┤",
+            14 => "┬",
+            _ => "┼",
+        };
     }
 
-    protected void RotateBinaryLeft()
+    protected void BeginSoloDialDrag(PointerEventArgs args, string dialKey)
     {
-        if (CurrentRoomState?.Puzzle is BinaryShiftPuzzle puzzle)
-        {
-            puzzle.RotateLeft();
-        }
-        else if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle transformation)
-        {
-            transformation.RotateLeft();
-        }
+        _dragDialKey = dialKey;
+        _dragDialLastClientX = args.ClientX;
     }
 
-    protected void RotateBinaryRight()
+    protected void HandleSoloDialDragMove(PointerEventArgs args)
     {
-        if (CurrentRoomState?.Puzzle is BinaryShiftPuzzle puzzle)
+        if (string.IsNullOrWhiteSpace(_dragDialKey) || _lastSoloPanelView is null)
         {
-            puzzle.RotateRight();
+            return;
         }
-        else if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle transformation)
+
+        var delta = args.ClientX - _dragDialLastClientX;
+        if (Math.Abs(delta) < DialDragStepPixels)
         {
-            transformation.RotateRight();
+            return;
         }
+
+        var direction = delta > 0 ? "up" : "down";
+        var stepCount = Math.Max(1, (int)Math.Floor(Math.Abs(delta) / DialDragStepPixels));
+        if (!TryGetSoloPanelDialAction(_lastSoloPanelView, _dragDialKey, direction, out var action) || !action.Enabled)
+        {
+            _dragDialLastClientX = args.ClientX;
+            return;
+        }
+
+        for (var step = 0; step < stepCount; step++)
+        {
+            ApplySoloPanelAction(action.Command);
+        }
+
+        _dragDialLastClientX = args.ClientX;
     }
 
-    protected void FlipBinaryCenter()
+    protected void EndSoloDialDrag(PointerEventArgs _)
     {
-        if (CurrentRoomState?.Puzzle is BinaryShiftPuzzle puzzle)
-        {
-            puzzle.FlipCenter();
-        }
+        _dragDialKey = null;
     }
 
-    protected void SelectCrossingLeft(int index)
+    private static int RotatePipeMask(int mask, int turnsClockwise)
     {
-        if (CurrentRoomState?.Puzzle is CrossingPathPuzzle puzzle)
+        var turns = ((turnsClockwise % 4) + 4) % 4;
+        var rotated = mask;
+        for (var turn = 0; turn < turns; turn++)
         {
-            puzzle.SelectLeft(index);
+            var next = 0;
+            if ((rotated & 1) != 0) next |= 2;
+            if ((rotated & 2) != 0) next |= 4;
+            if ((rotated & 4) != 0) next |= 8;
+            if ((rotated & 8) != 0) next |= 1;
+            rotated = next;
         }
+
+        return rotated;
     }
 
-    protected void ConnectCrossingRight(int index)
+    private static bool TryParseDialCommand(string command, out string key, out string direction)
     {
-        if (CurrentRoomState?.Puzzle is CrossingPathPuzzle puzzle)
+        key = string.Empty;
+        direction = string.Empty;
+        if (!command.StartsWith("dial:", StringComparison.OrdinalIgnoreCase))
         {
-            puzzle.ConnectRight(index);
+            return false;
         }
+
+        var parts = command.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 3)
+        {
+            return false;
+        }
+
+        key = parts[1];
+        direction = parts[2];
+        return true;
     }
 
-    protected void ToggleTemporalRing(int index)
+    private static bool TryParseCellCommand(string command, out string key)
     {
-        if (CurrentRoomState?.Puzzle is TemporalLockPuzzle puzzle)
+        key = string.Empty;
+        if (!command.StartsWith("cell:", StringComparison.OrdinalIgnoreCase))
         {
-            puzzle.ToggleRing(index);
+            return false;
         }
+
+        key = command[5..];
+        return !string.IsNullOrWhiteSpace(key);
     }
 
-    protected void PullParadoxLever(int index)
+    private static bool TryParsePipeCommand(string command, out int row, out int col)
     {
-        if (CurrentRoomState?.Puzzle is LogicalParadoxPuzzle puzzle)
+        row = -1;
+        col = -1;
+        if (!command.StartsWith("pipe:r", StringComparison.OrdinalIgnoreCase))
         {
-            puzzle.PullLever(index);
+            return false;
         }
+
+        var payload = command[6..];
+        var splitIndex = payload.IndexOf('c');
+        if (splitIndex <= 0 || splitIndex >= payload.Length - 1)
+        {
+            return false;
+        }
+
+        return int.TryParse(payload.AsSpan(0, splitIndex), NumberStyles.Integer, CultureInfo.InvariantCulture, out row) &&
+               int.TryParse(payload.AsSpan(splitIndex + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out col);
     }
 
-    protected void PressInterferenceRune(string rune)
+    private static bool TryParseCardCommand(string command, out int index)
     {
-        if (CurrentRoomState?.Puzzle is MemoryInterferencePuzzle puzzle)
-        {
-            puzzle.Press(rune);
-        }
+        index = -1;
+        return command.StartsWith("card:", StringComparison.OrdinalIgnoreCase) &&
+               int.TryParse(command[5..], NumberStyles.Integer, CultureInfo.InvariantCulture, out index);
     }
 
-    protected void RotateCipherRow(int row)
+    private static int ExtractNumericSuffix(string value)
     {
-        if (CurrentRoomState?.Puzzle is RotationalCipherGridPuzzle puzzle)
+        var digits = new StringBuilder();
+        foreach (var character in value)
         {
-            puzzle.RotateRow(row);
+            if (char.IsDigit(character))
+            {
+                digits.Append(character);
+            }
         }
-    }
 
-    protected void RotateCipherColumn(int column)
-    {
-        if (CurrentRoomState?.Puzzle is RotationalCipherGridPuzzle puzzle)
-        {
-            puzzle.RotateColumn(column);
-        }
-    }
-
-    protected void InvertBinaryAll()
-    {
-        if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle puzzle)
-        {
-            puzzle.InvertAll();
-        }
-    }
-
-    protected void FlipBinaryAlternate()
-    {
-        if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle puzzle)
-        {
-            puzzle.FlipAlternate();
-        }
-    }
-
-    protected void ApplyBinaryXorMask()
-    {
-        if (CurrentRoomState?.Puzzle is BinaryTransformationPuzzle puzzle)
-        {
-            puzzle.ApplyXorMask();
-        }
+        return digits.Length == 0 || !int.TryParse(digits.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? int.MaxValue
+            : parsed;
     }
 
     public async ValueTask DisposeAsync()
@@ -1827,15 +2144,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 PlayerFacing = PlayerFacing,
             });
 
-            if (_jsReady && CurrentRoomState.Puzzle is HarmonicPhasePuzzle harmonicPhase)
-            {
-                var tone = harmonicPhase.ConsumePendingTone();
-                if (tone.HasValue)
-                {
-                    await JS.InvokeVoidAsync("enigmaGame.playTone", tone.Value);
-                }
-            }
-
             if (CurrentRoomState.Puzzle.IsCompleted)
             {
                 var reward = CurrentRoomState.GrantPuzzleReward();
@@ -1858,11 +2166,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
             else
             {
                 _roomInteractionWasActive = false;
-            }
-
-            if (_jsReady && UsesRoomNativePuzzleInteraction && !wasCurrentPuzzleCompleted && CurrentRoomState.Puzzle.IsCompleted)
-            {
-                await JS.InvokeVoidAsync("enigmaGame.playDing", "success");
             }
         }
         else if (CurrentCoopPuzzle?.Completed == true && !IsCurrentCoopRoomSolved)
@@ -1889,7 +2192,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
             }
             else
             {
-                var bonus = CurrentRoomState.CollectRewardPickup();
+                var bonusMultiplier = CurrentRoomState.Puzzle is ISoloPanelPuzzle panelPuzzle &&
+                                      ParsedSeed?.Difficulty is MazeDifficulty.Medium or MazeDifficulty.Hard
+                    ? panelPuzzle.RewardPickupMultiplier
+                    : 1d;
+                var bonus = CurrentRoomState.CollectRewardPickup(bonusMultiplier);
                 if (bonus > 0)
                 {
                     TotalGold += bonus;
@@ -2025,21 +2332,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
         PlayerX += deltaX * PlayerSpeed * deltaTime;
         PlayerY += deltaY * PlayerSpeed * deltaTime;
 
-        if (!IsCoopRun && CurrentRoomState?.Puzzle is IBlockPushPuzzle blockPushPuzzle)
-        {
-            var playerRect = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
-            if (blockPushPuzzle.BlocksPlayer(playerRect))
-            {
-                _ = blockPushPuzzle.TryPush(PlayerFacing, playerRect);
-                playerRect = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
-                if (blockPushPuzzle.BlocksPlayer(playerRect))
-                {
-                    PlayerX = previousX;
-                    PlayerY = previousY;
-                }
-            }
-        }
-
         if (CanInteractWithPuzzleConsole &&
             IntersectsAnyPuzzleConsoleBase(GetPuzzleConsoleCollisionBounds(new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize))))
         {
@@ -2122,6 +2414,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
         CurrentRoom = nextRoom;
         CurrentRoomState = _roomStates[nextRoom.Coordinates];
+        EnsureCurrentSoloPanelTierAssigned();
         _roomInteractionWasActive = false;
         _nearestWorldInteractableId = null;
         ClosePuzzleOverlay();
@@ -2145,6 +2438,23 @@ public partial class Game : ComponentBase, IAsyncDisposable
         ShowBanner($"Entered room {CurrentRoom.Coordinates}", 0.8d);
         _ = ReportTutorialRoomTransitionAsync(CurrentRoom.Coordinates);
         return true;
+    }
+
+    private void EnsureCurrentSoloPanelTierAssigned()
+    {
+        if (IsCoopRun || CurrentRoomState?.Puzzle is not ISoloPanelPuzzle panelPuzzle || panelPuzzle.TierInitialized)
+        {
+            return;
+        }
+
+        var solvedRooms = _roomStates.Values.Count(state => state.Puzzle.IsCompleted);
+        if (CurrentRoomState.Puzzle.IsCompleted)
+        {
+            solvedRooms = Math.Max(0, solvedRooms - 1);
+        }
+
+        var totalPuzzleRooms = Math.Max(1, _roomStates.Count);
+        panelPuzzle.EnsureTierLevel(solvedRooms, totalPuzzleRooms);
     }
 
     private async Task ReportTutorialRoomTransitionAsync(GridPoint currentRoomCoordinates)
@@ -2366,53 +2676,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
                 worldProgress.Label);
             return true;
         }
-
-        switch (CurrentRoomState.Puzzle)
-        {
-            case PressurePlatePuzzle pressurePlate when pressurePlate.Progress > 0d:
-                if (pressurePlate.Progress >= 0.999d)
-                {
-                    return false;
-                }
-
-                progressState = new(pressurePlate.PlateBounds, pressurePlate.Progress, "Plate Charge");
-                return true;
-            case ZoneActivationPuzzle zoneActivation when zoneActivation.CurrentZoneIndex < zoneActivation.Zones.Count && zoneActivation.HoldProgress > 0d:
-                if (zoneActivation.HoldProgress >= 0.999d)
-                {
-                    return false;
-                }
-
-                progressState = new(
-                    zoneActivation.Zones[zoneActivation.CurrentZoneIndex],
-                    zoneActivation.HoldProgress,
-                    $"Beacon {zoneActivation.CurrentZoneIndex + 1}/{zoneActivation.Zones.Count}");
-                return true;
-            case DelayedActivationSequencePuzzle delayed when !delayed.IsWaitingForNextZone && delayed.HoldProgress > 0d:
-                if (delayed.HoldProgress >= 0.999d)
-                {
-                    return false;
-                }
-
-                progressState = new(
-                    delayed.Zones[delayed.ActiveZoneIndex],
-                    delayed.HoldProgress,
-                    $"Zone {delayed.CurrentStepIndex + 1}/{delayed.Order.Count}");
-                return true;
-            case RecursiveActivationSequencePuzzle recursive when recursive.CurrentZoneIndex >= 0 && recursive.HoldProgress > 0d:
-                if (recursive.HoldProgress >= 0.999d)
-                {
-                    return false;
-                }
-
-                progressState = new(
-                    recursive.Zones[recursive.CurrentZoneIndex],
-                    recursive.HoldProgress,
-                    $"Zone {recursive.CompletedOrder.Count + 1}");
-                return true;
-            default:
-                return false;
-        }
+        return false;
     }
 
     private bool TryIsRoomInteractionActive()
@@ -2431,19 +2695,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
             return worldPuzzle.TryGetProgressState(out var worldProgress) && worldProgress.Progress > 0.001d;
         }
-
-        var playerBounds = new PlayAreaRect(PlayerX, PlayerY, PlayerSize, PlayerSize);
-        return CurrentRoomState.Puzzle switch
-        {
-            PressurePlatePuzzle pressurePlate => pressurePlate.PlateBounds.Intersects(playerBounds),
-            ZoneActivationPuzzle zoneActivation when zoneActivation.CurrentZoneIndex < zoneActivation.Zones.Count =>
-                zoneActivation.Zones[zoneActivation.CurrentZoneIndex].Intersects(playerBounds),
-            DelayedActivationSequencePuzzle delayed when !delayed.IsWaitingForNextZone =>
-                delayed.Zones[delayed.ActiveZoneIndex].Intersects(playerBounds),
-            RecursiveActivationSequencePuzzle recursive when recursive.CurrentZoneIndex >= 0 =>
-                recursive.Zones[recursive.CurrentZoneIndex].Intersects(playerBounds),
-            _ => false,
-        };
+        return false;
     }
 
     private IEnumerable<ActivePuzzleConsole> GetActivePuzzleConsoles()
@@ -2655,242 +2907,25 @@ protected static string GetBinaryString(IEnumerable<bool> bits) => string.Concat
         _ => "\u2022",
     };
 
-protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ringIndex)
+    private PuzzleGuide GetCurrentPuzzleGuide()
     {
-        var rotation = -(puzzle.Positions[ringIndex] * 45d);
-        return $"transform: translate(-50%, -50%) rotate({Math.Round(rotation, 2)}deg);";
-    }
-
-    protected static string GetTemporalSigilStyle(int ringIndex, int symbolIndex, int symbolCount)
-    {
-        var radius = ringIndex switch
+        if (CurrentRoomState?.Puzzle is ISoloPanelPuzzle soloPanelPuzzle)
         {
-            0 => 118d,
-            1 => 84d,
-            _ => 52d,
-        };
+            var view = GetSoloPanelView(soloPanelPuzzle);
+            if (view is not null)
+            {
+                return new PuzzleGuide(
+                    Goal: CurrentRoomState.Puzzle.Instruction,
+                    Controls: "Use the console controls to tune, align, route, or stabilize the panel state until the room unlocks.",
+                    Success: $"{view.FamilyId.Replace('_', ' ')} reaches a solved state and the room doors unlock.");
+            }
+        }
 
-        var angle = ((Math.PI * 2d) / symbolCount) * symbolIndex - (Math.PI / 2d);
-        var x = Math.Cos(angle) * radius;
-        var y = Math.Sin(angle) * radius;
-        return $"left: calc(50% + {Math.Round(x, 2)}px); top: calc(50% + {Math.Round(y, 2)}px);";
+        return new PuzzleGuide(
+            Goal: "Solve the current room puzzle.",
+            Controls: "Use the controls shown in the panel and watch the status line for live feedback.",
+            Success: "The room reports solved and the doors unlock.");
     }
-
-    protected string GetConnectionLineStyle(PlayAreaPoint start, PlayAreaPoint end)
-    {
-        var scaledStartX = (Math.Clamp(start.X, 0d, RoomSize) / RoomSize) * RenderWidth;
-        var scaledEndX = (Math.Clamp(end.X, 0d, RoomSize) / RoomSize) * RenderWidth;
-        var deltaX = scaledEndX - scaledStartX;
-        var deltaY = end.Y - start.Y;
-        var length = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
-        var angle = Math.Atan2(deltaY, deltaX) * (180d / Math.PI);
-        var midpoint = new PlayAreaRect(
-            (start.X + end.X) / 2d,
-            (start.Y + end.Y) / 2d,
-            1d,
-            1d);
-        return AppendRadarSignalStyle(
-            $"left: {Math.Round((scaledStartX / RenderWidth) * 100d, 4)}%; top: {ToPercentY(start.Y)}%; width: {ToLengthPercentX(length)}%; transform: rotate({Math.Round(angle, 2)}deg);",
-            midpoint);
-    }
-
-    protected static string GetModifierLabel(RecursiveZoneModifier modifier) => modifier switch
-    {
-        RecursiveZoneModifier.ReverseRemaining => "Reverse",
-        RecursiveZoneModifier.RotateRemaining => "Rotate",
-        RecursiveZoneModifier.SwapExtremes => "Swap Ends",
-        RecursiveZoneModifier.ExtendNextHold => "Long Hold",
-        _ => "Shift",
-    };
-
-    private PuzzleGuide GetCurrentPuzzleGuide() => CurrentRoomState?.Puzzle switch
-    {
-        SignalRoutingChamberPuzzle => new(
-            "Route power through stable relays.",
-            "Use E or click on relay nodes. Overload relays vent and briefly lock input.",
-            "Only the correct stable relay set remains active."),
-        EchoMemoryChamberPuzzle => new(
-            "Rebuild the echo sequence.",
-            "Watch the pad reveal, then repeat the pad order by stepping or interacting in sequence.",
-            "The full sequence is repeated without errors."),
-        DualLayerRealityPuzzle => new(
-            "Synchronize both room layers.",
-            "Use the layer toggle, then activate the correct node in each layer pair.",
-            "Every alpha/beta pair is matched."),
-        BehaviorAdaptivePuzzle => new(
-            "Break your habitual route.",
-            "The chamber adapts to your tendencies. Choose deliberately instead of repeating instincts.",
-            "All behavior phases are cleared."),
-        RecursiveRoomMutationPuzzle => new(
-            "Identify the meaningful mutation each loop.",
-            "Interact with the single meaningful anchor each loop. Wrong picks roll one loop back.",
-            "All loops resolve."),
-        LivingGridPuzzle => new(
-            "Stabilize the living grid.",
-            "Stepping or interacting with a tile flips nearby states. Plan ahead and align the board.",
-            "Current grid matches target state."),
-        SymbolDecoderPuzzle => new(
-            "Decode with fixed symbol semantics.",
-            "A, B, C, and D always apply the same operations every run.",
-            "Decoder value matches target."),
-        TimeWindowPuzzle => new(
-            "Capture the cycle windows.",
-            "Interact only when the expected gate is open in the active cycle.",
-            "All cycle locks complete."),
-        FalseSolutionPuzzle => new(
-            "Ignore deceptive progress.",
-            "Decoy terminals can look correct briefly. Confirm the true route chain.",
-            "True route is fully confirmed."),
-        HeatPressureBalancePuzzle => new(
-            "Hold both systems in equilibrium.",
-            "Use heat/pressure controls and account for delayed effects to keep both systems centered.",
-            "Equilibrium stays stable long enough to lock."),
-        HiddenRulePrimePuzzle => new(
-            "Infer the hidden acceptance rule.",
-            "Test tiles and observe accepted order. There is no explicit rule text.",
-            "The full hidden order is entered."),
-        PressurePlatePuzzle => new(
-            "Charge the plate until it fully locks.",
-            "Stand on the glowing plate inside the room. Leaving early drains its progress.",
-            "The plate reaches full charge and the progress bar fills completely."),
-        PhaseRelayPuzzle => new(
-            "Trigger the phase nodes in the hidden order.",
-            "Watch the active node while it is visible, then walk to the nodes in that same sequence.",
-            "Every node is stepped on in the correct order without touching a wrong one."),
-        HarmonicPhasePuzzle => new(
-            "Make every plate resonate at the same value.",
-            "Stepping on a plate adds +2 to that plate and +1 to each adjacent plate.",
-            "All displayed plate values are equal at the same time."),
-        QuickTimePuzzle quickTime => new(
-            "Stop the moving pulse inside the bright target window.",
-            "Press Stop Pulse when the white marker overlaps the green band. Higher difficulties require a clean streak.",
-            $"Land {quickTime.RequiredHits} clean hit{(quickTime.RequiredHits == 1 ? string.Empty : "s")} in a row."),
-        DualPulseLockPuzzle => new(
-            "Freeze both pulses inside their target windows at the same time.",
-            "Use Pulse A and Pulse B to lock or release each track separately until both markers sit inside their green windows together.",
-            "Both tracks are locked while each marker is inside its own target window."),
-        TemporalLockPuzzle => new(
-            "Freeze the three rings in a constellation that satisfies every clue.",
-            "Let the rings spin, then lock or release each ring individually while reading the clue list as symbol relationships.",
-            "All clue statements are true for the symbols currently shown on the outer, middle, and inner rings."),
-        RiddlePuzzle => new(
-            "Choose the only answer that fits the riddle.",
-            "Read the question carefully and select one answer from the option list.",
-            "The selected answer is the correct solution to the riddle."),
-        SymbolLogicPuzzle => new(
-            "Build the only symbol order that satisfies every logic rule.",
-            "Read every statement, then place symbols left-to-right in the order strip. Clear Order resets the attempt.",
-            "The final left-to-right order keeps every listed statement true."),
-        LogicalParadoxPuzzle => new(
-            "Pick the lever that matches the only consistent interpretation of the statue statements.",
-            "Treat the statements as one logic set. Compare them before choosing a single lever.",
-            "The chosen lever is the only one that does not create a contradiction."),
-        SequenceMemoryPuzzle => new(
-            "Repeat the rune sequence exactly from memory.",
-            "Watch the runes first, then press the runes back in the same order after they disappear.",
-            "Every rune is entered in the original sequence with no mistakes."),
-        FadingPathMemoryPuzzle => new(
-            "Walk the exact floor path after it fades.",
-            "Watch the glowing cells on the room floor, then move your character along the same route from memory.",
-            "You trace the full path without stepping off the correct route."),
-        MemoryInterferencePuzzle => new(
-            "Recover the true sequence and ignore the interference.",
-            "Watch the original pattern, ignore the fake overlay, then enter the real answer once the display ends.",
-            "The full correct sequence is entered from start to finish without an error."),
-        TileRotationPuzzle => new(
-            "Rotate every tile so all arrows point north.",
-            "Click a tile to rotate its arrow by 90 degrees clockwise.",
-            "Every tile arrow points up at the same time."),
-        SignalRotationNetworkPuzzle => new(
-            "Create one continuous live circuit from the start node to the end node.",
-            "Rotate tiles until the pipe glyphs connect the upper-left start to the lower-right end.",
-            "There is a single continuous path linking start and end through connected tiles."),
-        RotationalCipherGridPuzzle => new(
-            "Transform the grid until the center row reveals the clue answer.",
-            "Use the row and column buttons to rotate letters around the board while watching the middle row.",
-            "The center row spells the word implied by the clue."),
-        UnlockPatternPuzzle => new(
-            "Replay the hidden arrow pattern exactly.",
-            "Wait until the preview disappears, then use the keyboard arrow keys or the on-screen arrow buttons to enter the same sequence.",
-            "Every direction matches the original pattern in the same order."),
-        DirectionalEchoPuzzle => new(
-            "Enter the transformed version of the shown direction pattern.",
-            "Watch the preview, then enter the answer using the transformation rule instead of copying it directly.",
-            "The full entered sequence matches the transformed target pattern."),
-        DimensionalPatternShiftPuzzle => new(
-            "Translate the shown pattern using the puzzle's transformation rule.",
-            "Use the arrow controls to enter the transformed path, not the raw preview.",
-            "The entered pattern matches the required dimensional transform exactly."),
-        ValveFlowPuzzle => new(
-            "Open the exact set of valves that produces the target flow.",
-            "Each valve adds its displayed amount to the live flow. You must hit the total using the required number of open valves.",
-            "Current Flow equals Target Flow and the exact required count of valves is open."),
-        FlowRedistributionPuzzle => new(
-            "Equalize all outputs to the same pressure.",
-            "Each valve button shows the change it applies to every output. Pulse valves until every output matches the shared target.",
-            "All output values are identical and equal to the displayed target flow."),
-        ConservationNetworkPuzzle => new(
-            "Reach the exact target distribution without changing the total flow.",
-            "Each valve moves pressure between outputs. Use the displayed valve deltas to turn the current distribution into the target one.",
-            "Every current output value matches the corresponding target value exactly."),
-        WeightBalancePuzzle => new(
-            "Select the exact combination of weights that hits the target load.",
-            "Toggle weights on or off. Both the total weight and the required number of selected weights must match.",
-            "Current Load equals Target Load and the selected count matches the exact requirement."),
-        WeightedTriggerZonesPuzzle => new(
-            "Push the weight blocks until the weighted pad total matches the target.",
-            "Move blocks around the room onto multiplier pads. Each pad changes a block's contribution.",
-            "The displayed weighted total equals the target."),
-        WeightedEquilibriumPuzzle => new(
-            "Balance the full pad equation at zero.",
-            "Move blocks onto positive and negative multiplier pads. Zero only counts if enough pads are occupied.",
-            "Equation total is exactly 0 and the occupied-pad count meets the minimum."),
-        XorLogicPuzzle => new(
-            "Match the circuit's target parity and exact live-bit count.",
-            "Toggle bits on and off. Every active bit flips the parity, so both the parity and number of lit bits matter.",
-            "Live Parity matches Target Parity and the live-bit count matches the target count."),
-        BinaryShiftPuzzle => new(
-            "Transform the current bit string into the target bit string.",
-            "Use Rotate Left, Rotate Right, and Flip Center to change the current pattern.",
-            "The current bit string matches the target bit string exactly."),
-        BinaryTransformationPuzzle binaryTransformation => new(
-            "Chain the machine operations until the current state matches the target.",
-            "Use the listed binary operations in a deliberate order. The hint points toward a useful sequence and the move limit is strict.",
-            $"Current bits match target bits before exceeding {binaryTransformation.MoveLimit} moves."),
-        YarnUntanglePuzzle => new(
-            "Untangle the strands so no lines cross.",
-            "The left anchors stay fixed. Click right-side endpoints to swap them until every strand runs cleanly.",
-            "Crossings drop to zero."),
-        CrossingPathPuzzle => new(
-            "Match each word tile to its correct descriptor tile.",
-            "Step on a word tile in the room to carry it, then walk to the descriptor tile that matches it.",
-            "Every word has been matched to its correct descriptor."),
-        KnotTopologyPuzzle => new(
-            "Remove every real crossing and leave only fake illusion crossings.",
-            "Swap strand endpoints until the solid crossings disappear. Dotted illusion crossings do not count.",
-            "Real crossings reach zero."),
-        ZoneActivationPuzzle => new(
-            "Charge the active beacon one zone at a time.",
-            "Walk into the highlighted zone in the room and stay there until it locks.",
-            "Each zone locks in order until the full sequence is complete."),
-        DelayedActivationSequencePuzzle => new(
-            "Lock each zone in order while respecting the wake delay.",
-            "Hold the live zone until it locks, then stay planted on the locked zone until the next zone activates.",
-            "Every zone locks in order without leaving the sequence."),
-        RecursiveActivationSequencePuzzle => new(
-            "Adapt to the changing zone order and modifiers until the full sequence is complete.",
-            "Charge the current zone, then read the modifier list because each completed zone can change the order or next hold time.",
-            "All recursive zone steps complete in the resulting final order."),
-        _ => new(
-            "Solve the current room puzzle.",
-            "Use the controls shown in the panel and watch the status line for live feedback.",
-            "The room reports solved and the doors unlock.")
-    };
-
-    protected static string FormatSignedDelta(int value) => value > 0 ? $"+{value}" : value.ToString();
-
-    protected static string FormatAdjustmentSummary(IEnumerable<int> adjustments) =>
-        string.Join(" / ", adjustments.Select(FormatSignedDelta));
 
     private async Task LoadBehaviorProfilesAsync()
     {
@@ -2995,14 +3030,6 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
 
     private void ApplyBehaviorProfileToEasyPuzzles()
     {
-        var (horizontalBias, rushBias) = GetBehaviorBias();
-        foreach (var roomState in _roomStates.Values)
-        {
-            if (roomState.Puzzle is IBehaviorAdaptiveWorldPuzzle adaptivePuzzle)
-            {
-                adaptivePuzzle.ApplyBehaviorProfile(horizontalBias, rushBias);
-            }
-        }
     }
 
     private (double HorizontalBias, double RushBias) GetBehaviorBias()
@@ -3503,46 +3530,22 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
             return "No puzzle is currently active.";
         }
 
-        return CurrentRoomState.Puzzle switch
+        if (CurrentRoomState.Puzzle is ISoloPanelPuzzle soloPanelPuzzle)
         {
-            SignalRoutingChamberPuzzle routing =>
-                $"Set relays to the exact stable configuration. Current match {Math.Round((routing.TryGetProgressState(out var progress) ? progress.Progress : 0d) * 100d)}%.",
-            EchoMemoryChamberPuzzle =>
-                "Wait for the echo to finish, then reproduce the pad order without repeating the wrong pad.",
-            DualLayerRealityPuzzle =>
-                "Toggle layers and match the linked node in each pair before moving to the next pair.",
-            BehaviorAdaptivePuzzle =>
-                "Break your instinct. If you always choose the same side first, choose differently.",
-            RecursiveRoomMutationPuzzle =>
-                "Across each loop, choose only the meaningful change. Wrong picks roll back one loop.",
-            LivingGridPuzzle =>
-                "Each activation toggles neighbors. Think several moves ahead and match the grid state.",
-            SymbolDecoderPuzzle =>
-                $"Symbol language is fixed: A={SymbolDecoderPuzzle.DescribeSymbol("A")}, B={SymbolDecoderPuzzle.DescribeSymbol("B")}, C={SymbolDecoderPuzzle.DescribeSymbol("C")}, D={SymbolDecoderPuzzle.DescribeSymbol("D")}.",
-            TimeWindowPuzzle =>
-                "Act only while the correct gate is open. Wrong timing drops your progress.",
-            FalseSolutionPuzzle =>
-                "Some routes pretend to progress. Confirm the quiet route twice to finish.",
-            HeatPressureBalancePuzzle heatPressure =>
-                $"{heatPressure.BuildTelemetry()} - keep both in the center band long enough to lock equilibrium.",
-            HiddenRulePrimePuzzle =>
-                "The rule is never stated. Test tiles, watch what the room accepts, and infer the sequence.",
-            QuickTimePuzzle quickTime =>
-                $"Stop the pulse inside the bright window. Clean hits: {quickTime.SuccessfulHits}/{quickTime.RequiredHits}.",
-            SequenceMemoryPuzzle sequenceMemory =>
-                sequenceMemory.IsSequenceVisible
-                    ? "Memorize now. Input starts after the rune sequence disappears."
-                    : $"Enter the rune order from memory. Progress {sequenceMemory.Entered.Count}/{sequenceMemory.Sequence.Count}.",
-            UnlockPatternPuzzle unlockPattern =>
-                unlockPattern.IsPatternVisible
-                    ? "Wait for the preview to vanish, then replay the pattern."
-                    : $"Replay the pattern exactly. Progress {unlockPattern.Entered.Count}/{unlockPattern.Pattern.Count}.",
-            YarnUntanglePuzzle untangle =>
-                $"Swap right endpoints until crossings are zero. Current crossings: {untangle.CrossingCount}.",
-            _ => GetCurrentPuzzleGuide().Controls,
-        };
-    }
+            var view = GetSoloPanelView(soloPanelPuzzle);
+            if (view is not null)
+            {
+                if (view.Board.TryGetValue("hint", out var directHint) && !string.IsNullOrWhiteSpace(directHint))
+                {
+                    return directHint;
+                }
 
+                return $"{GetCurrentPuzzleGuide().Controls} Status: {view.StatusText}";
+            }
+        }
+
+        return GetCurrentPuzzleGuide().Controls;
+    }
     private (List<PlayerDirection>? Path, string TargetLabel) FindNearestObjectiveRoute()
     {
         if (ParsedSeed is null || CurrentRoom is null)
@@ -3934,4 +3937,5 @@ protected static string GetTemporalRingStyle(TemporalLockPuzzle puzzle, int ring
 
     protected sealed record WallSegment(string CssClass, string Style, PlayAreaRect Bounds);
 }
+
 

@@ -1,31 +1,120 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException
 
-from .multiplayer_puzzles import CO_OP_PUZZLE_CATALOG
+from .multiplayer_puzzles import CO_OP_PUZZLE_CATALOG as CO_OP_PUZZLE_CATALOG_V2
 
-ROOM_SIZE = 1080.0
+PHASE_OBSERVE = "observe"
+PHASE_CONFIGURE = "configure"
+PHASE_COMMIT = "commit"
+PHASE_RESOLVE = "resolve"
+
+STATUS_NOT_STARTED = "not_started"
+STATUS_ACTIVE = "active"
+STATUS_FAILED_TEMPORARY = "failed_temporary"
+STATUS_COOLDOWN = "cooldown"
+STATUS_SOLVED = "solved"
+
+MAX_PREFLIGHT_ATTEMPTS = 6
+DEFAULT_COOLDOWN = 0.8
+
+FAMILY_BY_KEY = {
+    "p": "split_signal",
+    "q": "pressure_exchange",
+    "r": "bridge_builder",
+    "s": "mirror_minds",
+    "t": "flood_control",
+    "u": "cipher_relay",
+    "v": "gravity_tandem",
+    "w": "tidal_lock",
+    "x": "strata_shift",
+    "y": "echo_sync",
+    "z": "temporal_weave",
+}
+
+STAGE_VISUAL_PROFILES = {
+    1: "intro",
+    2: "expand",
+    3: "constraint",
+    4: "master",
+}
+
+PROGRESS_LABELS = {
+    "p": "Coherence / Synchronization",
+    "w": "Route Integrity / Pressure Stability",
+    "x": "Reconstruction Completeness / Archive Restoration",
+}
+
+FAILURE_LANGUAGES = {
+    "p": {
+        "phase_drift": {
+            "failure_code": "phase_drift",
+            "failure_label": "Phase Drift",
+            "visual_cue": "Waveform shear detected.",
+            "recovery_text": "Recenter channels and stabilize overlap.",
+        },
+        "stability_loss": {
+            "failure_code": "stability_loss",
+            "failure_label": "Stability Loss",
+            "visual_cue": "Dampers flashing fault.",
+            "recovery_text": "Recover stability and lock together.",
+        },
+        "sync_collapse": {
+            "failure_code": "sync_collapse",
+            "failure_label": "Sync Collapse",
+            "visual_cue": "Lock ring breakup detected.",
+            "recovery_text": "Reset alignment and rebuild sync.",
+        },
+    },
+    "w": {
+        "containment_leak": {
+            "failure_code": "containment_leak",
+            "failure_label": "Containment Leak",
+            "visual_cue": "Energy bleed detected.",
+            "recovery_text": "Seal the leak window and recapture.",
+        },
+        "pressure_breach": {
+            "failure_code": "pressure_breach",
+            "failure_label": "Pressure Breach",
+            "visual_cue": "Overpressure pulse triggered.",
+            "recovery_text": "Stabilize timing pressure before next catch.",
+        },
+        "routing_fault": {
+            "failure_code": "routing_fault",
+            "failure_label": "Routing Fault",
+            "visual_cue": "Synchronization route collapsed.",
+            "recovery_text": "Re-time both catches and relock.",
+        },
+    },
+    "x": {
+        "archive_conflict": {
+            "failure_code": "archive_conflict",
+            "failure_label": "Archive Conflict",
+            "visual_cue": "Layer mismatch conflict.",
+            "recovery_text": "Re-align alternating strata layers.",
+        },
+        "sequence_corruption": {
+            "failure_code": "sequence_corruption",
+            "failure_label": "Sequence Corruption",
+            "visual_cue": "Temporal ordering distortion.",
+            "recovery_text": "Rebuild order using stable layer anchors.",
+        },
+        "reconstruction_fault": {
+            "failure_code": "reconstruction_fault",
+            "failure_label": "Reconstruction Fault",
+            "visual_cue": "Rollback marker triggered.",
+            "recovery_text": "Reset reconstruction pass and retry.",
+        },
+    },
+}
 
 
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _utc_now_iso() -> str:
-    return _utc_now().isoformat()
-
-
-def _parse_iso(value: str | None) -> datetime:
-    if not value:
-        return _utc_now()
-
-    try:
-        return datetime.fromisoformat(value)
-    except ValueError:
-        return _utc_now()
+def _utc_seconds() -> float:
+    return datetime.now(timezone.utc).timestamp()
 
 
 def _stable_hash(value: str) -> int:
@@ -41,1182 +130,1144 @@ def _roll(seed: str, minimum: int, maximum: int) -> int:
     return minimum + (_stable_hash(seed) % span)
 
 
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
+
 def _room_key(session: dict[str, Any]) -> str:
     room = session.get("current_room", {})
     return f"{room.get('x')},{room.get('y')}"
 
 
 def _current_room_state(session: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    room_key = _room_key(session)
-    room = session.get("room_lookup", {}).get(room_key)
+    key = _room_key(session)
+    room = session.get("room_lookup", {}).get(key)
     if not room:
         raise HTTPException(status_code=409, detail="Current multiplayer room is missing.")
-    return room_key, room
-
-
-def _get_room_progress(session: dict[str, Any], room_key: str) -> dict[str, Any]:
-    room_progress = session.setdefault("room_progress", {})
-    progress = room_progress.get(room_key)
-    if isinstance(progress, dict):
-        return progress
-
-    progress = {
-        "puzzle_solved": False,
-        "reward_pickup_collected": False,
-    }
-    room_progress[room_key] = progress
-    return progress
-
-
-def _get_players(session: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    owner_username = str(session.get("owner_username") or "").strip()
-    guest_username = str(session.get("guest_username") or "").strip()
-    players = session.get("players", {})
-    owner = players.get(owner_username)
-    guest = players.get(guest_username)
-    if not owner or not guest:
-        raise HTTPException(status_code=409, detail="Both co-op players must be connected.")
-    return owner, guest
-
-
-def _player_center(player: dict[str, Any]) -> tuple[float, float]:
-    position = player.get("position", {})
-    width = float(position.get("width", 8.0) or 8.0)
-    height = float(position.get("height", 8.0) or 8.0)
-    x = float(position.get("x", 0.0) or 0.0) + (width / 2.0)
-    y = float(position.get("y", 0.0) or 0.0) + (height / 2.0)
-    return x, y
-
-
-def _center_in_rect(player: dict[str, Any], rect: dict[str, Any]) -> bool:
-    x, y = _player_center(player)
-    left = float(rect.get("x", 0.0) or 0.0)
-    top = float(rect.get("y", 0.0) or 0.0)
-    width = float(rect.get("width", 0.0) or 0.0)
-    height = float(rect.get("height", 0.0) or 0.0)
-    return left <= x <= left + width and top <= y <= top + height
-
-
-def _create_stage_rect(center_x: float, center_y: float, width: float = 150.0, height: float = 150.0) -> dict[str, float]:
-    return {
-        "x": round(center_x - (width / 2.0), 3),
-        "y": round(center_y - (height / 2.0), 3),
-        "width": round(width, 3),
-        "height": round(height, 3),
-    }
-
-
-def _named_rects(names: list[str]) -> list[dict[str, Any]]:
-    positions = {
-        2: [(310.0, 540.0), (770.0, 540.0)],
-        3: [(250.0, 540.0), (540.0, 320.0), (830.0, 540.0)],
-        4: [(260.0, 360.0), (820.0, 360.0), (260.0, 760.0), (820.0, 760.0)],
-    }
-    centers = positions.get(len(names), positions[4])
-    rects: list[dict[str, Any]] = []
-    for index, name in enumerate(names):
-        rects.append({"id": index, "label": name, **_create_stage_rect(*centers[index])})
-    return rects
-
-
-def _zone_rects(labels: list[str], columns: int = 3) -> list[dict[str, Any]]:
-    cell_width = 210.0
-    cell_height = 170.0
-    start_x = 170.0
-    start_y = 260.0
-    gap_x = 120.0
-    gap_y = 130.0
-    rects: list[dict[str, Any]] = []
-    for index, label in enumerate(labels):
-        row = index // columns
-        column = index % columns
-        rects.append(
-            {
-                "id": index,
-                "label": label,
-                "x": round(start_x + (column * (cell_width + gap_x)), 3),
-                "y": round(start_y + (row * (cell_height + gap_y)), 3),
-                "width": cell_width,
-                "height": cell_height,
-            }
-        )
-    return rects
+    return key, room
 
 
 def _role(username: str, session: dict[str, Any]) -> str:
-    return "owner" if username == str(session.get("owner_username") or "").strip() else "guest"
+    if str(username or "").strip() == str(session.get("owner_username") or "").strip():
+        return "owner"
+    if str(username or "").strip() == str(session.get("guest_username") or "").strip():
+        return "guest"
+    raise HTTPException(status_code=403, detail="User is not part of this co-op session.")
 
 
-def _other_role(role: str) -> str:
-    return "guest" if role == "owner" else "owner"
+def _compute_stage_level(session: dict[str, Any], current_room_key: str) -> int:
+    room_lookup = session.get("room_lookup", {})
+    room_progress = session.get("room_progress", {})
+    total_puzzle_rooms = sum(
+        1
+        for room in room_lookup.values()
+        if str((room or {}).get("kind") or "").strip().upper() not in {"S", "F"}
+    )
+    solved_before_current = sum(
+        1
+        for key, progress in room_progress.items()
+        if key != current_room_key and isinstance(progress, dict) and bool(progress.get("puzzle_solved"))
+    )
+    progress = solved_before_current / max(1, total_puzzle_rooms - 1)
+    band = min(3, max(0, int(progress * 4)))
+    return band + 1
 
 
-def _pulse_value(started_at: str, speed: float, offset: float, now: datetime | None = None) -> float:
-    current = now or _utc_now()
-    elapsed = max(0.0, (current - _parse_iso(started_at)).total_seconds())
-    value = (offset + (elapsed * speed)) % 2.0
-    return value if value <= 1.0 else 2.0 - value
+def _progress_label_for_key(puzzle_key: str) -> str:
+    return PROGRESS_LABELS.get(puzzle_key, "System Stability")
 
 
-def _direction_transform(direction: str, rule: str) -> str:
-    order = ["Up", "Right", "Down", "Left"]
-    index = order.index(direction)
-    if rule == "mirror":
-        return {"Up": "Up", "Down": "Down", "Left": "Right", "Right": "Left"}[direction]
-    if rule == "invert":
-        return {"Up": "Down", "Down": "Up", "Left": "Right", "Right": "Left"}[direction]
-    if rule == "rotate":
-        return order[(index + 1) % len(order)]
-    if rule == "rotate180":
-        return order[(index + 2) % len(order)]
-    return direction
-
-
-def _transform_pattern(pattern: list[str], rule: str) -> list[str]:
-    if rule == "reverse":
-        return list(reversed(pattern))
-    return [_direction_transform(direction, rule) for direction in pattern]
-
-
-def _complete(state: dict[str, Any], message: str) -> None:
-    state["completed"] = True
-    state["status"] = message
-
-
-def _create_pressure_state(seed: str, difficulty: str) -> dict[str, Any]:
-    if difficulty == "easy":
-        return {
-            "key": "p",
-            "view_type": "pressure_systems",
-            "name": CO_OP_PUZZLE_CATALOG[difficulty]["p"]["name"],
-            "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["p"]["description"],
-            "plates": _named_rects(["Owner Plate", "Guest Plate"]),
-            "phases": [{"owner": 0, "guest": 1}],
-            "phase_index": 0,
-            "hold_seconds": 0.8,
-            "hold_started_at": None,
-            "completed": False,
-            "status": "Stand on both linked plates together.",
-        }
-
-    if difficulty == "medium":
-        names = ["Dawn", "Zenith", "Dusk"]
-        owner_plate = _roll(f"{seed}|pressure|owner", 0, 2)
-        guest_plate = (owner_plate + 2) % 3
-        return {
-            "key": "p",
-            "view_type": "pressure_systems",
-            "name": CO_OP_PUZZLE_CATALOG[difficulty]["p"]["name"],
-            "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["p"]["description"],
-            "plates": _named_rects(names),
-            "phases": [{"owner": owner_plate, "guest": guest_plate}],
-            "phase_index": 0,
-            "hold_seconds": 1.0,
-            "hold_started_at": None,
-            "owner_clue": [
-                "The owner stands where the sun rises.",
-                "The owner takes the high noon plate.",
-                "The owner anchors the falling light.",
-            ][owner_plate],
-            "guest_clue": [
-                "The guest answers from the dawn plate.",
-                "The guest steadies the zenith plate.",
-                "The guest grounds the cold dusk plate.",
-            ][guest_plate],
-            "completed": False,
-            "status": "Find the correct pair of plates and hold them together.",
-        }
-
-    first_owner = _roll(f"{seed}|pressure|hard|owner1", 0, 3)
-    first_guest = (first_owner + 2) % 4
+def _new_state(
+    puzzle_key: str,
+    difficulty: str,
+    layout_seed: str,
+    solution_seed: str,
+    stage_level: int,
+) -> dict[str, Any]:
+    info = CO_OP_PUZZLE_CATALOG_V2[difficulty][puzzle_key]
+    now = _utc_seconds()
+    normalized_stage = min(4, max(1, int(stage_level)))
     return {
-        "key": "p",
-        "view_type": "pressure_systems",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["p"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["p"]["description"],
-        "plates": _named_rects(["Ember", "Tide", "Volt", "Ash"]),
-        "phases": [
-            {"owner": first_owner, "guest": first_guest},
-            {"owner": first_guest, "guest": first_owner},
-            {"owner": (first_owner + 1) % 4, "guest": (first_guest + 1) % 4},
-        ],
-        "phase_index": 0,
-        "hold_seconds": 1.15,
-        "hold_started_at": None,
-        "owner_clue": "Stabilize the outer pair, then swap, then crest one plate clockwise.",
-        "guest_clue": "Mirror the owner's resonance, then swap, then rise one plate clockwise.",
+        "schema_version": 2,
+        "key": puzzle_key,
+        "family_id": FAMILY_BY_KEY[puzzle_key],
+        "name": info["name"],
+        "instruction": info["description"],
+        "accent_color": info["accent_color"],
+        "mechanic_type": info["mechanic_type"],
+        "difficulty": difficulty,
+        "layout_seed": layout_seed,
+        "solution_seed": solution_seed,
+        "layout_signature": "",
+        "solution_signature": "",
+        "phase": PHASE_OBSERVE,
+        "status_code": STATUS_NOT_STARTED,
+        "status_text": "Observe and coordinate.",
+        "is_solved": False,
         "completed": False,
-        "status": "Charge each resonance phase in order without breaking formation.",
+        "can_interact": True,
+        "progress": 0.0,
+        "progress_label": _progress_label_for_key(puzzle_key),
+        "progress_value": 0.0,
+        "progress_trend": "steady",
+        "attempt": 1,
+        "last_tick": now,
+        "cooldown_until": 0.0,
+        "pending_reset": False,
+        "failure_code": "",
+        "failure_label": "",
+        "failure_visual_cue": "",
+        "recovery_text": "",
+        "stage_level": normalized_stage,
+        "stage_visual_profile": STAGE_VISUAL_PROFILES.get(normalized_stage, "master"),
+        "runtime": {},
+        "reset_runtime": {},
+        "solution_script": [],
+        "preflight_trace": [],
+        "preflight_validated": False,
     }
 
-def _create_reaction_state(seed: str, difficulty: str) -> dict[str, Any]:
-    base = {
-        "key": "q",
-        "view_type": "sync_reaction",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["q"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["q"]["description"],
-        "started_at": _utc_now_iso(),
-        "window_start": (_roll(f"{seed}|reaction|window", 24, 58) / 100.0),
-        "window_width": 0.16 if difficulty == "easy" else 0.13 if difficulty == "medium" else 0.14,
-        "owner_speed": 0.65 if difficulty == "easy" else 0.86,
-        "guest_speed": 0.65 if difficulty == "easy" else 1.04 if difficulty == "medium" else 0.92,
-        "owner_offset": (_roll(f"{seed}|reaction|owner", 8, 42) / 100.0),
-        "guest_offset": (_roll(f"{seed}|reaction|guest", 51, 88) / 100.0),
-        "locks": {},
-        "completed": False,
-        "status": "Coordinate your stop timing with your partner.",
-    }
-    if difficulty == "hard":
-        base["sync_tolerance_seconds"] = 0.35
-        base["show_target_owner"] = True
-        base["show_pulse_owner"] = False
-        base["show_target_guest"] = False
-        base["show_pulse_guest"] = True
-        base["status"] = "Owner calls the lock. Guest catches the pulse."
-        return base
 
-    base["sync_tolerance_seconds"] = 0.5 if difficulty == "easy" else 0.4
-    base["show_target_owner"] = True
-    base["show_pulse_owner"] = True
-    base["show_target_guest"] = True
-    base["show_pulse_guest"] = True
-    return base
+def _set_status(state: dict[str, Any], phase: str, status_code: str, text: str, can_interact: bool) -> None:
+    state["phase"] = phase
+    state["status_code"] = status_code
+    state["status_text"] = text
+    state["can_interact"] = can_interact
 
 
-def _riddle_pool() -> dict[str, list[dict[str, Any]]]:
+def _resolve_failure_payload(state: dict[str, Any], failure_code: str | None) -> dict[str, str]:
+    family_language = FAILURE_LANGUAGES.get(state["key"], {})
+    if failure_code and failure_code in family_language:
+        return family_language[failure_code]
+    if family_language:
+        return next(iter(family_language.values()))
     return {
-        "easy": [
-            {
-                "owner_prompt": "I speak without a mouth and answer every shout. What am I?",
-                "guest_prompt": "Choose the answer your partner describes.",
-                "owner_options": ["A", "B", "C", "D"],
-                "guest_options": ["Echo", "River", "Lantern", "Compass"],
-                "answer_index": 0,
-            },
-            {
-                "owner_prompt": "What has keys but can never open a lock?",
-                "guest_prompt": "Pick the right artifact.",
-                "owner_options": ["A", "B", "C", "D"],
-                "guest_options": ["Piano", "Anchor", "Bell", "Mirror"],
-                "answer_index": 0,
-            },
-            {
-                "owner_prompt": "The more you take, the more you leave behind. What are they?",
-                "guest_prompt": "Listen for the clue and choose.",
-                "owner_options": ["A", "B", "C", "D"],
-                "guest_options": ["Footsteps", "Stars", "Shadows", "Leaves"],
-                "answer_index": 0,
-            },
-        ],
-        "medium": [
-            {
-                "owner_clues": ["The answer is metallic.", "It is not carried by sound."],
-                "guest_clues": ["It points but never speaks.", "It is not the silver bell."],
-                "options": ["Copper Compass", "Silver Bell", "Glass Orchid", "Velvet Drum"],
-                "answer_index": 0,
-            },
-            {
-                "owner_clues": ["The answer is alive.", "Its color is not crimson."],
-                "guest_clues": ["It grows, not forges.", "It is not the midnight fern."],
-                "options": ["Azure Orchid", "Crimson Blade", "Midnight Fern", "Amber Gear"],
-                "answer_index": 0,
-            },
-            {
-                "owner_clues": ["The answer reflects light.", "It is not forged from wood."],
-                "guest_clues": ["It hangs on walls.", "It is not the bronze lantern."],
-                "options": ["Silver Mirror", "Bronze Lantern", "Oak Spear", "Iron Wheel"],
-                "answer_index": 0,
-            },
-        ],
-        "hard": [
-            {
-                "owner_clues": ["Statue A: 'The left lever is false.'", "Statue B: 'Only one of us tells the truth.'"],
-                "guest_clues": ["Statue C: 'The center lever is false.'", "The true path is guarded by exactly one honest statue."],
-                "options": ["Left Lever", "Center Lever", "Right Lever"],
-                "answer_index": 2,
-            },
-            {
-                "owner_clues": ["Stone One: 'The right lever lies.'", "Stone Two: 'The center path is safe.'"],
-                "guest_clues": ["Stone Three: 'Exactly two stones lie.'", "Only the consistent assignment opens the chamber."],
-                "options": ["Left Lever", "Center Lever", "Right Lever"],
-                "answer_index": 0,
-            },
-            {
-                "owner_clues": ["Cipher A: 'The left lever is true.'", "Cipher B: 'Cipher A lies.'"],
-                "guest_clues": ["Cipher C: 'The center lever is false.'", "Only one statement survives the paradox."],
-                "options": ["Left Lever", "Center Lever", "Right Lever"],
-                "answer_index": 1,
-            },
-        ],
+        "failure_code": failure_code or "system_fault",
+        "failure_label": "System Fault",
+        "visual_cue": "Control signal unstable.",
+        "recovery_text": "Reset and retry with stable inputs.",
     }
 
 
-def _create_riddle_state(seed: str, difficulty: str) -> dict[str, Any]:
-    pool = _riddle_pool()[difficulty]
-    entry = pool[_stable_hash(f"{seed}|riddle|{difficulty}") % len(pool)]
-    state = {
-        "key": "r",
-        "view_type": "deduction_riddle",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["r"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["r"]["description"],
-        "answer_index": entry["answer_index"],
-        "owner_selection": None,
-        "guest_selection": None,
-        "completed": False,
-        "status": "Both players must commit to the same answer.",
-    }
-    state.update(entry)
-    return state
-
-
-def _create_memory_state(seed: str, difficulty: str) -> dict[str, Any]:
-    symbols = ["A", "B", "C", "D", "E", "F"]
-    length = 6 if difficulty == "easy" else 7 if difficulty == "medium" else 8
-    sequence = [symbols[_stable_hash(f"{seed}|memory|{difficulty}|{index}") % len(symbols)] for index in range(length)]
-    if difficulty == "easy":
-        owner_view = sequence[: length // 2]
-        guest_view = sequence[length // 2 :]
-        roles = ["owner"] * (length // 2) + ["guest"] * (length - (length // 2))
-    else:
-        owner_view = sequence[:]
-        guest_view = sequence[:]
-        owner_view[_roll(f"{seed}|memory|owner|swap", 0, length - 1)] = symbols[_roll(f"{seed}|memory|owner|symbol", 0, len(symbols) - 1)]
-        guest_view[_roll(f"{seed}|memory|guest|swap", 0, length - 1)] = symbols[_roll(f"{seed}|memory|guest|symbol", 0, len(symbols) - 1)]
-        roles = ["owner" if index % 2 == 0 else "guest" for index in range(length)]
-    return {
-        "key": "s",
-        "view_type": "split_memory",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["s"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["s"]["description"],
-        "symbols": symbols,
-        "sequence": sequence,
-        "owner_view": owner_view,
-        "guest_view": guest_view,
-        "input": [],
-        "input_roles": roles,
-        "completed": False,
-        "status": "Reconstruct the shared sequence together.",
-    }
-
-
-def _create_rotation_state(seed: str, difficulty: str) -> dict[str, Any]:
-    rows = 2
-    cols = 2 if difficulty == "easy" else 3
-    total = rows * cols
-    current = [(_stable_hash(f"{seed}|rotation|current|{index}") % 4) for index in range(total)]
-    owner_controls = [index for index in range(total) if index % 2 == 0]
-    guest_controls = [index for index in range(total) if index % 2 == 1]
-    mirror_pairs = {index: (total - 1 - index) for index in range(total)}
-    targets = list(current)
-    step_count = 3 if difficulty == "easy" else 5 if difficulty == "medium" else 6
-    for step_index in range(step_count):
-        role = "owner" if _roll(f"{seed}|rotation|role|{step_index}", 0, 1) == 0 else "guest"
-        controls = owner_controls if role == "owner" else guest_controls
-        control_index = controls[_roll(f"{seed}|rotation|tile|{step_index}", 0, len(controls) - 1)]
-        targets[control_index] = (int(targets[control_index]) + 1) % 4
-        if difficulty == "medium":
-            mirror_id = mirror_pairs.get(control_index)
-            if mirror_id is not None and 0 <= int(mirror_id) < len(targets):
-                targets[int(mirror_id)] = (int(targets[int(mirror_id)]) + 1) % 4
-    if current == targets:
-        fallback_index = owner_controls[0]
-        targets[fallback_index] = (int(targets[fallback_index]) + 1) % 4
-        if difficulty == "medium":
-            mirror_id = mirror_pairs.get(fallback_index)
-            if mirror_id is not None and 0 <= int(mirror_id) < len(targets):
-                targets[int(mirror_id)] = (int(targets[int(mirror_id)]) + 1) % 4
-    return {
-        "key": "t",
-        "view_type": "dual_rotation",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["t"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["t"]["description"],
-        "rows": rows,
-        "cols": cols,
-        "current": current,
-        "targets": targets,
-        "owner_controls": owner_controls,
-        "guest_controls": guest_controls,
-        "mirror_pairs": mirror_pairs,
-        "board_rotation_owner": 0,
-        "board_rotation_guest": 1 if difficulty == "hard" else 0,
-        "completed": False,
-        "status": "Rotate your tiles until the shared path snaps into alignment.",
-    }
-
-
-def _create_pattern_state(seed: str, difficulty: str) -> dict[str, Any]:
-    directions = ["Up", "Right", "Down", "Left"]
-    length = 5 if difficulty == "easy" else 6 if difficulty == "medium" else 7
-    pattern = [directions[_stable_hash(f"{seed}|pattern|{difficulty}|{index}") % len(directions)] for index in range(length)]
-    rule = "reverse" if difficulty == "easy" else ["mirror", "invert", "rotate", "rotate180"][_stable_hash(f"{seed}|pattern|rule|{difficulty}") % 4]
-    expected = pattern if difficulty == "easy" else _transform_pattern(pattern, rule)
-    guest_expected = list(reversed(pattern)) if difficulty == "easy" else expected
-    return {
-        "key": "u",
-        "view_type": "opposing_pattern_input",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["u"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["u"]["description"],
-        "pattern": pattern,
-        "rule": rule,
-        "expected_owner": expected,
-        "expected_guest": guest_expected,
-        "owner_input": [],
-        "guest_input": [],
-        "completed": False,
-        "status": "Decode the shared pattern rule and enter the correct sequence.",
-    }
-
-def _create_flow_state(seed: str, difficulty: str) -> dict[str, Any]:
-    count = 3 if difficulty != "hard" else 4
-    owner_values = [_roll(f"{seed}|flow|owner|value|{index}", 0, 3) for index in range(count)]
-    guest_values = [_roll(f"{seed}|flow|guest|value|{index}", 0, 3) for index in range(count)]
-    owner_controls = []
-    guest_controls = []
-    for index in range(count):
-        owner_controls.append(
-            {
-                "label": f"Valve {index + 1}",
-                "owner_delta": [1 if sub == index else 0 for sub in range(count)],
-                "guest_delta": [1 if sub == (index + 1) % count else -1 if sub == (index + 2) % count else 0 for sub in range(count)],
-            }
-        )
-        guest_controls.append(
-            {
-                "label": f"Valve {index + 1}",
-                "owner_delta": [1 if sub == (index - 1) % count else -1 if sub == (index + 1) % count else 0 for sub in range(count)],
-                "guest_delta": [1 if sub == index else 0 for sub in range(count)],
-            }
-        )
-    owner_targets = list(owner_values)
-    guest_targets = list(guest_values)
-    sequence_length = 3 if difficulty == "easy" else 4 if difficulty == "medium" else 5
-    for step_index in range(sequence_length):
-        role = "owner" if _roll(f"{seed}|flow|role|{step_index}", 0, 1) == 0 else "guest"
-        controls = owner_controls if role == "owner" else guest_controls
-        control = controls[_roll(f"{seed}|flow|control|{step_index}", 0, len(controls) - 1)]
-        owner_targets, guest_targets = _apply_flow_control_values(owner_targets, guest_targets, control)
-    if owner_targets == owner_values and guest_targets == guest_values:
-        owner_targets, guest_targets = _apply_flow_control_values(owner_targets, guest_targets, owner_controls[0])
-    return {
-        "key": "v",
-        "view_type": "flow_transfer",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["v"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["v"]["description"],
-        "owner_values": owner_values,
-        "guest_values": guest_values,
-        "owner_targets": owner_targets,
-        "guest_targets": guest_targets,
-        "owner_controls": owner_controls,
-        "guest_controls": guest_controls,
-        "completed": False,
-        "status": "Redistribute flow without starving the shared network.",
-    }
-
-
-def _create_weight_state(seed: str, difficulty: str) -> dict[str, Any]:
-    count = 3 if difficulty != "hard" else 4
-    owner_multipliers = [_roll(f"{seed}|weight|owner|mult|{index}", 1, 3) for index in range(count)]
-    guest_multipliers = [_roll(f"{seed}|weight|guest|mult|{index}", 1, 3) for index in range(count)]
-    if difficulty == "hard":
-        owner_multipliers[0] = 2
-        guest_multipliers[-1] = -1
-    return {
-        "key": "w",
-        "view_type": "distributed_weight",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["w"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["w"]["description"],
-        "owner_allocations": [0] * count,
-        "guest_allocations": [0] * count,
-        "owner_multipliers": owner_multipliers,
-        "guest_multipliers": guest_multipliers,
-        "limit_per_pad": 4 if difficulty == "hard" else 3,
-        "target": _roll(f"{seed}|weight|target|{difficulty}", 6, 18 if difficulty == "hard" else 12),
-        "completed": False,
-        "status": "Balance the shared equation exactly.",
-    }
-
-
-def _create_binary_state(seed: str, difficulty: str) -> dict[str, Any]:
-    if difficulty == "easy":
-        return {
-            "key": "x",
-            "view_type": "binary_echo",
-            "name": CO_OP_PUZZLE_CATALOG[difficulty]["x"]["name"],
-            "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["x"]["description"],
-            "mode": "toggle_bits",
-            "current": [False] * 6,
-            "target": [bool(_stable_hash(f"{seed}|binary|easy|{index}") % 2) for index in range(6)],
-            "owner_controls": [0, 2, 4],
-            "guest_controls": [1, 3, 5],
-            "completed": False,
-            "status": "Match the shared binary target.",
-        }
-
-    current = [bool(_stable_hash(f"{seed}|binary|current|{difficulty}|{index}") % 2) for index in range(7 if difficulty == "hard" else 6)]
-    target = [bool(_stable_hash(f"{seed}|binary|target|{difficulty}|{index}") % 2) for index in range(len(current))]
-    if difficulty == "medium":
-        return {
-            "key": "x",
-            "view_type": "binary_echo",
-            "name": CO_OP_PUZZLE_CATALOG[difficulty]["x"]["name"],
-            "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["x"]["description"],
-            "mode": "shared_operations",
-            "current": current,
-            "target": target,
-            "owner_operations": ["flip_left", "rotate_left"],
-            "guest_operations": ["flip_right", "invert_even"],
-            "completed": False,
-            "status": "Use your half of the machine without scrambling your partner's side.",
-        }
-
-    return {
-        "key": "x",
-        "view_type": "binary_echo",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["x"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["x"]["description"],
-        "mode": "distributed_ops",
-        "current": current,
-        "target": target,
-        "owner_operations": ["rotate_left", "invert_all"],
-        "guest_operations": ["flip_alternate", "xor_mask"],
-        "xor_mask": [True, False, True, False, True, False, True][: len(current)],
-        "moves_remaining": 8,
-        "completed": False,
-        "status": "Combine your separate operators to reach the target before the machine locks.",
-    }
-
-
-def _create_signal_state(seed: str, difficulty: str) -> dict[str, Any]:
-    target = [0, 1, 2, 3]
-    if difficulty == "medium":
-        target = [0, 2, 1, 3]
-    elif difficulty == "hard":
-        target = [1, 0, 3, 2]
-    blocked = [(1, 1), (2, 2)] if difficulty == "medium" else [(0, 2), (1, 3)] if difficulty == "hard" else []
-    fake_blocked = [(0, 1), (2, 0)] if difficulty == "hard" else []
-    return {
-        "key": "y",
-        "view_type": "signal_lines",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["y"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["y"]["description"],
-        "left_nodes": [f"Signal {index + 1}" for index in range(4)],
-        "right_nodes": ["I", "II", "III", "IV"],
-        "target_map": target,
-        "routes": [None] * 4,
-        "owner_controls": [0, 1],
-        "guest_controls": [2, 3],
-        "blocked_routes": blocked,
-        "fake_blocked_routes": fake_blocked,
-        "completed": False,
-        "status": "Route each signal to the correct receiver without breaking the grid.",
-    }
-
-
-def _create_spatial_state(seed: str, difficulty: str) -> dict[str, Any]:
-    zones = _zone_rects(["A", "B", "C", "D", "E", "F"])
-    if difficulty == "easy":
-        sequence = [{"owner": 0, "guest": 1}]
-        hold = 0.8
-    elif difficulty == "medium":
-        sequence = [{"owner": 0, "guest": 2}, {"owner": 1, "guest": 1}, {"owner": 2, "guest": 0}]
-        hold = 0.9
-    else:
-        first = _roll(f"{seed}|spatial|hard|first", 0, 3)
-        sequence = [
-            {"owner": first, "guest": (first + 1) % 4},
-            {"owner": (first + 2) % 4, "guest": first},
-            {"owner": (first + 3) % 4, "guest": (first + 2) % 4},
-            {"owner": first, "guest": (first + 3) % 4},
-        ]
-        hold = 1.0
-    return {
-        "key": "z",
-        "view_type": "spatial_sync",
-        "name": CO_OP_PUZZLE_CATALOG[difficulty]["z"]["name"],
-        "instruction": CO_OP_PUZZLE_CATALOG[difficulty]["z"]["description"],
-        "zones": zones,
-        "sequence": sequence,
-        "step_index": 0,
-        "hold_seconds": hold,
-        "hold_started_at": None,
-        "completed": False,
-        "status": "Stand in the active zone pair together.",
-    }
-
-
-def _create_puzzle_state(session: dict[str, Any], room_key: str, room: dict[str, Any]) -> dict[str, Any]:
-    difficulty = str(session.get("difficulty") or "easy").strip().lower()
-    puzzle_key = str(room.get("puzzle_key") or "").strip().lower()
-    seed = f"{session.get('session_id')}|{room_key}|{puzzle_key}|{difficulty}"
-    if puzzle_key == "p":
-        return _create_pressure_state(seed, difficulty)
-    if puzzle_key == "q":
-        return _create_reaction_state(seed, difficulty)
-    if puzzle_key == "r":
-        return _create_riddle_state(seed, difficulty)
-    if puzzle_key == "s":
-        return _create_memory_state(seed, difficulty)
-    if puzzle_key == "t":
-        return _create_rotation_state(seed, difficulty)
-    if puzzle_key == "u":
-        return _create_pattern_state(seed, difficulty)
-    if puzzle_key == "v":
-        return _create_flow_state(seed, difficulty)
-    if puzzle_key == "w":
-        return _create_weight_state(seed, difficulty)
-    if puzzle_key == "x":
-        return _create_binary_state(seed, difficulty)
-    if puzzle_key == "y":
-        return _create_signal_state(seed, difficulty)
-    if puzzle_key == "z":
-        return _create_spatial_state(seed, difficulty)
-    raise HTTPException(status_code=400, detail=f"Unsupported co-op puzzle key '{puzzle_key}'.")
-
-
-def ensure_current_room_puzzle_state(session: dict[str, Any]) -> dict[str, Any]:
-    room_key, room = _current_room_state(session)
-    room_states = session.setdefault("room_puzzle_states", {})
-    state = room_states.get(room_key)
-    if not isinstance(state, dict):
-        state = _create_puzzle_state(session, room_key, room)
-        room_states[room_key] = state
-    if _get_room_progress(session, room_key).get("puzzle_solved"):
-        state["completed"] = True
-    return state
-
-def _serialize_pressure_view(state: dict[str, Any], role: str, owner: dict[str, Any], guest: dict[str, Any]) -> dict[str, Any]:
-    phase_index = int(state.get("phase_index", 0) or 0)
-    phases = state.get("phases", [])
-    current_phase = phases[min(phase_index, len(phases) - 1)] if phases else {"owner": 0, "guest": 0}
-    owner_plate = next((plate.get("id") for plate in state["plates"] if _center_in_rect(owner, plate)), None)
-    guest_plate = next((plate.get("id") for plate in state["plates"] if _center_in_rect(guest, plate)), None)
-    return {
-        "stage_elements": [
-            {
-                **plate,
-                "state": "active" if plate["id"] in {owner_plate, guest_plate} else "idle",
-                "is_target": bool(not state.get("completed") and plate["id"] in {current_phase["owner"], current_phase["guest"]}),
-            }
-            for plate in state["plates"]
-        ],
-        "phase_index": phase_index,
-        "phase_count": len(phases),
-        "hold_seconds": state.get("hold_seconds", 0.0),
-        "clue": state.get(f"{role}_clue") or state.get("instruction"),
-    }
-
-
-def _serialize_reaction_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    return {
-        "show_target": bool(state.get(f"show_target_{role}", True)),
-        "show_pulse": bool(state.get(f"show_pulse_{role}", True)),
-        "target_start": state.get("window_start", 0.3),
-        "target_width": state.get("window_width", 0.15),
-        "pulse_started_at": state.get("started_at"),
-        "pulse_speed": state.get(f"{role}_speed", 0.75),
-        "pulse_offset": state.get(f"{role}_offset", 0.15),
-        "locked_self": role in state.get("locks", {}),
-        "locked_partner": _other_role(role) in state.get("locks", {}),
-        "sync_tolerance_seconds": state.get("sync_tolerance_seconds", 0.5),
-    }
-
-
-def _serialize_riddle_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    if "owner_prompt" in state:
-        return {
-            "prompt": state["owner_prompt"] if role == "owner" else state["guest_prompt"],
-            "options": state["owner_options"] if role == "owner" else state["guest_options"],
-            "selected_self": state.get(f"{role}_selection"),
-            "selected_partner": state.get(f"{_other_role(role)}_selection"),
-        }
-    return {
-        "clues": state.get(f"{role}_clues", []),
-        "options": state.get("options", []),
-        "selected_self": state.get(f"{role}_selection"),
-        "selected_partner": state.get(f"{_other_role(role)}_selection"),
-    }
-
-
-def _serialize_memory_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    input_values = state.get("input", [])
-    input_roles = state.get("input_roles", [])
-    next_role = input_roles[len(input_values)] if len(input_values) < len(input_roles) else None
-    return {
-        "symbols": state.get("symbols", []),
-        "visible_sequence": state.get(f"{role}_view", []),
-        "input": input_values,
-        "next_role": next_role,
-    }
-
-
-def _serialize_rotation_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    controls = set(state.get(f"{role}_controls", []))
-    board_rotation = int(state.get(f"board_rotation_{role}", 0) or 0)
-    cols = int(state.get("cols", 2) or 2)
-    tiles = []
-    current = state.get("current", [])
-    targets = state.get("targets", [])
-    for tile_id, rotation in enumerate(current):
-        tiles.append(
-            {
-                "id": tile_id,
-                "row": tile_id // cols,
-                "col": tile_id % cols,
-                "rotation": int(rotation),
-                "target": int(targets[tile_id]),
-                "controllable": tile_id in controls,
-                "display_rotation": (int(rotation) + board_rotation) % 4,
-            }
-        )
-    return {
-        "rows": state.get("rows", 2),
-        "cols": state.get("cols", 2),
-        "board_rotation": board_rotation,
-        "tiles": tiles,
-    }
-
-
-def _serialize_pattern_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    if state.get("expected_owner") == state.get("pattern"):
-        clue = state.get("pattern") if role == "owner" else list(reversed(state.get("pattern", [])))
-    elif role == "owner":
-        clue = state.get("rule")
-    else:
-        clue = state.get("pattern")
-    return {
-        "clue": clue,
-        "input": state.get(f"{role}_input", []),
-        "target_length": len(state.get("expected_owner", [])),
-    }
-
-
-def _serialize_flow_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    return {
-        "values": state.get(f"{role}_values", []),
-        "targets": state.get(f"{role}_targets", []),
-        "controls": state.get(f"{role}_controls", []),
-        "partner_values": state.get(f"{_other_role(role)}_values", []),
-    }
-
-
-def _weight_total(state: dict[str, Any]) -> int:
-    total = sum(int(value) * int(multiplier) for value, multiplier in zip(state.get("owner_allocations", []), state.get("owner_multipliers", []), strict=False))
-    total += sum(int(value) * int(multiplier) for value, multiplier in zip(state.get("guest_allocations", []), state.get("guest_multipliers", []), strict=False))
-    if len(state.get("owner_allocations", [])) == 4 and len(state.get("guest_allocations", [])) == 4:
-        total += sum(int(state["guest_allocations"][index]) for index in range(0, 4, 2))
-        total -= sum(int(state["owner_allocations"][index]) for index in range(1, 4, 2))
-    return total
-
-
-def _serialize_weight_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    return {
-        "allocations": state.get(f"{role}_allocations", []),
-        "multipliers": state.get(f"{role}_multipliers", []),
-        "limit_per_pad": state.get("limit_per_pad", 3),
-        "target": state.get("target", 0),
-        "current_total": _weight_total(state),
-    }
-
-
-def _serialize_binary_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    payload = {"mode": state.get("mode"), "current": state.get("current", []), "target": state.get("target", [])}
-    if state.get("mode") == "toggle_bits":
-        payload["controls"] = state.get(f"{role}_controls", [])
-    else:
-        payload["operations"] = state.get(f"{role}_operations", [])
-        payload["moves_remaining"] = state.get("moves_remaining")
+def _apply_failure_payload(state: dict[str, Any], failure_code: str | None) -> dict[str, str]:
+    payload = _resolve_failure_payload(state, failure_code)
+    state["failure_code"] = payload["failure_code"]
+    state["failure_label"] = payload["failure_label"]
+    state["failure_visual_cue"] = payload["visual_cue"]
+    state["recovery_text"] = payload["recovery_text"]
     return payload
 
 
-def _serialize_signal_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    return {
-        "left_nodes": state.get("left_nodes", []),
-        "right_nodes": state.get("right_nodes", []),
-        "routes": state.get("routes", []),
-        "controls": state.get(f"{role}_controls", []),
-        "blocked_routes": state.get("blocked_routes", []) if role == "owner" else (state.get("fake_blocked_routes") or state.get("blocked_routes", [])),
-        "real_routes_visible": role == "owner",
-    }
+def _clear_failure_payload(state: dict[str, Any]) -> None:
+    state["failure_code"] = ""
+    state["failure_label"] = ""
+    state["failure_visual_cue"] = ""
+    state["recovery_text"] = ""
 
 
-def _serialize_spatial_view(state: dict[str, Any], role: str) -> dict[str, Any]:
-    sequence = state.get("sequence", [])
-    step_index = min(int(state.get("step_index", 0) or 0), max(0, len(sequence) - 1))
-    current_step = sequence[step_index] if sequence else {"owner": 0, "guest": 0}
-    return {
-        "stage_elements": [
-            {**zone, "state": "target" if zone["id"] == current_step.get(role) else "complete" if state.get("completed") else "idle"}
-            for zone in state.get("zones", [])
-        ],
-        "step_index": step_index,
-        "step_count": len(sequence),
-        "hold_seconds": state.get("hold_seconds", 0.8),
-        "target_zone": current_step.get(role),
-    }
+def _mark_solved(state: dict[str, Any], text: str) -> None:
+    state["is_solved"] = True
+    state["completed"] = True
+    state["progress"] = 1.0
+    state["progress_value"] = 1.0
+    state["progress_trend"] = "up"
+    _clear_failure_payload(state)
+    _set_status(state, PHASE_RESOLVE, STATUS_SOLVED, text, False)
 
 
-def serialize_current_room_puzzle(session: dict[str, Any], username: str) -> dict[str, Any]:
-    state = ensure_current_room_puzzle_state(session)
-    role = _role(username, session)
-    owner, guest = _get_players(session)
-    view_type = state.get("view_type")
-    if view_type == "pressure_systems":
-        view = _serialize_pressure_view(state, role, owner, guest)
-    elif view_type == "sync_reaction":
-        view = _serialize_reaction_view(state, role)
-    elif view_type == "deduction_riddle":
-        view = _serialize_riddle_view(state, role)
-    elif view_type == "split_memory":
-        view = _serialize_memory_view(state, role)
-    elif view_type == "dual_rotation":
-        view = _serialize_rotation_view(state, role)
-    elif view_type == "opposing_pattern_input":
-        view = _serialize_pattern_view(state, role)
-    elif view_type == "flow_transfer":
-        view = _serialize_flow_view(state, role)
-    elif view_type == "distributed_weight":
-        view = _serialize_weight_view(state, role)
-    elif view_type == "binary_echo":
-        view = _serialize_binary_view(state, role)
-    elif view_type == "signal_lines":
-        view = _serialize_signal_view(state, role)
-    elif view_type == "spatial_sync":
-        view = _serialize_spatial_view(state, role)
+def _queue_failure(state: dict[str, Any], now: float, text: str, failure_code: str | None = None) -> None:
+    payload = _apply_failure_payload(state, failure_code)
+    state["pending_reset"] = True
+    state["cooldown_until"] = now + DEFAULT_COOLDOWN
+    status_text = text if text else f"{payload['failure_label']}: {payload['visual_cue']}"
+    _set_status(state, PHASE_RESOLVE, STATUS_FAILED_TEMPORARY, status_text, False)
+
+
+def _reset_after_failure(state: dict[str, Any]) -> None:
+    state["runtime"] = deepcopy(state["reset_runtime"])
+    state["attempt"] = int(state.get("attempt", 1)) + 1
+    state["pending_reset"] = False
+    state["cooldown_until"] = 0.0
+    recovery = str(state.get("recovery_text") or "").strip()
+    status_text = f"{recovery} Reconfigure."
+    _clear_failure_payload(state)
+    _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, status_text if recovery else "Reset complete. Reconfigure.", True)
+
+
+def _phase_value(now: float, speed: float, offset: float) -> float:
+    value = (now * speed) + offset
+    return value - int(value)
+
+
+def _phase_distance(a: float, b: float) -> float:
+    delta = abs(a - b)
+    return min(delta, 1.0 - delta)
+
+
+def _next_phase_delay(now: float, speed: float, offset: float, target: float, minimum: float = 0.05) -> float:
+    current = _phase_value(now, speed, offset)
+    raw = (target - current) % 1.0
+    delay = raw / max(0.001, speed)
+    if delay < minimum:
+        delay += 1.0 / max(0.001, speed)
+    return delay
+
+
+def _mk_action(cmd: str, label: str, icon: str, tone: str, enabled: bool, active: bool = False) -> dict[str, Any]:
+    return {"cmd": cmd, "label": label, "icon": icon, "tone": tone, "enabled": bool(enabled), "active": bool(active)}
+
+
+def _mk_hud(label: str, value: str, icon: str, tone: str = "shared") -> dict[str, Any]:
+    return {"label": label, "value": value, "icon": icon, "tone": tone}
+
+
+def _gen_state(
+    puzzle_key: str,
+    difficulty: str,
+    layout_seed: str,
+    solution_seed: str,
+    stage_level: int,
+) -> dict[str, Any]:
+    state = _new_state(puzzle_key, difficulty, layout_seed, solution_seed, stage_level)
+    script: list[dict[str, Any]] = []
+
+    if puzzle_key in {"p", "u", "v"}:
+        max_a = 9 if puzzle_key != "u" else 25
+        max_b = 9 if puzzle_key == "p" else 5 if puzzle_key == "v" else 3
+        if puzzle_key == "p" and stage_level == 1:
+            max_a = 6
+            max_b = 6
+        start_a = _roll(f"{layout_seed}|a_start", 0, max_a)
+        start_b = _roll(f"{layout_seed}|b_start", 0, max_b)
+        target_a = _roll(f"{solution_seed}|a_target", 1, max_a)
+        target_b = _roll(f"{solution_seed}|b_target", 1, max_b)
+        runtime = {
+            "a": start_a,
+            "b": start_b,
+            "target_a": target_a,
+            "target_b": target_b,
+            "owner_lock": False,
+            "guest_lock": False,
+        }
+        while runtime["a"] < target_a:
+            script.append({"role": "owner", "cmd": "owner_up"})
+            runtime["a"] += 1
+        while runtime["a"] > target_a:
+            script.append({"role": "owner", "cmd": "owner_down"})
+            runtime["a"] -= 1
+        while runtime["b"] < target_b:
+            script.append({"role": "guest", "cmd": "guest_up"})
+            runtime["b"] += 1
+        while runtime["b"] > target_b:
+            script.append({"role": "guest", "cmd": "guest_down"})
+            runtime["b"] -= 1
+        if puzzle_key == "v":
+            script.extend([{"role": "owner", "cmd": "owner_arm"}, {"role": "guest", "cmd": "guest_arm"}, {"role": "guest", "cmd": "launch"}])
+        else:
+            script.extend([{"role": "owner", "cmd": "owner_lock"}, {"role": "guest", "cmd": "guest_lock"}])
+        state["runtime"] = {"a": start_a, "b": start_b, "target_a": target_a, "target_b": target_b, "owner_lock": False, "guest_lock": False}
+        state["layout_signature"] = f"{state['family_id']}:vector"
+        state["solution_signature"] = f"{target_a}:{target_b}:{max_a}:{max_b}"
+
+    elif puzzle_key == "q":
+        count = 3 if difficulty == "easy" else 4 if difficulty == "medium" else 5
+        pressures = [_roll(f"{layout_seed}|p_start|{idx}", 0, 2) for idx in range(count)]
+        target = [_roll(f"{solution_seed}|p_target|{idx}", 3, 7) for idx in range(count)]
+        for idx in range(count):
+            delta = target[idx] - pressures[idx]
+            for _ in range(max(0, delta)):
+                script.append({"role": "owner", "cmd": f"owner_raise_{idx}"})
+            for _ in range(max(0, -delta)):
+                script.append({"role": "guest", "cmd": f"guest_vent_{idx}"})
+        script.extend([{"role": "owner", "cmd": "owner_lock"}, {"role": "guest", "cmd": "guest_lock"}])
+        state["runtime"] = {"pressures": pressures, "target": target, "owner_lock": False, "guest_lock": False, "drift_acc": 0.0}
+        state["layout_signature"] = f"pressure_exchange:{count}"
+        state["solution_signature"] = ":".join(str(v) for v in target)
+
+    elif puzzle_key == "r":
+        count = 6 if difficulty == "easy" else 8 if difficulty == "medium" else 10
+        required = [bool(_roll(f"{solution_seed}|required|{idx}", 0, 1)) for idx in range(count)]
+        active = [False for _ in range(count)]
+        owner = [idx for idx in range(count) if idx % 2 == 0]
+        guest = [idx for idx in range(count) if idx % 2 == 1]
+        if not any(required[idx] for idx in owner):
+            required[owner[0]] = True
+        if not any(required[idx] for idx in guest):
+            required[guest[0]] = True
+        for idx in range(count):
+            if required[idx]:
+                script.append({"role": "owner" if idx in owner else "guest", "cmd": f"toggle_{idx}"})
+        state["runtime"] = {"active": active, "required": required, "owner": owner, "guest": guest}
+        state["layout_signature"] = f"bridge_builder:{count}"
+        state["solution_signature"] = "".join("1" if v else "0" for v in required)
+
+    elif puzzle_key == "s":
+        cells = 4 if difficulty == "easy" else 6 if difficulty == "medium" else 8
+        owner_target = [_roll(f"{solution_seed}|o|{idx}", 0, 3) for idx in range(cells)]
+        guest_target = [_roll(f"{solution_seed}|g|{idx}", 0, 3) for idx in range(cells)]
+        for idx in range(cells):
+            for _ in range(owner_target[idx]):
+                script.append({"role": "owner", "cmd": f"owner_cycle_{idx}"})
+            for _ in range(guest_target[idx]):
+                script.append({"role": "guest", "cmd": f"guest_cycle_{idx}"})
+        state["runtime"] = {"owner_values": [0] * cells, "guest_values": [0] * cells, "owner_target": owner_target, "guest_target": guest_target}
+        state["layout_signature"] = f"mirror_minds:{cells}"
+        state["solution_signature"] = f"{sum(owner_target)}:{sum(guest_target)}"
+
+    elif puzzle_key == "t":
+        count = 3 if difficulty == "easy" else 4 if difficulty == "medium" else 5
+        water = [_roll(f"{layout_seed}|w_start|{idx}", 4, 8) for idx in range(count)]
+        safe = [_roll(f"{solution_seed}|safe|{idx}", 2, 4) for idx in range(count)]
+        for idx in range(count):
+            script.append({"role": "owner", "cmd": f"gate_{idx}"})
+            for _ in range(max(0, water[idx] - safe[idx])):
+                script.append({"role": "guest", "cmd": f"pump_{idx}"})
+        script.extend([{"role": "owner", "cmd": "owner_lock"}, {"role": "guest", "cmd": "guest_lock"}, {"role": "owner", "cmd": "wait", "delay": 1.0}])
+        state["runtime"] = {"water": [float(v) for v in water], "safe": safe, "gates": [False] * count, "owner_lock": False, "guest_lock": False, "hold": 0.0}
+        state["layout_signature"] = f"flood_control:{count}"
+        state["solution_signature"] = ":".join(str(v) for v in safe)
+
+    elif puzzle_key == "w":
+        if stage_level == 1:
+            speed = 0.22
+            required = 1
+        else:
+            speed = 0.23 if difficulty == "easy" else 0.30 if difficulty == "medium" else 0.37
+            required = 2 if difficulty == "easy" else 3 if difficulty == "medium" else 4
+        target_phase = _roll(f"{solution_seed}|phase", 140, 860) / 1000.0
+        offset = _roll(f"{layout_seed}|offset", 0, 1000) / 1000.0
+        if stage_level == 1:
+            sync_tol = 0.42
+            phase_tol = 0.16
+        else:
+            sync_tol = 0.34 if difficulty == "easy" else 0.25 if difficulty == "medium" else 0.18
+            phase_tol = 0.12 if difficulty == "easy" else 0.09 if difficulty == "medium" else 0.06
+        now = float(state["last_tick"])
+        for _ in range(required):
+            delay = _next_phase_delay(now, speed, offset, target_phase, 0.05)
+            script.append({"role": "owner", "cmd": "wait", "delay": delay})
+            now += delay
+            script.append({"role": "owner", "cmd": "catch"})
+            script.append({"role": "guest", "cmd": "wait", "delay": max(0.02, sync_tol * 0.35)})
+            now += max(0.02, sync_tol * 0.35)
+            script.append({"role": "guest", "cmd": "catch"})
+        state["runtime"] = {
+            "speed": speed,
+            "target_phase": target_phase,
+            "offset": offset,
+            "required": required,
+            "sync_tol": sync_tol,
+            "phase_tol": phase_tol,
+            "owner_catch": None,
+            "guest_catch": None,
+            "catches": 0,
+        }
+        state["layout_signature"] = f"tidal_lock:{speed:.3f}"
+        state["solution_signature"] = f"{target_phase:.3f}:{required}:{sync_tol:.2f}:{phase_tol:.2f}"
+
+    elif puzzle_key == "x":
+        count = (
+            4
+            if stage_level == 1
+            else 6 if difficulty == "easy" else 8 if difficulty == "medium" else 10
+        )
+        layers = [_roll(f"{layout_seed}|layer|{idx}", -1, 1) for idx in range(count)]
+        target = [_roll(f"{solution_seed}|target|{idx}", -2, 2) for idx in range(count)]
+        owner = [idx for idx in range(count) if idx % 2 == 0]
+        guest = [idx for idx in range(count) if idx % 2 == 1]
+        for idx in range(count):
+            role = "owner" if idx in owner else "guest"
+            current = layers[idx]
+            while current < target[idx]:
+                script.append({"role": role, "cmd": f"shift_{idx}_up"})
+                current += 1
+            while current > target[idx]:
+                script.append({"role": role, "cmd": f"shift_{idx}_down"})
+                current -= 1
+        script.extend([{"role": "owner", "cmd": "owner_lock"}, {"role": "guest", "cmd": "guest_lock"}])
+        state["runtime"] = {
+            "layers": layers,
+            "target": target,
+            "owner": owner,
+            "guest": guest,
+            "owner_lock": False,
+            "guest_lock": False,
+        }
+        state["layout_signature"] = f"strata_shift:{count}"
+        state["solution_signature"] = ":".join(str(v) for v in target)
+
+    elif puzzle_key == "y":
+        speed = 0.31 if difficulty == "easy" else 0.39 if difficulty == "medium" else 0.46
+        required = 2 if difficulty == "easy" else 3 if difficulty == "medium" else 4
+        target_phase = _roll(f"{solution_seed}|phase", 80, 920) / 1000.0
+        offset = _roll(f"{layout_seed}|offset", 0, 1000) / 1000.0
+        freq = _roll(f"{layout_seed}|freq", 120, 420)
+        target_freq = _roll(f"{solution_seed}|target_freq", 180, 540)
+        step = 20
+        while freq < target_freq:
+            script.append({"role": "guest", "cmd": "guest_freq_up"})
+            freq += step
+        while freq > target_freq:
+            script.append({"role": "guest", "cmd": "guest_freq_down"})
+            freq -= step
+        now = float(state["last_tick"])
+        for _ in range(required):
+            delay = _next_phase_delay(now, speed, offset, target_phase, 0.45)
+            script.append({"role": "owner", "cmd": "wait", "delay": delay})
+            now += delay
+            script.append({"role": "owner", "cmd": "fire"})
+        state["runtime"] = {
+            "speed": speed,
+            "target_phase": target_phase,
+            "offset": offset,
+            "freq": _roll(f"{layout_seed}|freq", 120, 420),
+            "target_freq": target_freq,
+            "step": step,
+            "required": required,
+            "res": 0,
+            "last_fire": 0.0,
+        }
+        state["layout_signature"] = f"echo_sync:{speed:.3f}"
+        state["solution_signature"] = f"{target_phase:.3f}:{target_freq}:{required}"
+
+    elif puzzle_key == "z":
+        rows = 2 if difficulty == "easy" else 3 if difficulty == "medium" else 4
+        cols = 3 if difficulty == "easy" else 4 if difficulty == "medium" else 5
+        past_target = [[bool(_roll(f"{solution_seed}|past|{r}|{c}", 0, 1)) for c in range(cols)] for r in range(rows)]
+        present_target = [[bool(_roll(f"{solution_seed}|present|{r}|{c}", 0, 1)) for c in range(cols)] for r in range(rows)]
+        links = []
+        for idx in range(2 if difficulty == "easy" else 4 if difficulty == "medium" else 7):
+            pr = _roll(f"{layout_seed}|lpr|{idx}", 0, rows - 1)
+            pc = _roll(f"{layout_seed}|lpc|{idx}", 0, cols - 1)
+            rr = _roll(f"{layout_seed}|lrr|{idx}", 0, rows - 1)
+            rc = _roll(f"{layout_seed}|lrc|{idx}", 0, cols - 1)
+            links.append({"past": [pr, pc], "present": [rr, rc]})
+            linked = past_target[pr][pc] or present_target[rr][rc]
+            past_target[pr][pc] = linked
+            present_target[rr][rc] = linked
+        for r in range(rows):
+            for c in range(cols):
+                if past_target[r][c]:
+                    script.append({"role": "owner", "cmd": f"past_{r}_{c}"})
+        for r in range(rows):
+            for c in range(cols):
+                if present_target[r][c]:
+                    script.append({"role": "guest", "cmd": f"present_{r}_{c}"})
+        state["runtime"] = {
+            "rows": rows,
+            "cols": cols,
+            "past": [[False for _ in range(cols)] for _ in range(rows)],
+            "present": [[False for _ in range(cols)] for _ in range(rows)],
+            "past_target": past_target,
+            "present_target": present_target,
+            "links": links,
+            "past_clues": [sum(1 for value in row if value) for row in past_target],
+            "present_clues": [sum(1 for value in row if value) for row in present_target],
+        }
+        state["layout_signature"] = f"temporal_weave:{rows}x{cols}:{len(links)}"
+        state["solution_signature"] = f"{sum(state['runtime']['past_clues'])}:{sum(state['runtime']['present_clues'])}"
+
+    state["solution_signature"] = f"{state['solution_signature']}|{_stable_hash(solution_seed)}"
+    state["solution_script"] = script
+    state["reset_runtime"] = deepcopy(state["runtime"])
+    _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Use your controls and commit together.", True)
+    return state
+
+
+
+def _command_allowed(state: dict[str, Any], role: str, cmd: str) -> bool:
+    key = state["key"]
+    runtime = state["runtime"]
+    if cmd == "wait":
+        return True
+    if key in {"p", "u", "v"}:
+        if cmd.startswith("owner_"):
+            return role == "owner"
+        if cmd.startswith("guest_") or cmd == "launch":
+            return role == "guest"
+        return False
+    if key == "q":
+        return (cmd.startswith("owner_") and role == "owner") or (cmd.startswith("guest_") and role == "guest")
+    if key == "r":
+        if not cmd.startswith("toggle_"):
+            return False
+        index = int(cmd.split("_")[1])
+        return index in set(runtime["owner"]) if role == "owner" else index in set(runtime["guest"])
+    if key == "s":
+        return (cmd.startswith("owner_") and role == "owner") or (cmd.startswith("guest_") and role == "guest")
+    if key == "t":
+        return (cmd.startswith("gate_") and role == "owner") or (cmd in {"owner_lock"} and role == "owner") or (cmd.startswith("pump_") and role == "guest") or (cmd in {"guest_lock"} and role == "guest")
+    if key == "w":
+        return cmd == "catch"
+    if key == "x":
+        if cmd == "owner_lock":
+            return role == "owner"
+        if cmd == "guest_lock":
+            return role == "guest"
+        if not cmd.startswith("shift_"):
+            return False
+        layer = int(cmd.split("_")[1])
+        return layer in set(runtime["owner"]) if role == "owner" else layer in set(runtime["guest"])
+    if key == "y":
+        return (cmd.startswith("guest_") and role == "guest") or (cmd == "fire" and role == "owner")
+    if key == "z":
+        return (cmd.startswith("past_") and role == "owner") or (cmd.startswith("present_") and role == "guest")
+    return False
+
+
+def _apply_cmd(state: dict[str, Any], role: str, cmd: str, now: float) -> None:
+    key = state["key"]
+    runtime = state["runtime"]
+    if cmd == "wait":
+        return
+
+    if key in {"p", "u", "v"}:
+        max_a = 9 if key != "u" else 25
+        max_b = 9 if key == "p" else 5 if key == "v" else 3
+        if cmd == "owner_up":
+            runtime["a"] = int(_clamp(int(runtime["a"]) + 1, 0, max_a))
+            runtime["owner_lock"] = False
+        elif cmd == "owner_down":
+            runtime["a"] = int(_clamp(int(runtime["a"]) - 1, 0, max_a))
+            runtime["owner_lock"] = False
+        elif cmd == "guest_up":
+            runtime["b"] = int(_clamp(int(runtime["b"]) + 1, 0, max_b))
+            runtime["guest_lock"] = False
+        elif cmd == "guest_down":
+            runtime["b"] = int(_clamp(int(runtime["b"]) - 1, 0, max_b))
+            runtime["guest_lock"] = False
+        elif cmd == "owner_lock":
+            runtime["owner_lock"] = True
+        elif cmd == "guest_lock":
+            runtime["guest_lock"] = True
+        elif cmd == "owner_arm":
+            runtime["owner_lock"] = True
+        elif cmd == "guest_arm":
+            runtime["guest_lock"] = True
+        elif cmd == "launch":
+            if not runtime["owner_lock"] or not runtime["guest_lock"]:
+                _set_status(state, PHASE_COMMIT, STATUS_ACTIVE, "Both players must arm before launch.", True)
+                return
+            if int(runtime["a"]) == int(runtime["target_a"]) and int(runtime["b"]) == int(runtime["target_b"]):
+                _mark_solved(state, "Trajectory converged.")
+            else:
+                _queue_failure(state, now, "Launch diverged. Resetting.", "sync_collapse" if key == "p" else None)
+            return
+        else:
+            raise HTTPException(status_code=400, detail="Invalid puzzle command.")
+        if runtime["owner_lock"] and runtime["guest_lock"]:
+            if int(runtime["a"]) == int(runtime["target_a"]) and int(runtime["b"]) == int(runtime["target_b"]):
+                _mark_solved(state, "Dual channels locked.")
+            else:
+                _queue_failure(state, now, "Lock mismatch. Reconfigure.", "phase_drift" if key == "p" else None)
+        else:
+            _set_status(state, PHASE_COMMIT, STATUS_ACTIVE, "Align both channels and lock.", True)
+        return
+
+    if key == "q":
+        if cmd.startswith("owner_raise_"):
+            idx = int(cmd.split("_")[-1])
+            runtime["pressures"][idx] = int(_clamp(int(runtime["pressures"][idx]) + 1, 0, 9))
+            runtime["owner_lock"] = False
+        elif cmd.startswith("guest_vent_"):
+            idx = int(cmd.split("_")[-1])
+            runtime["pressures"][idx] = int(_clamp(int(runtime["pressures"][idx]) - 1, 0, 9))
+            runtime["guest_lock"] = False
+        elif cmd == "owner_lock":
+            runtime["owner_lock"] = True
+        elif cmd == "guest_lock":
+            runtime["guest_lock"] = True
+        else:
+            raise HTTPException(status_code=400, detail="Invalid pressure command.")
+        if runtime["owner_lock"] and runtime["guest_lock"]:
+            if runtime["pressures"] == runtime["target"]:
+                _mark_solved(state, "Pressure profile stabilized.")
+            else:
+                _queue_failure(state, now, "Pressure commit failed.")
+        else:
+            _set_status(state, PHASE_COMMIT, STATUS_ACTIVE, "Raise/vent channels and commit together.", True)
+        return
+
+    if key == "r":
+        idx = int(cmd.split("_")[1])
+        runtime["active"][idx] = not bool(runtime["active"][idx])
+        if all(bool(runtime["active"][i]) == bool(runtime["required"][i]) for i in range(len(runtime["required"]))):
+            _mark_solved(state, "Bridge stabilized.")
+        else:
+            _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Toggle segments to complete the path.", True)
+        return
+
+    if key == "s":
+        if cmd.startswith("owner_cycle_"):
+            idx = int(cmd.split("_")[-1])
+            runtime["owner_values"][idx] = (int(runtime["owner_values"][idx]) + 1) % 4
+        elif cmd.startswith("guest_cycle_"):
+            idx = int(cmd.split("_")[-1])
+            runtime["guest_values"][idx] = (int(runtime["guest_values"][idx]) + 1) % 4
+        else:
+            raise HTTPException(status_code=400, detail="Invalid mirror command.")
+        if runtime["owner_values"] == runtime["owner_target"] and runtime["guest_values"] == runtime["guest_target"]:
+            _mark_solved(state, "Mirror arrays synchronized.")
+        else:
+            _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Cycle cells to match your mirrored pattern.", True)
+        return
+
+    if key == "t":
+        if cmd.startswith("gate_"):
+            idx = int(cmd.split("_")[-1])
+            runtime["gates"][idx] = not bool(runtime["gates"][idx])
+            runtime["owner_lock"] = False
+        elif cmd.startswith("pump_"):
+            idx = int(cmd.split("_")[-1])
+            runtime["water"][idx] = _clamp(float(runtime["water"][idx]) - 1.0, 0.0, 9.0)
+            runtime["guest_lock"] = False
+        elif cmd == "owner_lock":
+            runtime["owner_lock"] = True
+        elif cmd == "guest_lock":
+            runtime["guest_lock"] = True
+        else:
+            raise HTTPException(status_code=400, detail="Invalid flood command.")
+        if runtime["owner_lock"] and runtime["guest_lock"]:
+            if all(float(runtime["water"][idx]) <= int(runtime["safe"][idx]) for idx in range(len(runtime["safe"]))):
+                _set_status(state, PHASE_COMMIT, STATUS_ACTIVE, "Safe profile reached. Hold it.", True)
+            else:
+                _queue_failure(state, now, "Unsafe flood commit.")
+        else:
+            _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Set gates/pumps, then lock together.", True)
+        return
+    if key == "w":
+        phase = _phase_value(now, float(runtime["speed"]), float(runtime["offset"]))
+        runtime[f"{role}_catch"] = {"t": now, "p": phase}
+        owner = runtime.get("owner_catch")
+        guest = runtime.get("guest_catch")
+        if owner and guest:
+            dt = abs(float(owner["t"]) - float(guest["t"]))
+            owner_d = _phase_distance(float(owner["p"]), float(runtime["target_phase"]))
+            guest_d = _phase_distance(float(guest["p"]), float(runtime["target_phase"]))
+            runtime["owner_catch"] = None
+            runtime["guest_catch"] = None
+            if dt <= float(runtime["sync_tol"]) and owner_d <= float(runtime["phase_tol"]) and guest_d <= float(runtime["phase_tol"]):
+                runtime["catches"] = int(runtime["catches"]) + 1
+                if int(runtime["catches"]) >= int(runtime["required"]):
+                    _mark_solved(state, "Tidal lock captured.")
+                else:
+                    _set_status(state, PHASE_COMMIT, STATUS_ACTIVE, "Catch confirmed. Repeat on next cycle.", True)
+            else:
+                failure_code = "routing_fault" if dt > float(runtime["sync_tol"]) else "pressure_breach"
+                _queue_failure(state, now, "Window miss. Tidal lock reset.", failure_code)
+        else:
+            _set_status(state, PHASE_COMMIT, STATUS_ACTIVE, "Catch armed. Waiting for partner.", True)
+        return
+
+    if key == "x":
+        if cmd == "owner_lock":
+            runtime["owner_lock"] = True
+        elif cmd == "guest_lock":
+            runtime["guest_lock"] = True
+        else:
+            parts = cmd.split("_")
+            idx = int(parts[1])
+            delta = 1 if parts[2] == "up" else -1
+            runtime["layers"][idx] = int(_clamp(int(runtime["layers"][idx]) + delta, -2, 2))
+            runtime["owner_lock"] = False
+            runtime["guest_lock"] = False
+
+        if runtime.get("owner_lock") and runtime.get("guest_lock"):
+            if runtime["layers"] == runtime["target"]:
+                _mark_solved(state, "Strata aligned.")
+            else:
+                failure_code = "archive_conflict" if int(state.get("stage_level", 1)) <= 2 else "sequence_corruption"
+                _queue_failure(state, now, "Layer commit conflict detected.", failure_code)
+        else:
+            _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Shift alternating layers to the target.", True)
+        return
+
+    if key == "y":
+        if cmd == "guest_freq_up":
+            runtime["freq"] = int(_clamp(int(runtime["freq"]) + int(runtime["step"]), 100, 1000))
+            _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Frequency tuned.", True)
+            return
+        if cmd == "guest_freq_down":
+            runtime["freq"] = int(_clamp(int(runtime["freq"]) - int(runtime["step"]), 100, 1000))
+            _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Frequency tuned.", True)
+            return
+        if cmd != "fire":
+            raise HTTPException(status_code=400, detail="Invalid echo command.")
+        if runtime["last_fire"] and (now - float(runtime["last_fire"])) < 0.38:
+            raise HTTPException(status_code=409, detail="Pulse emitter is cooling down.")
+        runtime["last_fire"] = now
+        phase = _phase_value(now, float(runtime["speed"]), float(runtime["offset"]))
+        phase_ok = _phase_distance(phase, float(runtime["target_phase"])) <= (0.11 if state["difficulty"] == "easy" else 0.08 if state["difficulty"] == "medium" else 0.06)
+        freq_ok = abs(int(runtime["freq"]) - int(runtime["target_freq"])) <= (30 if state["difficulty"] == "easy" else 20 if state["difficulty"] == "medium" else 10)
+        if phase_ok and freq_ok:
+            runtime["res"] = int(runtime["res"]) + 1
+            if int(runtime["res"]) >= int(runtime["required"]):
+                _mark_solved(state, "Echo resonance synchronized.")
+            else:
+                _set_status(state, PHASE_COMMIT, STATUS_ACTIVE, "Resonance locked. Chain the next pulse.", True)
+        else:
+            runtime["res"] = 0
+            _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Resonance lost. Re-sync.", True)
+        return
+
+    if key == "z":
+        parts = cmd.split("_")
+        source = parts[0]
+        row = int(parts[1])
+        col = int(parts[2])
+        if source == "past":
+            runtime["past"][row][col] = True
+            for link in runtime["links"]:
+                if link["past"] == [row, col]:
+                    runtime["present"][int(link["present"][0])][int(link["present"][1])] = True
+        elif source == "present":
+            runtime["present"][row][col] = True
+            for link in runtime["links"]:
+                if link["present"] == [row, col]:
+                    runtime["past"][int(link["past"][0])][int(link["past"][1])] = True
+        else:
+            raise HTTPException(status_code=400, detail="Invalid temporal command.")
+        for r in range(int(runtime["rows"])):
+            if sum(1 for val in runtime["past"][r] if val) > int(runtime["past_clues"][r]):
+                _queue_failure(state, now, "Temporal paradox detected.")
+                return
+            if sum(1 for val in runtime["present"][r] if val) > int(runtime["present_clues"][r]):
+                _queue_failure(state, now, "Temporal paradox detected.")
+                return
+        if runtime["past"] == runtime["past_target"] and runtime["present"] == runtime["present_target"]:
+            _mark_solved(state, "Temporal weave stabilized.")
+        else:
+            _set_status(state, PHASE_CONFIGURE, STATUS_ACTIVE, "Fill both timelines without paradox.", True)
+
+
+def _refresh_progress(state: dict[str, Any]) -> None:
+    previous = float(state.get("progress_value", state.get("progress", 0.0)) or 0.0)
+    if state["is_solved"]:
+        progress = 1.0
     else:
-        view = {}
+        runtime = state["runtime"]
+        key = state["key"]
+        if key in {"p", "u", "v"}:
+            a_score = 1.0 - min(1.0, abs(int(runtime["a"]) - int(runtime["target_a"])) / max(1, 25 if key == "u" else 9))
+            b_score = 1.0 - min(1.0, abs(int(runtime["b"]) - int(runtime["target_b"])) / max(1, 9 if key == "p" else 5 if key == "v" else 3))
+            lock_bonus = (1 if runtime["owner_lock"] else 0) + (1 if runtime["guest_lock"] else 0)
+            progress = _clamp((a_score + b_score + (lock_bonus / 2.0)) / 3.0, 0.0, 0.99)
+        elif key == "q":
+            score = 0.0
+            for idx in range(len(runtime["target"])):
+                score += 1.0 - min(1.0, abs(int(runtime["pressures"][idx]) - int(runtime["target"][idx])) / 9.0)
+            score /= max(1, len(runtime["target"]))
+            lock_bonus = (1 if runtime["owner_lock"] else 0) + (1 if runtime["guest_lock"] else 0)
+            progress = _clamp((score + (lock_bonus / 2.0)) / 2.0, 0.0, 0.99)
+        elif key == "r":
+            matched = sum(1 for i in range(len(runtime["required"])) if bool(runtime["active"][i]) == bool(runtime["required"][i]))
+            progress = _clamp(matched / max(1, len(runtime["required"])), 0.0, 0.99)
+        elif key == "s":
+            matched = sum(1 for i in range(len(runtime["owner_target"])) if int(runtime["owner_values"][i]) == int(runtime["owner_target"][i]))
+            matched += sum(1 for i in range(len(runtime["guest_target"])) if int(runtime["guest_values"][i]) == int(runtime["guest_target"][i]))
+            progress = _clamp(matched / max(1, len(runtime["owner_target"]) * 2), 0.0, 0.99)
+        elif key == "t":
+            score = sum(1 for i in range(len(runtime["safe"])) if float(runtime["water"][i]) <= int(runtime["safe"][i]))
+            hold = min(1.0, float(runtime["hold"]) / 1.0)
+            progress = _clamp(((score / max(1, len(runtime["safe"]))) + hold) / 2.0, 0.0, 0.99)
+        elif key == "w":
+            progress = _clamp(int(runtime["catches"]) / max(1, int(runtime["required"])), 0.0, 0.99)
+        elif key == "x":
+            matched = sum(1 for i in range(len(runtime["target"])) if int(runtime["layers"][i]) == int(runtime["target"][i]))
+            lock_bonus = (1 if runtime.get("owner_lock") else 0) + (1 if runtime.get("guest_lock") else 0)
+            progress = _clamp(((matched / max(1, len(runtime["target"]))) + (lock_bonus / 2.0)) / 2.0, 0.0, 0.99)
+        elif key == "y":
+            res = _clamp(int(runtime["res"]) / max(1, int(runtime["required"])), 0.0, 0.99)
+            freq = 1.0 - min(1.0, abs(int(runtime["freq"]) - int(runtime["target_freq"])) / 500.0)
+            progress = _clamp((res + freq) / 2.0, 0.0, 0.99)
+        elif key == "z":
+            rows = int(runtime["rows"])
+            cols = int(runtime["cols"])
+            total = max(1, rows * cols * 2)
+            matched = 0
+            for r in range(rows):
+                for c in range(cols):
+                    if bool(runtime["past"][r][c]) == bool(runtime["past_target"][r][c]):
+                        matched += 1
+                    if bool(runtime["present"][r][c]) == bool(runtime["present_target"][r][c]):
+                        matched += 1
+            progress = _clamp(matched / total, 0.0, 0.99)
+        else:
+            progress = _clamp(float(state.get("progress", 0.0) or 0.0), 0.0, 0.99)
+
+    state["progress"] = progress
+    state["progress_value"] = progress
+    delta = progress - previous
+    if delta > 0.001:
+        state["progress_trend"] = "up"
+    elif delta < -0.001:
+        state["progress_trend"] = "down"
+    else:
+        state["progress_trend"] = "steady"
+
+
+def tick_puzzle_state_v2(state: dict[str, Any], now: float, delta: float | None = None) -> None:
+    if state["is_solved"]:
+        return
+    prev = float(state.get("last_tick", now))
+    elapsed = max(0.0, now - prev) if delta is None else max(0.0, delta)
+    state["last_tick"] = now
+    if state.get("pending_reset"):
+        if now < float(state.get("cooldown_until", 0.0)):
+            _set_status(state, PHASE_RESOLVE, STATUS_COOLDOWN, state["status_text"], False)
+            _refresh_progress(state)
+            return
+        _reset_after_failure(state)
+
+    if state["key"] == "t":
+        runtime = state["runtime"]
+        locked_safe = runtime["owner_lock"] and runtime["guest_lock"] and all(float(runtime["water"][i]) <= int(runtime["safe"][i]) for i in range(len(runtime["safe"])))
+        if not locked_safe:
+            for i in range(len(runtime["water"])):
+                rise = 1.25 * elapsed
+                if runtime["gates"][i]:
+                    rise *= 0.25
+                runtime["water"][i] = _clamp(float(runtime["water"][i]) + rise, 0.0, 9.0)
+        if any(float(v) >= 8.95 for v in runtime["water"]):
+            _queue_failure(state, now, "Flood breach detected.")
+        if locked_safe:
+            runtime["hold"] = float(runtime["hold"]) + elapsed
+            if runtime["hold"] >= 1.0:
+                _mark_solved(state, "Flood channels stabilized.")
+        else:
+            runtime["hold"] = 0.0
+    elif state["key"] == "w":
+        runtime = state["runtime"]
+        for side in ("owner_catch", "guest_catch"):
+            entry = runtime.get(side)
+            if entry and (now - float(entry["t"])) > 1.0:
+                runtime[side] = None
+    elif state["key"] == "y":
+        runtime = state["runtime"]
+        if runtime["res"] > 0 and runtime["last_fire"] and (now - float(runtime["last_fire"])) > 4.0:
+            runtime["res"] = max(0, int(runtime["res"]) - 1)
+            state["status_text"] = "Resonance chain fading."
+    _refresh_progress(state)
+
+
+def _simulate_trace(state: dict[str, Any], trace: list[dict[str, Any]]) -> bool:
+    sim = deepcopy(state)
+    now = float(sim.get("last_tick", _utc_seconds()))
+    for step in trace:
+        cmd = str(step.get("cmd") or "").strip()
+        role = str(step.get("role") or "").strip()
+        delay = float(step.get("delay", 0.0) or 0.0)
+        if delay > 0:
+            now += delay
+            tick_puzzle_state_v2(sim, now, delay)
+        if cmd == "wait":
+            continue
+        if not _command_allowed(sim, role, cmd):
+            return False
+        _apply_cmd(sim, role, cmd, now)
+        tick_puzzle_state_v2(sim, now, 0.0)
+        if sim["is_solved"]:
+            break
+    return bool(sim["is_solved"])
+
+
+def try_solve_v2(state: dict[str, Any]) -> list[dict[str, Any]] | None:
+    trace = deepcopy(state.get("solution_script", []))
+    if not trace:
+        return None
+    baseline = deepcopy(state)
+    if isinstance(baseline.get("reset_runtime"), dict) and baseline.get("reset_runtime"):
+        baseline["runtime"] = deepcopy(baseline["reset_runtime"])
+    baseline["is_solved"] = False
+    baseline["completed"] = False
+    baseline["pending_reset"] = False
+    baseline["cooldown_until"] = 0.0
+    return trace if _simulate_trace(baseline, trace) else None
+
+
+def _create_state_with_preflight(session: dict[str, Any], room_key: str, room: dict[str, Any]) -> dict[str, Any]:
+    difficulty = str(session.get("difficulty") or "easy").strip().lower()
+    if difficulty not in CO_OP_PUZZLE_CATALOG_V2:
+        difficulty = "easy"
+    puzzle_key = str(room.get("puzzle_key") or "").strip().lower()
+    if puzzle_key not in FAMILY_BY_KEY:
+        raise HTTPException(status_code=400, detail=f"Unsupported co-op puzzle key '{puzzle_key}'.")
+    stage_level = _compute_stage_level(session, room_key)
+    run_nonce = str(session.get("run_nonce") or "legacy").strip() or "legacy"
+    layout_seed = f"{session.get('seed', '')}|{room_key}|{puzzle_key}|{difficulty}"
+    solution_seed = f"{layout_seed}|{run_nonce}"
+    for attempt in range(MAX_PREFLIGHT_ATTEMPTS):
+        candidate = _gen_state(
+            puzzle_key,
+            difficulty,
+            layout_seed,
+            f"{solution_seed}|attempt:{attempt}",
+            stage_level,
+        )
+        trace = try_solve_v2(candidate)
+        if trace is None:
+            continue
+        candidate["preflight_trace"] = trace
+        candidate["preflight_validated"] = True
+        return candidate
+    fallback = _new_state(puzzle_key, difficulty, layout_seed, f"{solution_seed}|fallback", stage_level)
+    fallback["runtime"] = {"owner_lock": False, "guest_lock": False}
+    fallback["reset_runtime"] = deepcopy(fallback["runtime"])
+    fallback["solution_script"] = [{"role": "owner", "cmd": "owner_lock"}, {"role": "guest", "cmd": "guest_lock"}]
+    fallback["preflight_trace"] = deepcopy(fallback["solution_script"])
+    fallback["preflight_validated"] = True
+    return fallback
+
+
+def ensure_current_room_puzzle_state_v2(session: dict[str, Any]) -> dict[str, Any]:
+    room_key, room = _current_room_state(session)
+    room_states = session.setdefault("room_puzzle_states", {})
+    state = room_states.get(room_key)
+    if not isinstance(state, dict) or int(state.get("schema_version", 0)) != 2:
+        state = _create_state_with_preflight(session, room_key, room)
+        room_states[room_key] = state
+    tick_puzzle_state_v2(state, _utc_seconds())
+    return state
+
+def _serialize_stage_elements(state: dict[str, Any], now: float) -> list[dict[str, Any]]:
+    runtime = state["runtime"]
+    if state["key"] == "q":
+        return [
+            {
+                "x": 180.0 + (idx * 180.0),
+                "y": 360.0,
+                "width": 130.0,
+                "height": 130.0,
+                "label": f"P{idx + 1}",
+                "state": "target" if int(runtime["pressures"][idx]) == int(runtime["target"][idx]) else "active",
+                "is_target": int(runtime["pressures"][idx]) == int(runtime["target"][idx]),
+            }
+            for idx in range(len(runtime["pressures"]))
+        ]
+    if state["key"] == "t":
+        return [
+            {
+                "x": 170.0 + (idx * 170.0),
+                "y": 300.0,
+                "width": 120.0,
+                "height": 210.0,
+                "label": f"F{idx + 1}",
+                "state": "target" if float(runtime["water"][idx]) <= int(runtime["safe"][idx]) else "active",
+                "is_target": float(runtime["water"][idx]) <= int(runtime["safe"][idx]),
+            }
+            for idx in range(len(runtime["water"]))
+        ]
+    if state["key"] == "w":
+        phase = _phase_value(now, float(runtime["speed"]), float(runtime["offset"]))
+        near = _phase_distance(phase, float(runtime["target_phase"])) <= float(runtime["phase_tol"])
+        return [{"x": 420.0, "y": 320.0, "width": 240.0, "height": 240.0, "label": "LOCK", "state": "target" if near else "active", "is_target": near}]
+    return []
+
+
+def _serialize_actions(state: dict[str, Any], role: str) -> list[dict[str, Any]]:
+    runtime = state["runtime"]
+    enabled = bool(state["can_interact"])
+    key = state["key"]
+    actions: list[dict[str, Any]] = []
+    if key in {"p", "u", "v"}:
+        actions.extend(
+            [
+                _mk_action("owner_down", "Owner -", "dial", "owner", enabled and role == "owner"),
+                _mk_action("owner_up", "Owner +", "dial", "owner", enabled and role == "owner"),
+                _mk_action("owner_lock" if key != "v" else "owner_arm", "Owner Lock" if key != "v" else "Owner Arm", "lock", "owner", enabled and role == "owner", bool(runtime["owner_lock"])),
+                _mk_action("guest_down", "Guest -", "dial", "guest", enabled and role == "guest"),
+                _mk_action("guest_up", "Guest +", "dial", "guest", enabled and role == "guest"),
+                _mk_action("guest_lock" if key != "v" else "guest_arm", "Guest Lock" if key != "v" else "Guest Arm", "lock", "guest", enabled and role == "guest", bool(runtime["guest_lock"])),
+            ]
+        )
+        if key == "v":
+            actions.append(_mk_action("launch", "Launch", "launch", "shared", enabled and role == "guest"))
+    elif key == "q":
+        for idx in range(len(runtime["pressures"])):
+            actions.append(_mk_action(f"owner_raise_{idx}", f"Raise P{idx + 1}", "valve", "owner", enabled and role == "owner"))
+            actions.append(_mk_action(f"guest_vent_{idx}", f"Vent P{idx + 1}", "vent", "guest", enabled and role == "guest"))
+        actions.append(_mk_action("owner_lock", "Owner Commit", "commit", "owner", enabled and role == "owner", bool(runtime["owner_lock"])))
+        actions.append(_mk_action("guest_lock", "Guest Commit", "commit", "guest", enabled and role == "guest", bool(runtime["guest_lock"])))
+    elif key == "r":
+        for idx in range(len(runtime["active"])):
+            tone = "owner" if idx in set(runtime["owner"]) else "guest"
+            actions.append(_mk_action(f"toggle_{idx}", f"Beam {idx + 1}", "bridge", tone, enabled and ((tone == "owner" and role == "owner") or (tone == "guest" and role == "guest")), bool(runtime["active"][idx])))
+    elif key == "s":
+        for idx in range(len(runtime["owner_values"])):
+            actions.append(_mk_action(f"owner_cycle_{idx}", f"O {idx + 1}", "mirror", "owner", enabled and role == "owner"))
+            actions.append(_mk_action(f"guest_cycle_{idx}", f"G {idx + 1}", "mirror", "guest", enabled and role == "guest"))
+    elif key == "t":
+        for idx in range(len(runtime["water"])):
+            actions.append(_mk_action(f"gate_{idx}", f"Gate {idx + 1}", "gate", "owner", enabled and role == "owner", bool(runtime["gates"][idx])))
+            actions.append(_mk_action(f"pump_{idx}", f"Pump {idx + 1}", "pump", "guest", enabled and role == "guest"))
+        actions.append(_mk_action("owner_lock", "Owner Lock", "commit", "owner", enabled and role == "owner", bool(runtime["owner_lock"])))
+        actions.append(_mk_action("guest_lock", "Guest Lock", "commit", "guest", enabled and role == "guest", bool(runtime["guest_lock"])))
+    elif key == "w":
+        actions.append(_mk_action("catch", "Catch Window", "time", "shared", enabled))
+    elif key == "x":
+        for idx in range(len(runtime["layers"])):
+            tone = "owner" if idx in set(runtime["owner"]) else "guest"
+            usable = enabled and ((tone == "owner" and role == "owner") or (tone == "guest" and role == "guest"))
+            actions.append(_mk_action(f"shift_{idx}_down", f"L{idx + 1} -", "strata", tone, usable))
+            actions.append(_mk_action(f"shift_{idx}_up", f"L{idx + 1} +", "strata", tone, usable))
+        actions.append(_mk_action("owner_lock", "Owner Lock", "commit", "owner", enabled and role == "owner", bool(runtime.get("owner_lock"))))
+        actions.append(_mk_action("guest_lock", "Guest Lock", "commit", "guest", enabled and role == "guest", bool(runtime.get("guest_lock"))))
+    elif key == "y":
+        actions.extend(
+            [
+                _mk_action("guest_freq_down", "Freq -", "freq", "guest", enabled and role == "guest"),
+                _mk_action("guest_freq_up", "Freq +", "freq", "guest", enabled and role == "guest"),
+                _mk_action("fire", "Fire Pulse", "echo", "owner", enabled and role == "owner"),
+            ]
+        )
+    elif key == "z":
+        for r in range(int(runtime["rows"])):
+            for c in range(int(runtime["cols"])):
+                actions.append(_mk_action(f"past_{r}_{c}", f"P {r + 1},{c + 1}", "time", "owner", enabled and role == "owner", bool(runtime["past"][r][c])))
+                actions.append(_mk_action(f"present_{r}_{c}", f"N {r + 1},{c + 1}", "time", "guest", enabled and role == "guest", bool(runtime["present"][r][c])))
+    else:
+        actions.append(_mk_action("owner_lock", "Owner Ready", "commit", "owner", enabled and role == "owner"))
+        actions.append(_mk_action("guest_lock", "Guest Ready", "commit", "guest", enabled and role == "guest"))
+    return actions
+
+
+def _serialize_hud(state: dict[str, Any], now: float) -> list[dict[str, Any]]:
+    runtime = state["runtime"]
+    key = state["key"]
+    if key in {"p", "u", "v"}:
+        return [_mk_hud("Owner", f"{runtime['a']}->{runtime['target_a']}", "dial", "owner"), _mk_hud("Guest", f"{runtime['b']}->{runtime['target_b']}", "dial", "guest")]
+    if key == "q":
+        return [_mk_hud("Pressure", " | ".join(f"{runtime['pressures'][idx]}/{runtime['target'][idx]}" for idx in range(len(runtime["target"]))), "valve")]
+    if key == "r":
+        matched = sum(1 for i in range(len(runtime["required"])) if bool(runtime["active"][i]) == bool(runtime["required"][i]))
+        return [_mk_hud("Match", f"{matched}/{len(runtime['required'])}", "bridge")]
+    if key == "s":
+        owner_match = sum(1 for i in range(len(runtime["owner_target"])) if int(runtime["owner_values"][i]) == int(runtime["owner_target"][i]))
+        guest_match = sum(1 for i in range(len(runtime["guest_target"])) if int(runtime["guest_values"][i]) == int(runtime["guest_target"][i]))
+        return [_mk_hud("Owner", f"{owner_match}/{len(runtime['owner_target'])}", "mirror", "owner"), _mk_hud("Guest", f"{guest_match}/{len(runtime['guest_target'])}", "mirror", "guest")]
+    if key == "t":
+        return [_mk_hud("Water", " | ".join(f"{int(runtime['water'][idx])}/{runtime['safe'][idx]}" for idx in range(len(runtime["safe"]))), "flood"), _mk_hud("Hold", f"{runtime['hold']:.1f}/1.0s", "time")]
+    if key == "w":
+        phase = _phase_value(now, float(runtime["speed"]), float(runtime["offset"]))
+        return [_mk_hud("Phase", f"{phase:.2f}->{runtime['target_phase']:.2f}", "time"), _mk_hud("Catch", f"{runtime['catches']}/{runtime['required']}", "lock")]
+    if key == "x":
+        matched = sum(1 for i in range(len(runtime["target"])) if int(runtime["layers"][i]) == int(runtime["target"][i]))
+        return [_mk_hud("Aligned", f"{matched}/{len(runtime['target'])}", "strata")]
+    if key == "y":
+        phase = _phase_value(now, float(runtime["speed"]), float(runtime["offset"]))
+        return [_mk_hud("Freq", f"{runtime['freq']}->{runtime['target_freq']}", "freq"), _mk_hud("Phase", f"{phase:.2f}->{runtime['target_phase']:.2f}", "time"), _mk_hud("Res", f"{runtime['res']}/{runtime['required']}", "echo")]
+    if key == "z":
+        past_now = sum(1 for row in runtime["past"] for v in row if v)
+        present_now = sum(1 for row in runtime["present"] for v in row if v)
+        return [_mk_hud("Past", f"{past_now}/{sum(runtime['past_clues'])}", "time", "owner"), _mk_hud("Now", f"{present_now}/{sum(runtime['present_clues'])}", "time", "guest")]
+    return [_mk_hud("Fallback", "Dual commit", "commit")]
+
+def serialize_current_room_puzzle_v2(session: dict[str, Any], username: str) -> dict[str, Any]:
+    state = ensure_current_room_puzzle_state_v2(session)
+    role = _role(username, session)
+    now = _utc_seconds()
+    tick_puzzle_state_v2(state, now)
+    hud = _serialize_hud(state, now)
+    actions = _serialize_actions(state, role)
+    stage_elements = _serialize_stage_elements(state, now)
+    prompt = "Press E to open the panel. Use your assigned controls."
+    view = {
+        "schema_version": 2,
+        "family_id": state["family_id"],
+        "phase": state["phase"],
+        "status_code": state["status_code"],
+        "status_text": state["status_text"],
+        "is_solved": bool(state["is_solved"]),
+        "can_interact": bool(state["can_interact"]),
+        "progress": float(state["progress"]),
+        "progress_label": state.get("progress_label", "System Stability"),
+        "progress_value": float(state.get("progress_value", state.get("progress", 0.0))),
+        "progress_trend": state.get("progress_trend", "steady"),
+        "attempt": int(state["attempt"]),
+        "failure_code": state.get("failure_code", ""),
+        "failure_label": state.get("failure_label", ""),
+        "failure_visual_cue": state.get("failure_visual_cue", ""),
+        "recovery_text": state.get("recovery_text", ""),
+        "stage_level": int(state.get("stage_level", 1)),
+        "stage_visual_profile": state.get("stage_visual_profile", "intro"),
+        "accent_color": state["accent_color"],
+        "mechanic_type": state["mechanic_type"],
+        "hud": hud,
+        "actions": actions,
+        "stage_elements": stage_elements,
+        "prompt": prompt,
+        "panel": {
+            "status_text": state["status_text"],
+            "prompt": prompt,
+            "hud": hud,
+            "actions": actions,
+            "failure_code": state.get("failure_code", ""),
+            "failure_label": state.get("failure_label", ""),
+            "failure_visual_cue": state.get("failure_visual_cue", ""),
+            "recovery_text": state.get("recovery_text", ""),
+            "progress_label": state.get("progress_label", "System Stability"),
+            "progress_value": float(state.get("progress_value", state.get("progress", 0.0))),
+            "progress_trend": state.get("progress_trend", "steady"),
+            "stage_level": int(state.get("stage_level", 1)),
+            "stage_visual_profile": state.get("stage_visual_profile", "intro"),
+        },
+        "stage": {
+            "visual_profile": state.get("stage_visual_profile", "intro"),
+            "level": int(state.get("stage_level", 1)),
+            "elements": stage_elements,
+        },
+    }
     return {
-        "key": state.get("key"),
+        "key": state["key"],
         "difficulty": session.get("difficulty"),
-        "name": state.get("name"),
-        "instruction": state.get("instruction"),
-        "status": state.get("status"),
-        "completed": bool(state.get("completed")),
+        "name": state["name"],
+        "instruction": state["instruction"],
+        "status": state["status_text"],
+        "completed": bool(state["is_solved"]),
         "role": role,
-        "view_type": view_type,
+        "view_type": "coop_v2",
         "view": view,
     }
 
 
-def _update_pressure_state(session: dict[str, Any], state: dict[str, Any]) -> None:
-    owner, guest = _get_players(session)
-    phase_index = int(state.get("phase_index", 0) or 0)
-    phases = state.get("phases", [])
-    if phase_index >= len(phases):
-        _complete(state, "The linked pressure lattice stabilizes.")
-        return
-    current = phases[phase_index]
-    if _center_in_rect(owner, state["plates"][current["owner"]]) and _center_in_rect(guest, state["plates"][current["guest"]]):
-        if not state.get("hold_started_at"):
-            state["hold_started_at"] = _utc_now_iso()
-            state["status"] = f"Charging resonance phase {phase_index + 1}/{len(phases)}..."
-            return
-        elapsed = (_utc_now() - _parse_iso(state.get("hold_started_at"))).total_seconds()
-        if elapsed >= float(state.get("hold_seconds", 0.8)):
-            state["phase_index"] = phase_index + 1
-            state["hold_started_at"] = None
-            if int(state["phase_index"]) >= len(phases):
-                _complete(state, "The linked pressure lattice stabilizes.")
-            else:
-                state["status"] = f"Phase {phase_index + 1} stabilized. Shift to the next resonance pair."
-        return
-    state["hold_started_at"] = None
-    state["status"] = "Both players must hold the active plate pair together."
+def update_position_puzzle_state_v2(session: dict[str, Any]) -> None:
+    state = ensure_current_room_puzzle_state_v2(session)
+    tick_puzzle_state_v2(state, _utc_seconds())
 
 
-def _update_spatial_state(session: dict[str, Any], state: dict[str, Any]) -> None:
-    owner, guest = _get_players(session)
-    step_index = int(state.get("step_index", 0) or 0)
-    sequence = state.get("sequence", [])
-    if step_index >= len(sequence):
-        _complete(state, "Your movement patterns resonate perfectly.")
-        return
-    current = sequence[step_index]
-    if _center_in_rect(owner, state["zones"][current["owner"]]) and _center_in_rect(guest, state["zones"][current["guest"]]):
-        if not state.get("hold_started_at"):
-            state["hold_started_at"] = _utc_now_iso()
-            state["status"] = f"Locking sync zone {step_index + 1}/{len(sequence)}..."
-            return
-        elapsed = (_utc_now() - _parse_iso(state.get("hold_started_at"))).total_seconds()
-        if elapsed >= float(state.get("hold_seconds", 0.8)):
-            state["step_index"] = step_index + 1
-            state["hold_started_at"] = None
-            if int(state["step_index"]) >= len(sequence):
-                _complete(state, "Your movement patterns resonate perfectly.")
-            else:
-                state["status"] = f"Sync step {step_index + 1} held. Advance together."
-        return
-    state["hold_started_at"] = None
-    state["status"] = "Both players must stand in the current highlighted zones together."
+def apply_puzzle_action_v2(session: dict[str, Any], username: str, action: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+    state = ensure_current_room_puzzle_state_v2(session)
+    role = _role(username, session)
+    now = _utc_seconds()
+    tick_puzzle_state_v2(state, now)
+    if state["is_solved"]:
+        return state
+    normalized = str(action or "").strip().lower()
+    payload = args or {}
+    cmd = str(payload.get("cmd") or "").strip().lower() if normalized == "v2_action" else normalized
+    if not cmd:
+        raise HTTPException(status_code=400, detail="Missing co-op puzzle command.")
+    if not _command_allowed(state, role, cmd):
+        raise HTTPException(status_code=403, detail="That control belongs to your partner.")
+    if not bool(state["can_interact"]) and cmd != "wait":
+        raise HTTPException(status_code=409, detail="Puzzle controls are cooling down.")
+    _apply_cmd(state, role, cmd, now)
+    tick_puzzle_state_v2(state, now, 0.0)
+    return state
+
+
+# In-place upgrade compatibility: keep original runtime entry points and v1 aliases.
+def ensure_current_room_puzzle_state(session: dict[str, Any]) -> dict[str, Any]:
+    return ensure_current_room_puzzle_state_v2(session)
+
+
+def serialize_current_room_puzzle(session: dict[str, Any], username: str) -> dict[str, Any]:
+    return serialize_current_room_puzzle_v2(session, username)
 
 
 def update_position_puzzle_state(session: dict[str, Any]) -> None:
-    state = ensure_current_room_puzzle_state(session)
-    if state.get("completed"):
-        return
-    if state.get("view_type") == "pressure_systems":
-        _update_pressure_state(session, state)
-    elif state.get("view_type") == "spatial_sync":
-        _update_spatial_state(session, state)
-
-def _apply_riddle_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:
-    options = state.get("guest_options") or state.get("options") or []
-    index = int(args.get("index", -1))
-    if index < 0 or index >= len(options):
-        raise HTTPException(status_code=400, detail="Invalid answer choice.")
-    state[f"{role}_selection"] = index
-    partner = state.get(f"{_other_role(role)}_selection")
-    if partner is None:
-        state["status"] = "Answer committed. Waiting for your partner."
-        return
-    if partner == index == int(state.get("answer_index", -1)):
-        _complete(state, "Both minds converged on the true answer.")
-        return
-    if partner == index:
-        state["owner_selection"] = None
-        state["guest_selection"] = None
-        state["status"] = "Both players committed to the wrong answer. The chamber resets."
-        return
-    state["status"] = "Your answers disagree. Align on one choice."
-
-
-def _apply_memory_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:
-    symbol = str(args.get("symbol") or "").strip().upper()
-    valid_symbols = {str(entry).upper() for entry in state.get("symbols", [])}
-    if symbol not in valid_symbols:
-        raise HTTPException(status_code=400, detail="Invalid memory symbol.")
-    current_input = list(state.get("input", []))
-    input_roles = state.get("input_roles", [])
-    next_index = len(current_input)
-    if next_index >= len(input_roles):
-        raise HTTPException(status_code=409, detail="This sequence is already complete.")
-    if input_roles[next_index] != role:
-        raise HTTPException(status_code=409, detail="It is your partner's turn to enter the next symbol.")
-    if symbol != str(state.get("sequence", [])[next_index]).upper():
-        state["input"] = []
-        state["status"] = "The sequence fractured. Rebuild it from the start."
-        return
-    current_input.append(symbol)
-    state["input"] = current_input
-    if len(current_input) >= len(state.get("sequence", [])):
-        _complete(state, "The split sequence recombines into one memory thread.")
-    else:
-        state["status"] = f"Sequence locked {len(current_input)}/{len(state.get('sequence', []))}."
-
-
-def _apply_rotation_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:
-    tile_id = int(args.get("tileId", -1))
-    current = state.get("current", [])
-    controls = set(state.get(f"{role}_controls", []))
-    if tile_id not in controls or tile_id < 0 or tile_id >= len(current):
-        raise HTTPException(status_code=403, detail="That tile is controlled by your partner.")
-    current[tile_id] = (int(current[tile_id]) + 1) % 4
-    if "mirrored" in str(state.get("instruction", "")).lower():
-        mirror_id = state.get("mirror_pairs", {}).get(tile_id)
-        if mirror_id is not None and 0 <= int(mirror_id) < len(current):
-            current[int(mirror_id)] = (int(current[int(mirror_id)]) + 1) % 4
-    state["current"] = current
-    if current == state.get("targets"):
-        _complete(state, "Both board halves align into a continuous path.")
-    else:
-        state["status"] = "Keep rotating until the shared path aligns."
-
-
-def _apply_pattern_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:
-    direction = str(args.get("direction") or "").strip().title()
-    if direction not in {"Up", "Right", "Down", "Left"}:
-        raise HTTPException(status_code=400, detail="Invalid direction.")
-    key = f"{role}_input"
-    target = list(state.get(f"expected_{role}", []))
-    current = list(state.get(key, []))
-    if len(current) >= len(target):
-        raise HTTPException(status_code=409, detail="Your pattern is already complete.")
-    if direction != target[len(current)]:
-        state["owner_input"] = []
-        state["guest_input"] = []
-        state["status"] = "The transformed pattern shattered. Re-enter it from the start."
-        return
-    current.append(direction)
-    state[key] = current
-    if state.get("owner_input") == state.get("expected_owner") and state.get("guest_input") == state.get("expected_guest"):
-        _complete(state, "Both transformed inputs resonate.")
-    else:
-        state["status"] = "One half of the transformed pattern is locked in."
-
-
-def _clamp_values(values: list[int], minimum: int = 0, maximum: int = 9) -> list[int]:
-    return [max(minimum, min(maximum, int(value))) for value in values]
-
-
-def _apply_flow_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:
-    controls = state.get(f"{role}_controls", [])
-    index = int(args.get("index", -1))
-    if index < 0 or index >= len(controls):
-        raise HTTPException(status_code=400, detail="Invalid valve index.")
-    control = controls[index]
-    owner_values, guest_values = _apply_flow_control_values(state.get("owner_values", []), state.get("guest_values", []), control)
-    state["owner_values"] = owner_values
-    state["guest_values"] = guest_values
-    if state.get("owner_values") == state.get("owner_targets") and state.get("guest_values") == state.get("guest_targets"):
-        _complete(state, "The transfer network balances across both rooms.")
-    else:
-        state["status"] = "Flow shifted. Keep balancing the shared network."
-
-
-def _apply_flow_control_values(owner_values: list[int], guest_values: list[int], control: dict[str, Any]) -> tuple[list[int], list[int]]:
-    next_owner = _clamp_values([
-        value + int(delta)
-        for value, delta in zip(owner_values, control.get("owner_delta", []), strict=False)
-    ])
-    next_guest = _clamp_values([
-        value + int(delta)
-        for value, delta in zip(guest_values, control.get("guest_delta", []), strict=False)
-    ])
-    return next_owner, next_guest
-
-
-def _apply_weight_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:
-    allocations = list(state.get(f"{role}_allocations", []))
-    index = int(args.get("index", -1))
-    delta = int(args.get("delta", 0))
-    if index < 0 or index >= len(allocations) or delta not in {-1, 1}:
-        raise HTTPException(status_code=400, detail="Invalid weight adjustment.")
-    limit = int(state.get("limit_per_pad", 3) or 3)
-    allocations[index] = max(0, min(limit, int(allocations[index]) + delta))
-    state[f"{role}_allocations"] = allocations
-    total = _weight_total(state)
-    if total == int(state.get("target", 0) or 0):
-        _complete(state, "The distributed equation balances perfectly.")
-    else:
-        state["status"] = f"Current combined total: {total}. Keep adjusting toward the target."
-
-
-def _flip(values: list[bool], indices: list[int]) -> list[bool]:
-    clone = list(values)
-    for index in indices:
-        if 0 <= index < len(clone):
-            clone[index] = not clone[index]
-    return clone
-
-
-def _apply_binary_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:
-    current = list(state.get("current", []))
-    mode = state.get("mode")
-    if mode == "toggle_bits":
-        index = int(args.get("index", -1))
-        controls = set(state.get(f"{role}_controls", []))
-        if index not in controls or index < 0 or index >= len(current):
-            raise HTTPException(status_code=403, detail="That bit is controlled by your partner.")
-        current[index] = not current[index]
-    else:
-        operation = str(args.get("operation") or "").strip()
-        operations = set(state.get(f"{role}_operations", []))
-        if operation not in operations:
-            raise HTTPException(status_code=403, detail="That operator belongs to your partner.")
-        if mode == "shared_operations":
-            if operation == "flip_left":
-                current = _flip(current, list(range(0, len(current) // 2)))
-            elif operation == "rotate_left":
-                current = current[1:] + current[:1]
-            elif operation == "flip_right":
-                current = _flip(current, list(range(len(current) // 2, len(current))))
-            elif operation == "invert_even":
-                current = _flip(current, list(range(0, len(current), 2)))
-        else:
-            moves_remaining = int(state.get("moves_remaining", 0) or 0)
-            if moves_remaining <= 0:
-                raise HTTPException(status_code=409, detail="The machine is out of moves.")
-            state["moves_remaining"] = moves_remaining - 1
-            if operation == "rotate_left":
-                current = current[1:] + current[:1]
-            elif operation == "invert_all":
-                current = [not bit for bit in current]
-            elif operation == "flip_alternate":
-                current = _flip(current, list(range(0, len(current), 2)))
-            elif operation == "xor_mask":
-                mask = list(state.get("xor_mask", []))
-                current = [bit ^ mask[index] for index, bit in enumerate(current)]
-    state["current"] = current
-    if current == state.get("target"):
-        _complete(state, "The binary machine settles into the target state.")
-    else:
-        state["status"] = "The register shifted. Continue coordinating your operations."
-
-
-def _apply_signal_action(state: dict[str, Any], role: str, args: dict[str, Any]) -> None:
-    left_index = int(args.get("leftIndex", -1))
-    right_index = int(args.get("rightIndex", -1))
-    controls = set(state.get(f"{role}_controls", []))
-    if left_index not in controls or left_index < 0 or left_index >= len(state.get("routes", [])) or right_index < 0 or right_index >= len(state.get("right_nodes", [])):
-        raise HTTPException(status_code=400, detail="Invalid signal route.")
-    if (left_index, right_index) in {tuple(pair) for pair in state.get("blocked_routes", [])}:
-        raise HTTPException(status_code=409, detail="That route is blocked by the shared grid.")
-    routes = list(state.get("routes", []))
-    routes[left_index] = right_index
-    state["routes"] = routes
-    if all(route is not None for route in routes) and routes == state.get("target_map"):
-        _complete(state, "The signal lattice routes cleanly across both halves.")
-    else:
-        state["status"] = "Route committed. Complete the remaining signal paths."
-
-
-def _apply_reaction_action(state: dict[str, Any], role: str) -> None:
-    locks = state.setdefault("locks", {})
-    now = _utc_now()
-    if role in locks:
-        raise HTTPException(status_code=409, detail="You already locked your reaction.")
-    if bool(state.get("show_target_guest", True)):
-        meter = _pulse_value(state.get("started_at"), float(state.get(f"{role}_speed", 0.8) or 0.8), float(state.get(f"{role}_offset", 0.1) or 0.1), now)
-        locks[role] = {"time": now.isoformat(), "meter": meter}
-    else:
-        guest_meter = _pulse_value(state.get("started_at"), float(state.get("guest_speed", 0.9) or 0.9), float(state.get("guest_offset", 0.15) or 0.15), now)
-        locks[role] = {"time": now.isoformat(), "meter": guest_meter if role == "guest" else None}
-    if len(locks) < 2:
-        state["status"] = "Reaction locked. Waiting for your partner."
-        return
-    target_start = float(state.get("window_start", 0.3) or 0.3)
-    target_end = target_start + float(state.get("window_width", 0.15) or 0.15)
-    owner_lock = locks.get("owner", {})
-    guest_lock = locks.get("guest", {})
-    delta = abs((_parse_iso(owner_lock.get("time")) - _parse_iso(guest_lock.get("time"))).total_seconds())
-    tolerance = float(state.get("sync_tolerance_seconds", 0.5) or 0.5)
-    def in_window(value: float | None) -> bool:
-        return value is not None and target_start <= float(value) <= target_end
-    if bool(state.get("show_target_guest", True)):
-        success = delta <= tolerance and in_window(owner_lock.get("meter")) and in_window(guest_lock.get("meter"))
-    else:
-        success = delta <= tolerance and in_window(guest_lock.get("meter"))
-    if success:
-        _complete(state, "Both reactions lock on the same beat.")
-    else:
-        state["locks"] = {}
-        state["status"] = "The lock slipped. Both reaction channels restart."
+    update_position_puzzle_state_v2(session)
 
 
 def apply_puzzle_action(session: dict[str, Any], username: str, action: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
-    role = _role(username, session)
-    state = ensure_current_room_puzzle_state(session)
-    if state.get("completed"):
-        return state
-    payload = args or {}
-    normalized_action = (action or "").strip().lower()
-    if state.get("view_type") == "sync_reaction" and normalized_action == "lock":
-        _apply_reaction_action(state, role)
-    elif state.get("view_type") == "deduction_riddle" and normalized_action == "select_option":
-        _apply_riddle_action(state, role, payload)
-    elif state.get("view_type") == "split_memory" and normalized_action == "press_symbol":
-        _apply_memory_action(state, role, payload)
-    elif state.get("view_type") == "dual_rotation" and normalized_action == "rotate_tile":
-        _apply_rotation_action(state, role, payload)
-    elif state.get("view_type") == "opposing_pattern_input" and normalized_action == "press_direction":
-        _apply_pattern_action(state, role, payload)
-    elif state.get("view_type") == "flow_transfer" and normalized_action == "pulse_flow":
-        _apply_flow_action(state, role, payload)
-    elif state.get("view_type") == "distributed_weight" and normalized_action == "adjust_weight":
-        _apply_weight_action(state, role, payload)
-    elif state.get("view_type") == "binary_echo":
-        _apply_binary_action(state, role, payload)
-    elif state.get("view_type") == "signal_lines" and normalized_action == "route_signal":
-        _apply_signal_action(state, role, payload)
-    else:
-        raise HTTPException(status_code=400, detail="Unsupported co-op puzzle action.")
-    return state
+    return apply_puzzle_action_v2(session, username, action, args)

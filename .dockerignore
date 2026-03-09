@@ -10,9 +10,9 @@
 **/TestResults
 **/__pycache__
 **/*.pyc
-**/.publish-check
-**/.publish-check2
-**/.publish-test
-**/.build
-**/bin_verify
-**/obj_verify
+.build
+.publish-check
+.publish-check2
+.publish-test
+bin_verify
+obj_verify

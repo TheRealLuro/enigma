@@ -1,0 +1,192 @@
+@using System.Globalization
+@using Enigma.Client.Models.Gameplay
+
+<div class="enigma-advanced-panel-shell enigma-flow-template @DifficultyCss">
+    <section class="enigma-advanced-stage-card">
+        <header class="enigma-advanced-stage-head">
+            <div>
+                <span class="enigma-kicker">@DifficultyLabel Conduit</span>
+                <strong>@FamilyTitle</strong>
+                <p>Route flow from source to receiver without venting pressure into dead branches.</p>
+            </div>
+            <div class="enigma-advanced-stage-badges">
+                <span class="enigma-advanced-stage-pill">@ReservoirState</span>
+                <span class="enigma-advanced-stage-pill muted">@($"{RouteCells} active")</span>
+            </div>
+        </header>
+
+        <div class="enigma-flow-template-main">
+            <div class="enigma-flow-board"
+                 style="@($"--flow-cols:{Cols};--flow-rows:{Rows};")">
+                @foreach (var tile in Tiles)
+                {
+                    <button class="enigma-flow-tile @(tile.Flowing ? "flowing" : string.Empty) @(tile.Source ? "source" : string.Empty) @(tile.Sink ? "sink" : string.Empty)"
+                            disabled="@(!tile.Enabled)"
+                            @onclick="(() => DispatchAsync(tile.Command))">
+                        <span class="core"></span>
+                        @if ((tile.RotatedMask & 1) != 0)
+                        {
+                            <span class="arm north"></span>
+                        }
+                        @if ((tile.RotatedMask & 2) != 0)
+                        {
+                            <span class="arm east"></span>
+                        }
+                        @if ((tile.RotatedMask & 4) != 0)
+                        {
+                            <span class="arm south"></span>
+                        }
+                        @if ((tile.RotatedMask & 8) != 0)
+                        {
+                            <span class="arm west"></span>
+                        }
+                    </button>
+                }
+            </div>
+
+            <aside class="enigma-advanced-telemetry-panel">
+                <div class="enigma-advanced-telemetry-grid">
+                    <article>
+                        <span>Linked</span>
+                        <strong>@(Linked ? "YES" : "NO")</strong>
+                    </article>
+                    <article>
+                        <span>Containment</span>
+                        <strong>@(LeakFree ? "SEALED" : "LEAKING")</strong>
+                    </article>
+                    <article>
+                        <span>Pressure</span>
+                        <strong>@($"{PressurePercent}%")</strong>
+                    </article>
+                    <article>
+                        <span>Timer</span>
+                        <strong>@($"{Math.Max(0, Math.Ceiling(View.TimerRemainingSeconds)):0}s")</strong>
+                    </article>
+                </div>
+
+                <div class="enigma-advanced-status-card">
+                    <span class="enigma-kicker">Reservoir</span>
+                    <strong>@ReservoirState</strong>
+                    <p>@View.StatusText</p>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <div class="enigma-advanced-action-row">
+        @if (CommitAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-commit"
+                    disabled="@(!CommitAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(CommitAction.Value.Command))">
+                Commit
+            </button>
+        }
+        @if (ResetAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-reset"
+                    disabled="@(!ResetAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(ResetAction.Value.Command))">
+                Reset
+            </button>
+        }
+        @if (HintAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-hint"
+                    disabled="@(!HintAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(HintAction.Value.Command))">
+                Hint
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required SoloPanelView View { get; set; }
+
+    [Parameter, EditorRequired]
+    public required EventCallback<string> OnAction { get; set; }
+
+    private readonly record struct TileVm(string Command, int RotatedMask, bool Flowing, bool Source, bool Sink, bool Enabled);
+
+    private string DifficultyCss => $"diff-{GetBoardText("visual:difficulty", "medium")}";
+    private string DifficultyLabel => GetBoardText("visual:difficulty_label", "MEDIUM");
+    private string FamilyTitle => GetBoardText("visual:family_title", "Token Flood");
+    private int Rows => Math.Max(1, GetBoardInt("pipe_rows", 1));
+    private int Cols => Math.Max(1, GetBoardInt("pipe_cols", 1));
+    private int RouteCells => Math.Max(0, GetBoardInt("flowviz:route_cells", 0));
+    private int PressurePercent => Math.Clamp((int)Math.Round(GetBoardDouble("flowviz:pressure_pct", 0d)), 0, 100);
+    private bool Linked => GetBoardText("flowviz:linked", "0") == "1";
+    private bool LeakFree => GetBoardText("flowviz:leak_free", "0") == "1";
+    private string ReservoirState => GetBoardText("token_flood:reservoir_state", "seeking").ToUpperInvariant();
+    private SoloPanelActionItem? CommitAction => FindAction("commit");
+    private SoloPanelActionItem? ResetAction => FindAction("reset");
+    private SoloPanelActionItem? HintAction => FindAction("hint");
+
+    private IReadOnlyList<TileVm> Tiles =>
+        View.Actions
+            .Where(action => TryParsePipeCommand(action.Command, out _, out _))
+            .OrderBy(action => TryParsePipeCommand(action.Command, out var row, out var col) ? (row * 100) + col : int.MaxValue)
+            .Select(action =>
+            {
+                TryParsePipeCommand(action.Command, out var row, out var col);
+                var key = $"r{row}c{col}";
+                return new TileVm(
+                    action.Command,
+                    GetBoardInt($"flowviz:{key}:rotated_mask", 0),
+                    GetBoardText($"flowviz:{key}:state", "idle") == "flowing",
+                    string.Equals(GetBoardText("pipe_source", string.Empty), key, StringComparison.OrdinalIgnoreCase),
+                    string.Equals(GetBoardText("pipe_sink", string.Empty), key, StringComparison.OrdinalIgnoreCase),
+                    action.Enabled);
+            })
+            .ToArray();
+
+    private SoloPanelActionItem? FindAction(string command) =>
+        View.Actions.FirstOrDefault(action => string.Equals(action.Command, command, StringComparison.OrdinalIgnoreCase));
+
+    private async Task DispatchAsync(string? command)
+    {
+        if (!OnAction.HasDelegate || string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        await OnAction.InvokeAsync(command);
+    }
+
+    private static bool TryParsePipeCommand(string command, out int row, out int col)
+    {
+        row = -1;
+        col = -1;
+        if (!command.StartsWith("pipe:r", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var payload = command[6..];
+        var splitIndex = payload.IndexOf('c');
+        if (splitIndex <= 0 || splitIndex >= payload.Length - 1)
+        {
+            return false;
+        }
+
+        return int.TryParse(payload.AsSpan(0, splitIndex), NumberStyles.Integer, CultureInfo.InvariantCulture, out row) &&
+               int.TryParse(payload.AsSpan(splitIndex + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out col);
+    }
+
+    private int GetBoardInt(string key, int fallback = 0) =>
+        View.Board.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private double GetBoardDouble(string key, double fallback = 0d) =>
+        View.Board.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private string GetBoardText(string key, string fallback = "") =>
+        View.Board.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+}
