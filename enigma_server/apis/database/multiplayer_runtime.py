@@ -321,6 +321,196 @@ def _mk_hud(label: str, value: str, icon: str, tone: str = "shared") -> dict[str
     return {"label": label, "value": value, "icon": icon, "tone": tone}
 
 
+def _role_label(role: str) -> str:
+    return "Owner" if role == "owner" else "Guest"
+
+
+def _partner_role(role: str) -> str:
+    return "guest" if role == "owner" else "owner"
+
+
+def _action_index(actions: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        str(action.get("cmd") or "").strip(): action
+        for action in actions
+        if isinstance(action, dict) and str(action.get("cmd") or "").strip()
+    }
+
+
+def _board_action(action: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not action:
+        return None
+    return {
+        "cmd": str(action.get("cmd") or ""),
+        "label": str(action.get("label") or ""),
+        "icon": str(action.get("icon") or "node"),
+        "tone": str(action.get("tone") or "shared"),
+        "enabled": bool(action.get("enabled", True)),
+        "active": bool(action.get("active", False)),
+    }
+
+
+def _board_metric(
+    label: str,
+    value: str,
+    target: str,
+    aligned: bool,
+    *,
+    tone: str = "shared",
+    priority: str = "primary",
+) -> dict[str, Any]:
+    return {
+        "label": label,
+        "value": value,
+        "target": target,
+        "aligned": bool(aligned),
+        "tone": tone,
+        "priority": priority,
+    }
+
+
+def _board_clue(label: str, text: str, *, tone: str = "shared") -> dict[str, Any]:
+    return {"label": label, "text": text, "tone": tone}
+
+
+def _board_stepper(
+    key: str,
+    label: str,
+    role: str,
+    value: int | float,
+    *,
+    minimum: int | float,
+    maximum: int | float,
+    step: int | float,
+    decrement_cmd: str | None = None,
+    increment_cmd: str | None = None,
+    enabled: bool = True,
+    target_text: str = "",
+    target_visible: bool = False,
+    state: str = "adjust",
+    detail: str = "",
+) -> dict[str, Any]:
+    return {
+        "kind": "stepper",
+        "key": key,
+        "label": label,
+        "role": role,
+        "value": value,
+        "min": minimum,
+        "max": maximum,
+        "step": step,
+        "decrement_cmd": decrement_cmd or "",
+        "increment_cmd": increment_cmd or "",
+        "enabled": bool(enabled),
+        "target_text": target_text,
+        "target_visible": bool(target_visible),
+        "state": state,
+        "detail": detail,
+    }
+
+
+def _board_toggle(
+    key: str,
+    label: str,
+    role: str,
+    active: bool,
+    *,
+    command: str | None = None,
+    enabled: bool = True,
+    target_text: str = "",
+    target_visible: bool = False,
+    detail: str = "",
+) -> dict[str, Any]:
+    return {
+        "kind": "toggle",
+        "key": key,
+        "label": label,
+        "role": role,
+        "active": bool(active),
+        "command": command or "",
+        "enabled": bool(enabled),
+        "target_text": target_text,
+        "target_visible": bool(target_visible),
+        "detail": detail,
+    }
+
+
+def _board_cell(
+    key: str,
+    label: str,
+    role: str,
+    row: int,
+    col: int,
+    active: bool,
+    *,
+    command: str | None = None,
+    enabled: bool = True,
+    target_active: bool | None = None,
+    target_visible: bool = False,
+) -> dict[str, Any]:
+    return {
+        "kind": "cell",
+        "key": key,
+        "label": label,
+        "role": role,
+        "row": row,
+        "col": col,
+        "active": bool(active),
+        "command": command or "",
+        "enabled": bool(enabled),
+        "target_active": target_active,
+        "target_visible": bool(target_visible),
+    }
+
+
+def _normalize_percent(value: float, maximum: float) -> int:
+    if maximum <= 0:
+        return 0
+    return int(round(_clamp((value / maximum) * 100.0, 0.0, 100.0)))
+
+
+def _split_route_points(value_a: float, value_b: float, max_a: float, max_b: float) -> list[dict[str, int]]:
+    a_pct = _normalize_percent(value_a, max_a)
+    b_pct = _normalize_percent(value_b, max_b)
+    return [
+        {"x": 10, "y": 68},
+        {"x": 28, "y": max(18, 86 - a_pct // 2)},
+        {"x": 50, "y": 42 + (b_pct // 3)},
+        {"x": 74, "y": max(14, 82 - ((a_pct + b_pct) // 4))},
+        {"x": 92, "y": 18},
+    ]
+
+
+def _gravity_nodes(value_a: float, value_b: float, max_a: float, max_b: float) -> list[dict[str, int]]:
+    combined_max = max(1.0, (max_a + max_b) / 2.0)
+    return [
+        {"x": 18, "y": 68 - (_normalize_percent(value_a, max_a) // 8), "r": 14},
+        {"x": 44, "y": 44 + (_normalize_percent(value_b, max_b) // 6), "r": 11},
+        {"x": 70, "y": 62 - (_normalize_percent((value_a + value_b) / 2.0, combined_max) // 10), "r": 10},
+    ]
+
+
+def _timing_window(target_phase: float, phase_tol: float) -> tuple[int, int]:
+    start = int(round(_clamp((target_phase - phase_tol) * 100.0, 0.0, 96.0)))
+    width = int(round(_clamp((phase_tol * 2.0) * 100.0, 4.0, 48.0)))
+    return start, width
+
+
+def _bridge_positions(count: int) -> list[tuple[int, int]]:
+    if count <= 0:
+        return []
+    if count <= 6:
+        cols = 3
+    elif count <= 8:
+        cols = 4
+    else:
+        cols = 5
+    positions: list[tuple[int, int]] = []
+    for idx in range(count):
+        positions.append((idx // cols, idx % cols))
+    return positions
+
+
 def _gen_state(
     puzzle_key: str,
     difficulty: str,
@@ -1162,6 +1352,652 @@ def _serialize_hud(state: dict[str, Any], now: float) -> list[dict[str, Any]]:
         return [_mk_hud("Past", f"{past_now}/{sum(runtime['past_clues'])}", "time", "owner"), _mk_hud("Now", f"{present_now}/{sum(runtime['present_clues'])}", "time", "guest")]
     return [_mk_hud("Fallback", "Dual commit", "commit")]
 
+
+def _serialize_board(state: dict[str, Any], role: str, actions: list[dict[str, Any]], now: float) -> dict[str, Any]:
+    runtime = state["runtime"]
+    action_map = _action_index(actions)
+    difficulty = str(state.get("difficulty") or "easy").strip().lower()
+    role_label = _role_label(role)
+    partner_role = _partner_role(role)
+    partner_label = _role_label(partner_role)
+    board: dict[str, Any] = {
+        "family_id": state["family_id"],
+        "template": "systems",
+        "family_title": state["name"],
+        "difficulty": difficulty,
+        "difficulty_label": difficulty.upper(),
+        "stage_level": int(state.get("stage_level", 1)),
+        "stage_visual_profile": state.get("stage_visual_profile", "intro"),
+        "accent_color": state.get("accent_color", "#60A5FA"),
+        "summary": {
+            "ready": bool(state.get("is_solved")),
+            "attempt": int(state.get("attempt", 1)),
+            "progress_percent": int(round(float(state.get("progress_value", 0.0)) * 100.0)),
+            "status": state.get("status_text", ""),
+            "phase": state.get("phase", "configure"),
+        },
+        "shared_stage": {
+            "headline": state["name"],
+            "subtitle": state["instruction"],
+            "role_token": role_label,
+            "partner_token": partner_label,
+            "profile": state.get("stage_visual_profile", "intro"),
+        },
+        "role_panel": {
+            "role": role,
+            "title": f"{role_label} Lens",
+            "focus": f"{role_label} controls",
+        },
+        "partner_panel": {
+            "role": partner_role,
+            "title": f"{partner_label} Intel",
+            "focus": f"{partner_label} callouts",
+        },
+        "metrics": [],
+        "controls": [],
+        "partner_controls": [],
+        "actions": [],
+        "clues": [],
+    }
+
+    key = state["key"]
+    if key in {"p", "u", "v"}:
+        label_map = {
+            "p": ("Carrier", "Phase Trim", "wave", "Stabilize the split carrier together."),
+            "u": ("Shift Drum", "Relay Column", "relay", "Decode the relay stream in sequence."),
+            "v": ("Heading Arc", "Thrust Burn", "gravity", "Align trajectory and launch together."),
+        }
+        left_label, right_label, visual_mode, subtitle = label_map[key]
+        max_a = 9 if key != "u" else 25
+        max_b = 9 if key == "p" else 5 if key == "v" else 3
+        matched = int(runtime["a"] == runtime["target_a"]) + int(runtime["b"] == runtime["target_b"])
+        local_value = int(runtime["a"]) if role == "owner" else int(runtime["b"])
+        local_target = int(runtime["target_a"]) if role == "owner" else int(runtime["target_b"])
+        partner_value = int(runtime["b"]) if role == "owner" else int(runtime["a"])
+        partner_target = int(runtime["target_b"]) if role == "owner" else int(runtime["target_a"])
+        local_label = left_label if role == "owner" else right_label
+        partner_control_label = right_label if role == "owner" else left_label
+        local_max = max_a if role == "owner" else max_b
+        lock_cmd = "owner_lock" if role == "owner" else "guest_lock"
+        if key == "v":
+            lock_cmd = "owner_arm" if role == "owner" else "guest_arm"
+        local_lock = bool(runtime["owner_lock"]) if role == "owner" else bool(runtime["guest_lock"])
+        partner_lock = bool(runtime["guest_lock"]) if role == "owner" else bool(runtime["owner_lock"])
+
+        board["template"] = "signal" if key == "p" else "relay" if key == "u" else "systems"
+        board["summary"]["ready"] = bool(runtime["owner_lock"] and runtime["guest_lock"] and matched == 2)
+        board["summary"]["exact_locks"] = matched
+        board["summary"]["total_locks"] = 2
+        board["shared_stage"] |= {
+            "mode": visual_mode,
+            "subtitle": subtitle,
+            "route_points": _split_route_points(float(runtime["a"]), float(runtime["b"]), float(max_a), float(max_b)) if key in {"p", "u"} else _gravity_nodes(float(runtime["a"]), float(runtime["b"]), float(max_a), float(max_b)),
+            "receiver_lock": matched == 2,
+            "owner_lock": bool(runtime["owner_lock"]),
+            "guest_lock": bool(runtime["guest_lock"]),
+        }
+        board["metrics"] = [
+            _board_metric(local_label, str(local_value), "Partner callout", local_value == local_target, tone=role),
+            _board_metric(partner_control_label, str(partner_value), str(partner_target), partner_value == partner_target, tone=partner_role),
+            _board_metric("Synchronization", f"{matched}/2", "2/2", matched == 2, priority="secondary"),
+        ]
+        board["controls"] = [
+            _board_stepper(
+                "local",
+                local_label,
+                role,
+                local_value,
+                minimum=0,
+                maximum=local_max,
+                step=1,
+                decrement_cmd="owner_down" if role == "owner" else "guest_down",
+                increment_cmd="owner_up" if role == "owner" else "guest_up",
+                enabled=bool(state["can_interact"]),
+                target_text="Exact target held by partner",
+                target_visible=False,
+                state="locked" if local_lock else "adjust",
+                detail=f"{partner_label} must call the exact {local_label.lower()} target.",
+            )
+        ]
+        board["partner_controls"] = [
+            {
+                "label": f"{partner_control_label} target",
+                "value": str(partner_target),
+                "detail": f"{partner_label} current {partner_value}",
+                "aligned": partner_value == partner_target,
+                "tone": partner_role,
+            }
+        ]
+        board["actions"] = [entry for entry in [_board_action(action_map.get(lock_cmd)), _board_action(action_map.get("launch"))] if entry]
+        board["clues"] = [
+            _board_clue("Partner target", f"Call {partner_label} to {partner_control_label.lower()} {partner_target}.", tone=partner_role),
+            _board_clue("Lock state", f"{partner_label} lock is {'armed' if partner_lock else 'open'}."),
+        ]
+        return board
+
+    if key == "q":
+        count = len(runtime["pressures"])
+        stable = sum(1 for idx in range(count) if int(runtime["pressures"][idx]) == int(runtime["target"][idx]))
+        board["template"] = "systems"
+        board["summary"]["ready"] = bool(runtime["owner_lock"] and runtime["guest_lock"] and stable == count)
+        board["summary"]["exact_locks"] = stable
+        board["summary"]["total_locks"] = count
+        board["shared_stage"] |= {
+            "mode": "reservoirs",
+            "subtitle": "Owner feeds pressure while guest bleeds to target.",
+            "tanks": [
+                {
+                    "label": f"P{idx + 1}",
+                    "level": int(runtime["pressures"][idx]),
+                    "safe": int(runtime["target"][idx]),
+                    "stable": int(runtime["pressures"][idx]) == int(runtime["target"][idx]),
+                }
+                for idx in range(count)
+            ],
+        }
+        board["metrics"] = [
+            _board_metric(
+                f"P{idx + 1}",
+                str(int(runtime["pressures"][idx])),
+                str(int(runtime["target"][idx])),
+                int(runtime["pressures"][idx]) == int(runtime["target"][idx]),
+                priority="primary" if idx < 3 else "secondary",
+            )
+            for idx in range(count)
+        ]
+        if role == "owner":
+            board["controls"] = [
+                _board_stepper(
+                    f"p{idx + 1}",
+                    f"Intake P{idx + 1}",
+                    role,
+                    int(runtime["pressures"][idx]),
+                    minimum=0,
+                    maximum=9,
+                    step=1,
+                    increment_cmd=f"owner_raise_{idx}",
+                    enabled=bool(state["can_interact"]),
+                    target_text="Guest holds the finish value",
+                    detail="Raise until your partner calls the lock point.",
+                )
+                for idx in range(count)
+            ]
+            board["partner_controls"] = [
+                {
+                    "label": f"P{idx + 1} finish",
+                    "value": str(int(runtime["target"][idx])),
+                    "detail": f"Guest must bleed to {int(runtime['target'][idx])}.",
+                    "aligned": int(runtime["pressures"][idx]) == int(runtime["target"][idx]),
+                    "tone": "guest",
+                }
+                for idx in range(count)
+            ]
+            board["actions"] = [entry for entry in [_board_action(action_map.get("owner_lock"))] if entry]
+        else:
+            board["controls"] = [
+                _board_stepper(
+                    f"p{idx + 1}",
+                    f"Bleed P{idx + 1}",
+                    role,
+                    int(runtime["pressures"][idx]),
+                    minimum=0,
+                    maximum=9,
+                    step=1,
+                    decrement_cmd=f"guest_vent_{idx}",
+                    enabled=bool(state["can_interact"]),
+                    target_text="Owner will call when to stop",
+                    detail="Vent only after owner raises above the target hold.",
+                )
+                for idx in range(count)
+            ]
+            board["partner_controls"] = [
+                {
+                    "label": f"P{idx + 1} target",
+                    "value": str(int(runtime["target"][idx])),
+                    "detail": "Owner needs this final vessel value.",
+                    "aligned": int(runtime["pressures"][idx]) == int(runtime["target"][idx]),
+                    "tone": "owner",
+                }
+                for idx in range(count)
+            ]
+            board["actions"] = [entry for entry in [_board_action(action_map.get("guest_lock"))] if entry]
+        board["clues"] = [_board_clue("Role split", "One player raises, one player bleeds. Neither side can finish the pressure profile alone.")]
+        return board
+
+    if key == "r":
+        count = len(runtime["active"])
+        positions = _bridge_positions(count)
+        owner_nodes = set(runtime["owner"])
+        local_nodes = owner_nodes if role == "owner" else set(runtime["guest"])
+        matched = sum(1 for idx in range(count) if bool(runtime["active"][idx]) == bool(runtime["required"][idx]))
+        board["template"] = "topology"
+        board["summary"]["exact_locks"] = matched
+        board["summary"]["total_locks"] = count
+        board["summary"]["ready"] = matched == count
+        board["shared_stage"] |= {
+            "mode": "bridge",
+            "subtitle": "Complete the bridge and satisfy the load map together.",
+            "nodes": [
+                {
+                    "key": f"beam_{idx}",
+                    "label": f"B{idx + 1}",
+                    "row": positions[idx][0],
+                    "col": positions[idx][1],
+                    "role": "owner" if idx in owner_nodes else "guest",
+                    "active": bool(runtime["active"][idx]),
+                    "required": bool(runtime["required"][idx]),
+                    "command": f"toggle_{idx}" if idx in local_nodes else "",
+                    "enabled": bool(state["can_interact"] and idx in local_nodes),
+                }
+                for idx in range(count)
+            ],
+            "edges": [{"from": f"beam_{idx}", "to": f"beam_{idx + 1}"} for idx in range(count - 1)],
+        }
+        board["metrics"] = [
+            _board_metric("Bridge Map", f"{matched}/{count}", f"{count}/{count}", matched == count),
+            _board_metric("Your nodes", str(sum(1 for idx in local_nodes if runtime["active"][idx])), "Route by partner callout", False, tone=role, priority="secondary"),
+        ]
+        board["controls"] = [
+            _board_toggle(
+                f"beam_{idx}",
+                f"Beam {idx + 1}",
+                role,
+                bool(runtime["active"][idx]),
+                command=f"toggle_{idx}",
+                enabled=bool(state["can_interact"]),
+                target_text="Partner holds target state",
+                detail="Toggle only after the partner confirms the span.",
+            )
+            for idx in sorted(local_nodes)
+        ]
+        board["partner_controls"] = [
+            {
+                "label": f"Partner beam {idx + 1}",
+                "value": "ACTIVE" if bool(runtime["required"][idx]) else "DORMANT",
+                "detail": "Partner node target",
+                "aligned": bool(runtime["active"][idx]) == bool(runtime["required"][idx]),
+                "tone": partner_role,
+            }
+            for idx in range(count)
+            if idx not in local_nodes
+        ]
+        board["clues"] = [_board_clue("Topology", f"{partner_label} owns the red spans. Call their target states exactly.")]
+        return board
+
+    if key == "s":
+        cells = len(runtime["owner_values"])
+        local_values = runtime["owner_values"] if role == "owner" else runtime["guest_values"]
+        own_targets = runtime["owner_target"] if role == "owner" else runtime["guest_target"]
+        partner_values = runtime["guest_values"] if role == "owner" else runtime["owner_values"]
+        partner_targets = runtime["guest_target"] if role == "owner" else runtime["owner_target"]
+        local_prefix = "owner_cycle_" if role == "owner" else "guest_cycle_"
+        match_count = sum(1 for idx in range(cells) if int(local_values[idx]) == int(own_targets[idx]))
+        partner_match = sum(1 for idx in range(cells) if int(partner_values[idx]) == int(partner_targets[idx]))
+        board["template"] = "deduction"
+        board["summary"]["exact_locks"] = match_count + partner_match
+        board["summary"]["total_locks"] = cells * 2
+        board["summary"]["ready"] = match_count == cells and partner_match == cells
+        board["shared_stage"] |= {
+            "mode": "mirror",
+            "subtitle": "Each side sees the other side's truth. Reconstruct the full mirrored array.",
+            "local_cells": [
+                {"label": f"C{idx + 1}", "value": int(local_values[idx]), "command": f"{local_prefix}{idx}", "enabled": bool(state["can_interact"])}
+                for idx in range(cells)
+            ],
+            "partner_cells": [
+                {"label": f"C{idx + 1}", "value": int(partner_values[idx]), "target": int(partner_targets[idx])}
+                for idx in range(cells)
+            ],
+        }
+        board["metrics"] = [
+            _board_metric("Your half", f"{match_count}/{cells}", f"{cells}/{cells}", match_count == cells, tone=role),
+            _board_metric("Partner half", f"{partner_match}/{cells}", f"{cells}/{cells}", partner_match == cells, tone=partner_role),
+        ]
+        board["controls"] = [
+            _board_toggle(
+                f"cell_{idx}",
+                f"Cell {idx + 1}",
+                role,
+                bool(int(local_values[idx])),
+                command=f"{local_prefix}{idx}",
+                enabled=bool(state["can_interact"]),
+                target_text="Partner sees your exact target",
+                detail=f"Current state {int(local_values[idx])}; partner must call the right value.",
+            )
+            for idx in range(cells)
+        ]
+        board["partner_controls"] = [
+            {
+                "label": f"Partner cell {idx + 1}",
+                "value": str(int(partner_targets[idx])),
+                "detail": f"{partner_label} current {int(partner_values[idx])}",
+                "aligned": int(partner_values[idx]) == int(partner_targets[idx]),
+                "tone": partner_role,
+            }
+            for idx in range(cells)
+        ]
+        board["clues"] = [_board_clue("Mirror rule", f"You can see {partner_label}'s exact targets. {partner_label} can see yours.")]
+        return board
+
+    if key == "t":
+        count = len(runtime["water"])
+        safe_count = sum(1 for idx in range(count) if float(runtime["water"][idx]) <= int(runtime["safe"][idx]))
+        board["template"] = "systems"
+        board["summary"]["exact_locks"] = safe_count
+        board["summary"]["total_locks"] = count
+        board["summary"]["ready"] = bool(runtime["owner_lock"] and runtime["guest_lock"] and float(runtime["hold"]) >= 1.0)
+        board["shared_stage"] |= {
+            "mode": "flood",
+            "subtitle": "Hold every channel under the safe band until the lock completes.",
+            "tanks": [
+                {
+                    "label": f"F{idx + 1}",
+                    "level": round(float(runtime["water"][idx]), 2),
+                    "safe": int(runtime["safe"][idx]),
+                    "gated": bool(runtime["gates"][idx]),
+                    "stable": float(runtime["water"][idx]) <= int(runtime["safe"][idx]),
+                }
+                for idx in range(count)
+            ],
+            "hold": round(float(runtime["hold"]), 2),
+        }
+        board["metrics"] = [
+            _board_metric(
+                f"F{idx + 1}",
+                f"{float(runtime['water'][idx]):0.1f}",
+                f"<= {int(runtime['safe'][idx])}",
+                float(runtime["water"][idx]) <= int(runtime["safe"][idx]),
+                priority="primary" if idx < 3 else "secondary",
+            )
+            for idx in range(count)
+        ] + [
+            _board_metric("Hold", f"{float(runtime['hold']):0.1f}s", "1.0s", float(runtime["hold"]) >= 1.0, priority="secondary")
+        ]
+        if role == "owner":
+            board["controls"] = [
+                _board_toggle(
+                    f"gate_{idx}",
+                    f"Gate {idx + 1}",
+                    role,
+                    bool(runtime["gates"][idx]),
+                    command=f"gate_{idx}",
+                    enabled=bool(state["can_interact"]),
+                    detail="Throttle the rise before guest pumps it down.",
+                )
+                for idx in range(count)
+            ]
+            board["actions"] = [entry for entry in [_board_action(action_map.get("owner_lock"))] if entry]
+            board["partner_controls"] = [
+                {
+                    "label": f"Pump lane {idx + 1}",
+                    "value": f"Safe {int(runtime['safe'][idx])}",
+                    "detail": f"Guest pump will drain F{idx + 1}.",
+                    "aligned": float(runtime["water"][idx]) <= int(runtime["safe"][idx]),
+                    "tone": "guest",
+                }
+                for idx in range(count)
+            ]
+        else:
+            board["controls"] = [
+                _board_stepper(
+                    f"pump_{idx}",
+                    f"Pump {idx + 1}",
+                    role,
+                    int(round(float(runtime["water"][idx]))),
+                    minimum=0,
+                    maximum=9,
+                    step=1,
+                    decrement_cmd=f"pump_{idx}",
+                    enabled=bool(state["can_interact"]),
+                    target_text="Owner throttles the rise",
+                    detail="Drain only when the owner has capped the surge.",
+                )
+                for idx in range(count)
+            ]
+            board["actions"] = [entry for entry in [_board_action(action_map.get("guest_lock"))] if entry]
+            board["partner_controls"] = [
+                {
+                    "label": f"Gate {idx + 1}",
+                    "value": "OPEN" if bool(runtime["gates"][idx]) else "CLOSED",
+                    "detail": f"Owner throttle on F{idx + 1}.",
+                    "aligned": float(runtime["water"][idx]) <= int(runtime["safe"][idx]),
+                    "tone": "owner",
+                }
+                for idx in range(count)
+            ]
+        board["clues"] = [_board_clue("Shared hold", "Both players must lock while every flood lane stays inside the safe band.")]
+        return board
+
+    if key == "w":
+        phase = _phase_value(now, float(runtime["speed"]), float(runtime["offset"]))
+        window_start, window_width = _timing_window(float(runtime["target_phase"]), float(runtime["phase_tol"]))
+        board["template"] = "signal"
+        board["summary"]["exact_locks"] = int(runtime["catches"])
+        board["summary"]["total_locks"] = int(runtime["required"])
+        board["summary"]["ready"] = int(runtime["catches"]) >= int(runtime["required"])
+        board["shared_stage"] |= {
+            "mode": "timing",
+            "subtitle": "Catch the lock window in sync and build the full chain.",
+            "phase_percent": int(round(phase * 100.0)),
+            "target_start": window_start,
+            "target_width": window_width,
+            "show_window": role == "owner",
+            "required": int(runtime["required"]),
+            "catches": int(runtime["catches"]),
+            "owner_catch": runtime.get("owner_catch"),
+            "guest_catch": runtime.get("guest_catch"),
+        }
+        board["metrics"] = [
+            _board_metric("Chain", f"{int(runtime['catches'])}/{int(runtime['required'])}", f"{int(runtime['required'])}/{int(runtime['required'])}", int(runtime["catches"]) >= int(runtime["required"])),
+            _board_metric("Sync window", f"{float(runtime['sync_tol']):0.2f}s", "<= tolerance", False, priority="secondary"),
+            _board_metric("Phase", f"{phase:0.2f}", f"{float(runtime['target_phase']):0.2f}", _phase_distance(phase, float(runtime["target_phase"])) <= float(runtime["phase_tol"]), priority="secondary"),
+        ]
+        board["actions"] = [entry for entry in [_board_action(action_map.get("catch"))] if entry]
+        if role == "owner":
+            board["clues"] = [
+                _board_clue("Window owner", f"You can see the exact lock band at {window_start}% width {window_width}%.", tone="owner"),
+                _board_clue("Partner dependency", "Guest does not see the exact band. Call the capture timing.", tone="guest"),
+            ]
+        else:
+            board["clues"] = [
+                _board_clue("Sync role", "Owner sees the exact lock band. You confirm the catch on their call.", tone="owner"),
+                _board_clue("Cadence", f"Valid catches must land within {float(runtime['sync_tol']):0.2f}s of each other."),
+            ]
+        return board
+
+    if key == "x":
+        count = len(runtime["layers"])
+        local_layers = set(runtime["owner"] if role == "owner" else runtime["guest"])
+        matched = sum(1 for idx in range(count) if int(runtime["layers"][idx]) == int(runtime["target"][idx]))
+        board["template"] = "systems"
+        board["summary"]["exact_locks"] = matched
+        board["summary"]["total_locks"] = count
+        board["summary"]["ready"] = bool(runtime.get("owner_lock") and runtime.get("guest_lock") and matched == count)
+        board["shared_stage"] |= {
+            "mode": "layers",
+            "subtitle": "Alternate layers belong to different players. Rebuild the full stack together.",
+            "layers": [
+                {
+                    "label": f"L{idx + 1}",
+                    "value": int(runtime["layers"][idx]),
+                    "target": int(runtime["target"][idx]),
+                    "role": "owner" if idx in set(runtime["owner"]) else "guest",
+                    "aligned": int(runtime["layers"][idx]) == int(runtime["target"][idx]),
+                }
+                for idx in range(count)
+            ],
+        }
+        board["metrics"] = [
+            _board_metric("Layer match", f"{matched}/{count}", f"{count}/{count}", matched == count),
+            _board_metric("Locks", f"{1 if runtime.get('owner_lock') else 0}/{1 if runtime.get('guest_lock') else 0}", "1/1", bool(runtime.get("owner_lock") and runtime.get("guest_lock")), priority="secondary"),
+        ]
+        board["controls"] = [
+            _board_stepper(
+                f"layer_{idx}",
+                f"Layer {idx + 1}",
+                role,
+                int(runtime["layers"][idx]),
+                minimum=-2,
+                maximum=2,
+                step=1,
+                decrement_cmd=f"shift_{idx}_down",
+                increment_cmd=f"shift_{idx}_up",
+                enabled=bool(state["can_interact"]),
+                target_text="Partner holds the exact offset",
+                detail="Adjust your alternating layers to the partner callout.",
+            )
+            for idx in sorted(local_layers)
+        ]
+        board["partner_controls"] = [
+            {
+                "label": f"Layer {idx + 1} target",
+                "value": str(int(runtime["target"][idx])),
+                "detail": f"{partner_label} current {int(runtime['layers'][idx])}",
+                "aligned": int(runtime["layers"][idx]) == int(runtime["target"][idx]),
+                "tone": partner_role,
+            }
+            for idx in range(count)
+            if idx not in local_layers
+        ]
+        board["actions"] = [entry for entry in [_board_action(action_map.get("owner_lock" if role == "owner" else "guest_lock"))] if entry]
+        board["clues"] = [_board_clue("Alternation", f"You own the {'even' if role == 'owner' else 'odd'} layers. {partner_label} holds your exact offsets.")]
+        return board
+
+    if key == "y":
+        phase = _phase_value(now, float(runtime["speed"]), float(runtime["offset"]))
+        phase_ok = _phase_distance(phase, float(runtime["target_phase"])) <= (0.11 if difficulty == "easy" else 0.08 if difficulty == "medium" else 0.06)
+        freq_ok = abs(int(runtime["freq"]) - int(runtime["target_freq"])) <= (30 if difficulty == "easy" else 20 if difficulty == "medium" else 10)
+        board["template"] = "signal"
+        board["summary"]["exact_locks"] = int(runtime["res"])
+        board["summary"]["total_locks"] = int(runtime["required"])
+        board["summary"]["ready"] = int(runtime["res"]) >= int(runtime["required"])
+        board["shared_stage"] |= {
+            "mode": "echo",
+            "subtitle": "Owner times the pulse. Guest dials the frequency until resonance stays exact.",
+            "phase_percent": int(round(phase * 100.0)),
+            "target_start": int(round(float(runtime["target_phase"]) * 100.0)),
+            "target_width": 10 if difficulty == "easy" else 8 if difficulty == "medium" else 6,
+            "show_window": role == "guest",
+        }
+        board["metrics"] = [
+            _board_metric("Frequency", str(int(runtime["freq"])), str(int(runtime["target_freq"])), freq_ok, tone="guest"),
+            _board_metric("Phase", f"{phase:0.2f}", f"{float(runtime['target_phase']):0.2f}", phase_ok, tone="owner"),
+            _board_metric("Resonance", f"{int(runtime['res'])}/{int(runtime['required'])}", f"{int(runtime['required'])}/{int(runtime['required'])}", int(runtime["res"]) >= int(runtime["required"]), priority="secondary"),
+        ]
+        if role == "guest":
+            board["controls"] = [
+                _board_stepper(
+                    "freq",
+                    "Frequency",
+                    role,
+                    int(runtime["freq"]),
+                    minimum=100,
+                    maximum=1000,
+                    step=int(runtime["step"]),
+                    decrement_cmd="guest_freq_down",
+                    increment_cmd="guest_freq_up",
+                    enabled=bool(state["can_interact"]),
+                    target_text="Owner sees the phase lock",
+                    detail="Tune until the owner confirms the pulse window.",
+                )
+            ]
+            board["partner_controls"] = [
+                {
+                    "label": "Target phase",
+                    "value": f"{float(runtime['target_phase']):0.2f}",
+                    "detail": "Owner owns the fire timing.",
+                    "aligned": phase_ok,
+                    "tone": "owner",
+                }
+            ]
+            board["clues"] = [_board_clue("Timing split", "Owner sees the pulse timing. You hold the exact resonance frequency.", tone="owner")]
+        else:
+            board["partner_controls"] = [
+                {
+                    "label": "Target frequency",
+                    "value": str(int(runtime["target_freq"])),
+                    "detail": f"Guest current {int(runtime['freq'])}",
+                    "aligned": freq_ok,
+                    "tone": "guest",
+                }
+            ]
+            board["clues"] = [_board_clue("Frequency split", f"Guest must tune to {int(runtime['target_freq'])}. Call the pulse timing once they do.", tone="guest")]
+        board["actions"] = [entry for entry in [_board_action(action_map.get("fire"))] if entry]
+        return board
+
+    if key == "z":
+        rows = int(runtime["rows"])
+        cols = int(runtime["cols"])
+        local_grid_key = "past" if role == "owner" else "present"
+        partner_grid_key = "present" if role == "owner" else "past"
+        local_target_key = "past_target" if role == "owner" else "present_target"
+        partner_target_key = "present_target" if role == "owner" else "past_target"
+        local_clue_key = "past_clues" if role == "owner" else "present_clues"
+        partner_clue_key = "present_clues" if role == "owner" else "past_clues"
+        matched = 0
+        total = rows * cols * 2
+        for r in range(rows):
+            for c in range(cols):
+                if bool(runtime["past"][r][c]) == bool(runtime["past_target"][r][c]):
+                    matched += 1
+                if bool(runtime["present"][r][c]) == bool(runtime["present_target"][r][c]):
+                    matched += 1
+        board["template"] = "topology"
+        board["summary"]["exact_locks"] = matched
+        board["summary"]["total_locks"] = total
+        board["summary"]["ready"] = runtime["past"] == runtime["past_target"] and runtime["present"] == runtime["present_target"]
+        board["shared_stage"] |= {
+            "mode": "timeline",
+            "subtitle": "Past and present are linked. Fill your own plane without causing paradox.",
+            "rows": rows,
+            "cols": cols,
+            "local_role": local_grid_key,
+            "links": runtime["links"],
+            "local_cells": [
+                _board_cell(
+                    f"{local_grid_key}_{r}_{c}",
+                    f"{local_grid_key[0].upper()}{r + 1},{c + 1}",
+                    role,
+                    r,
+                    c,
+                    bool(runtime[local_grid_key][r][c]),
+                    command=f"{local_grid_key}_{r}_{c}",
+                    enabled=bool(state["can_interact"]),
+                    target_active=bool(runtime[local_target_key][r][c]),
+                    target_visible=False,
+                )
+                for r in range(rows)
+                for c in range(cols)
+            ],
+            "partner_cells": [
+                {"row": r, "col": c, "active": bool(runtime[partner_grid_key][r][c]), "target": bool(runtime[partner_target_key][r][c])}
+                for r in range(rows)
+                for c in range(cols)
+            ],
+            "local_clues": [int(v) for v in runtime[local_clue_key]],
+            "partner_clues": [int(v) for v in runtime[partner_clue_key]],
+        }
+        board["metrics"] = [
+            _board_metric("Timeline", f"{matched}/{total}", f"{total}/{total}", matched == total),
+            _board_metric("Local rows", " / ".join(str(v) for v in runtime[local_clue_key]), "Clue totals", False, tone=role, priority="secondary"),
+            _board_metric("Partner rows", " / ".join(str(v) for v in runtime[partner_clue_key]), "Callout totals", False, tone=partner_role, priority="secondary"),
+        ]
+        board["controls"] = [cell for cell in board["shared_stage"]["local_cells"]]
+        board["partner_controls"] = [
+            {
+                "label": f"{partner_label} row {idx + 1}",
+                "value": str(int(value)),
+                "detail": "Partner active count clue",
+                "aligned": False,
+                "tone": partner_role,
+            }
+            for idx, value in enumerate(runtime[partner_clue_key])
+        ]
+        board["clues"] = [_board_clue("Row discipline", f"Do not exceed your row clues. {partner_label} is doing the same on their plane.")]
+        return board
+
+    return board
+
 def serialize_current_room_puzzle_v2(session: dict[str, Any], username: str) -> dict[str, Any]:
     state = ensure_current_room_puzzle_state_v2(session)
     role = _role(username, session)
@@ -1170,6 +2006,7 @@ def serialize_current_room_puzzle_v2(session: dict[str, Any], username: str) -> 
     hud = _serialize_hud(state, now)
     actions = _serialize_actions(state, role)
     stage_elements = _serialize_stage_elements(state, now)
+    board = _serialize_board(state, role, actions, now)
     prompt = "Press E to open the panel. Use your assigned controls."
     view = {
         "schema_version": 2,
@@ -1194,6 +2031,7 @@ def serialize_current_room_puzzle_v2(session: dict[str, Any], username: str) -> 
         "mechanic_type": state["mechanic_type"],
         "hud": hud,
         "actions": actions,
+        "board": board,
         "stage_elements": stage_elements,
         "prompt": prompt,
         "panel": {
@@ -1201,6 +2039,7 @@ def serialize_current_room_puzzle_v2(session: dict[str, Any], username: str) -> 
             "prompt": prompt,
             "hud": hud,
             "actions": actions,
+            "board": board,
             "failure_code": state.get("failure_code", ""),
             "failure_label": state.get("failure_label", ""),
             "failure_visual_cue": state.get("failure_visual_cue", ""),

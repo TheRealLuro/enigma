@@ -3478,6 +3478,214 @@ h1:focus {
     border-color: rgba(215, 175, 255, 0.4);
 }
 
+.enigma-coop-depth-panel {
+    gap: 18px;
+}
+
+.enigma-coop-depth-stage {
+    padding-bottom: 18px;
+}
+
+.enigma-coop-depth-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.enigma-coop-depth-lower {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.enigma-coop-signal-visual-card,
+.enigma-coop-systems-visual-card,
+.enigma-coop-topology-visual-card,
+.enigma-coop-relay-visual-card {
+    min-height: 220px;
+    border: 1px solid rgba(96, 165, 250, 0.15);
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at 15% 20%, rgba(96, 165, 250, 0.14), transparent 38%),
+        linear-gradient(135deg, rgba(8, 15, 36, 0.96), rgba(6, 10, 28, 0.98));
+    padding: 18px;
+}
+
+.enigma-coop-depth-svg {
+    width: 100%;
+    height: auto;
+    min-height: 184px;
+}
+
+.enigma-coop-timing-track {
+    position: relative;
+    height: 24px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+    margin-top: 18px;
+}
+
+.enigma-coop-timing-window {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(34, 197, 94, 0.4), rgba(125, 211, 252, 0.42));
+}
+
+.enigma-coop-timing-marker {
+    position: absolute;
+    top: -4px;
+    width: 12px;
+    height: 32px;
+    border-radius: 999px;
+    background: #f8fafc;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+    transform: translateX(-50%);
+}
+
+.enigma-coop-timing-caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 14px;
+    color: rgba(226, 232, 240, 0.88);
+}
+
+.enigma-coop-tank-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+    gap: 14px;
+}
+
+.enigma-coop-tank-card {
+    padding: 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.72);
+    text-align: center;
+}
+
+.enigma-coop-tank-card.stable,
+.enigma-coop-layer-band.aligned,
+.enigma-coop-bridge-node.active,
+.enigma-coop-time-cell.active,
+.enigma-coop-deduction-cell.partner,
+.enigma-system-metric-card.aligned {
+    border-color: rgba(74, 222, 128, 0.45);
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.14) inset;
+}
+
+.enigma-coop-tank-track {
+    position: relative;
+    height: 120px;
+    margin: 10px auto;
+    width: 36px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
+.enigma-coop-tank-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(180deg, rgba(96, 165, 250, 0.7), rgba(34, 211, 238, 0.76));
+}
+
+.enigma-coop-tank-safe {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    height: 2px;
+    background: rgba(248, 250, 252, 0.86);
+}
+
+.enigma-coop-layer-stack,
+.enigma-coop-depth-intel-grid,
+.enigma-coop-time-row-clues {
+    display: grid;
+    gap: 10px;
+}
+
+.enigma-coop-layer-band {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(15, 23, 42, 0.7);
+}
+
+.enigma-coop-bridge-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.enigma-coop-bridge-node,
+.enigma-coop-time-cell,
+.enigma-coop-deduction-cell {
+    min-height: 64px;
+    border-radius: 16px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: rgba(15, 23, 42, 0.72);
+    color: rgba(241, 245, 249, 0.96);
+}
+
+.enigma-coop-bridge-node.local {
+    border-color: rgba(96, 165, 250, 0.38);
+}
+
+.enigma-coop-bridge-node.partner,
+.enigma-coop-time-cell.partner,
+.enigma-coop-deduction-cell.partner {
+    opacity: 0.86;
+}
+
+.enigma-coop-time-grid-shell,
+.enigma-coop-deduction-board {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.enigma-coop-time-grid,
+.enigma-coop-deduction-column {
+    display: grid;
+    gap: 10px;
+}
+
+.enigma-coop-time-grid-board,
+.enigma-coop-deduction-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.enigma-coop-deduction-cell {
+    display: grid;
+    place-items: center;
+    padding: 10px;
+}
+
+.co-op-dual-controls {
+    margin-top: 10px;
+}
+
+@media (max-width: 1120px) {
+    .enigma-coop-depth-main,
+    .enigma-coop-depth-lower,
+    .enigma-coop-time-grid-shell,
+    .enigma-coop-deduction-board {
+        grid-template-columns: 1fr;
+    }
+}
+
 .enigma-signal-row {
     display: grid;
     gap: 0.75rem;

@@ -16,6 +16,8 @@ public partial class Game
     protected bool HasCoopPuzzle => IsCoopRun && CurrentCoopPuzzle is not null;
     protected bool HasCoopStageElements => GetCoopStageElements().Count > 0;
     protected bool IsCoopPuzzleV2 => GetCoopViewInt("schema_version", 0) >= 2;
+    protected bool HasCoopV2Board() =>
+        TryGetCoopViewProperty("board", out var board) && board.ValueKind == JsonValueKind.Object;
 
     private bool IsGuestPerspective =>
         string.Equals(CurrentCoopPuzzle?.Role, "guest", StringComparison.OrdinalIgnoreCase);

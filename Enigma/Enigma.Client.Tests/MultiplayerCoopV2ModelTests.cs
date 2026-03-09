@@ -48,10 +48,19 @@ public sealed class MultiplayerCoopV2ModelTests
                   "status_text": "active",
                   "prompt": "Press E to open the panel.",
                   "hud": [],
-                  "actions": []
+                  "actions": [],
+                  "board": {
+                    "template": "signal"
+                  }
                 },
                 "stage": {
                   "elements": []
+                },
+                "board": {
+                  "template": "signal",
+                  "role_panel": {
+                    "role": "owner"
+                  }
                 }
               }
             },
@@ -76,5 +85,9 @@ public sealed class MultiplayerCoopV2ModelTests
         Assert.Equal(JsonValueKind.Object, panel.ValueKind);
         Assert.True(envelope.Session.CurrentRoomPuzzle.View.TryGetProperty("stage", out var stage));
         Assert.Equal(JsonValueKind.Object, stage.ValueKind);
+        Assert.True(envelope.Session.CurrentRoomPuzzle.View.TryGetProperty("board", out var board));
+        Assert.Equal(JsonValueKind.Object, board.ValueKind);
+        Assert.Equal("signal", board.GetProperty("template").GetString());
+        Assert.Equal("owner", board.GetProperty("role_panel").GetProperty("role").GetString());
     }
 }

@@ -114,9 +114,40 @@ class MultiplayerRuntimeTests(unittest.TestCase):
         self.assertIn("failure_code", view)
         self.assertIn("failure_label", view)
         self.assertIn("recovery_text", view)
+        self.assertIn("board", view)
         self.assertIsInstance(view["panel"], dict)
         self.assertIsInstance(view["stage"], dict)
+        self.assertIsInstance(view["board"], dict)
         self.assertIn("elements", view["stage"])
+
+    def test_serializer_emits_role_lensed_board_contract(self) -> None:
+        session = _build_session("p", "easy", "nonce-board")
+        owner_view = serialize_current_room_puzzle_v2(session, "owner")["view"]["board"]
+        guest_view = serialize_current_room_puzzle_v2(session, "guest")["view"]["board"]
+
+        self.assertEqual("signal", owner_view["template"])
+        self.assertEqual("owner", owner_view["role_panel"]["role"])
+        self.assertEqual("guest", guest_view["role_panel"]["role"])
+        self.assertEqual("Carrier", owner_view["controls"][0]["label"])
+        self.assertEqual("Phase Trim", guest_view["controls"][0]["label"])
+        self.assertNotEqual(
+            owner_view["partner_controls"][0]["label"],
+            guest_view["partner_controls"][0]["label"],
+        )
+
+    def test_topology_board_includes_local_and_partner_planes(self) -> None:
+        session = _build_session("z", "medium", "nonce-topology")
+        owner_board = serialize_current_room_puzzle_v2(session, "owner")["view"]["board"]
+        shared_stage = owner_board["shared_stage"]
+
+        self.assertEqual("topology", owner_board["template"])
+        self.assertTrue(shared_stage["local_cells"])
+        self.assertTrue(shared_stage["partner_cells"])
+        self.assertEqual("past", shared_stage["local_role"])
+        self.assertEqual(
+            len(shared_stage["local_cells"]),
+            shared_stage["rows"] * shared_stage["cols"],
+        )
 
     def test_failure_language_dictionary_uses_locked_terms(self) -> None:
         self.assertSetEqual(

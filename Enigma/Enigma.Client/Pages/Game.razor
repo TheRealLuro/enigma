@@ -36,7 +36,7 @@ else
             <div class="enigma-room-stage-wrap">
                 <div id="@GameSurfaceId"
                      tabindex="0"
-                     class="enigma-room-stage @(UsePlaceholderGraphics ? "placeholder-mode" : string.Empty)"
+                     class="enigma-room-stage"
                      style="@GetRoomStageStyle()">
                         @foreach (var segment in GetWallSegments())
                         {
@@ -351,7 +351,96 @@ else
                         }
 
                         <div class="enigma-puzzle-surface">
-                        @if (IsCoopPuzzleV2)
+                        @if (IsCoopPuzzleV2 && HasCoopV2Board())
+                        {
+                            @switch (GetCoopV2FamilyId())
+                            {
+                                case "split_signal":
+                                case "echo_sync":
+                                case "tidal_lock":
+                                    <CoopSignalPanel View="CurrentCoopPuzzle!.View"
+                                                     FamilyId="GetCoopV2FamilyId()"
+                                                     OnCommand="TriggerCoopV2ActionAsync" />
+                                    break;
+                                case "pressure_exchange":
+                                case "flood_control":
+                                case "gravity_tandem":
+                                case "strata_shift":
+                                    <CoopSystemsPanel View="CurrentCoopPuzzle!.View"
+                                                      FamilyId="GetCoopV2FamilyId()"
+                                                      OnCommand="TriggerCoopV2ActionAsync" />
+                                    break;
+                                case "bridge_builder":
+                                case "temporal_weave":
+                                    <CoopTopologyPanel View="CurrentCoopPuzzle!.View"
+                                                       FamilyId="GetCoopV2FamilyId()"
+                                                       OnCommand="TriggerCoopV2ActionAsync" />
+                                    break;
+                                case "mirror_minds":
+                                    <CoopDeductionPanel View="CurrentCoopPuzzle!.View"
+                                                        FamilyId="GetCoopV2FamilyId()"
+                                                        OnCommand="TriggerCoopV2ActionAsync" />
+                                    break;
+                                case "cipher_relay":
+                                    <CoopRelayPanel View="CurrentCoopPuzzle!.View"
+                                                    FamilyId="GetCoopV2FamilyId()"
+                                                    OnCommand="TriggerCoopV2ActionAsync" />
+                                    break;
+                                default:
+                                    <div class="@GetCoopV2ShellClass()">
+                                        <div class="enigma-coop-v2-header">
+                                            <span class="enigma-coop-v2-family">@GetCoopV2FamilyId().Replace('_', ' ')</span>
+                                            <span class="enigma-coop-v2-phase">@GetCoopV2PhaseText().Replace('_', ' ')</span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(GetCoopV2FailureLabel()))
+                                        {
+                                            <div class="enigma-coop-v2-failure">
+                                                <strong>@GetCoopV2FailureLabel()</strong>
+                                                @if (!string.IsNullOrWhiteSpace(GetCoopV2FailureVisualCue()))
+                                                {
+                                                    <span>@GetCoopV2FailureVisualCue()</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(GetCoopV2RecoveryText()))
+                                                {
+                                                    <small>@GetCoopV2RecoveryText()</small>
+                                                }
+                                            </div>
+                                        }
+                                        <div class="enigma-coop-v2-status">@GetCoopV2StatusText()</div>
+                                        <div class="enigma-coop-v2-prompt">@GetCoopV2PromptText()</div>
+                                        <div class="enigma-progress-shell enigma-coop-v2-progress">
+                                            <div class="enigma-progress-bar" style="width: @(GetCoopV2ProgressPercent())%;"></div>
+                                        </div>
+                                        <div class="enigma-coop-v2-progress-axis @GetCoopV2ProgressTrendClass()">
+                                            <span>@GetCoopV2ProgressLabel()</span>
+                                            <strong>@($"{GetCoopV2ProgressPercent()}%")</strong>
+                                            <small>@GetCoopV2ProgressTrend()</small>
+                                        </div>
+                                        <div class="enigma-coop-v2-hud-grid">
+                                            @foreach (var hud in GetCoopV2HudItems())
+                                            {
+                                                <div class="enigma-coop-v2-hud-item">
+                                                    <span class="enigma-coop-v2-hud-icon">@GetCoopV2IconGlyph(hud.Icon)</span>
+                                                    <span class="enigma-coop-v2-hud-label">@hud.Label</span>
+                                                    <strong>@hud.Value</strong>
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="enigma-coop-v2-action-grid">
+                                            @foreach (var action in GetCoopV2Actions())
+                                            {
+                                                var command = action.Command;
+                                                <button class="@GetCoopV2ActionClass(action)" @onclick="(() => TriggerCoopV2ActionAsync(command))" disabled="@(!action.Enabled)">
+                                                    <span class="enigma-coop-v2-action-icon">@GetCoopV2IconGlyph(action.Icon)</span>
+                                                    <span>@action.Label</span>
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                    break;
+                            }
+                        }
+                        else if (IsCoopPuzzleV2)
                         {
                             <div class="@GetCoopV2ShellClass()">
                                 <div class="enigma-coop-v2-header">

@@ -1,0 +1,141 @@
+@using System.Text.Json
+
+<div class="enigma-advanced-panel-shell enigma-coop-depth-panel family-@FamilyId">
+    <section class="enigma-advanced-stage-card enigma-coop-depth-stage">
+        <header class="enigma-advanced-stage-head">
+            <div>
+                <span class="enigma-kicker">@DifficultyLabel Co-op</span>
+                <strong>@FamilyTitle</strong>
+                <p>@Subtitle</p>
+            </div>
+            <div class="enigma-advanced-stage-badges">
+                <span class="enigma-advanced-stage-pill">@RoleTitle</span>
+                <span class="enigma-advanced-stage-pill muted">@PartnerTitle</span>
+            </div>
+        </header>
+
+        <div class="enigma-coop-depth-main">
+            <div class="enigma-coop-deduction-board">
+                <div class="enigma-coop-deduction-column">
+                    <span class="enigma-kicker">Your Cells</span>
+                    <div class="enigma-coop-deduction-grid">
+                        @foreach (var cell in LocalCells)
+                        {
+                            <button class="enigma-coop-deduction-cell"
+                                    disabled='@(!CoopBoardJson.GetBool(cell, "enabled"))'
+                                    @onclick='() => DispatchAsync(CoopBoardJson.GetString(cell, "command"))'
+                                    >
+                                <strong>@CoopBoardJson.GetInt(cell, "value")</strong>
+                                <small>@CoopBoardJson.GetString(cell, "label")</small>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="enigma-coop-deduction-column partner">
+                    <span class="enigma-kicker">@PartnerTitle</span>
+                    <div class="enigma-coop-deduction-grid">
+                        @foreach (var cell in PartnerCells)
+                        {
+                            <article class="enigma-coop-deduction-cell partner">
+                                <strong>@CoopBoardJson.GetInt(cell, "target")</strong>
+                                <small>@CoopBoardJson.GetString(cell, "label")</small>
+                            </article>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <aside class="enigma-advanced-telemetry-panel streamlined">
+                <div class="enigma-system-summary-strip">
+                    <article>
+                        <span>Ready</span>
+                        <strong>@(Ready ? "YES" : "NO")</strong>
+                    </article>
+                    <article>
+                        <span>Exact</span>
+                        <strong>@($"{ExactLocks}/{TotalLocks}")</strong>
+                    </article>
+                    <article>
+                        <span>Attempt</span>
+                        <strong>@Attempt</strong>
+                    </article>
+                    <article>
+                        <span>Phase</span>
+                        <strong>@PhaseLabel</strong>
+                    </article>
+                </div>
+
+                <div class="enigma-advanced-status-card enigma-system-status-card">
+                    <span class="enigma-kicker">Deduction</span>
+                    <strong>@FamilyTitle</strong>
+                    <p>@StatusText</p>
+                    <div class="enigma-system-metric-strip">
+                        @foreach (var metric in Metrics)
+                        {
+                            <article class="enigma-system-metric-card compact @(CoopBoardJson.GetBool(metric, "aligned") ? "aligned" : string.Empty)">
+                                <span>@CoopBoardJson.GetString(metric, "label")</span>
+                                <strong>@CoopBoardJson.GetString(metric, "value")</strong>
+                                <small>@CoopBoardJson.GetString(metric, "target")</small>
+                            </article>
+                        }
+                    </div>
+                </div>
+
+                @if (Clues.Count > 0)
+                {
+                    <div class="enigma-system-clue-stack">
+                        @foreach (var clue in Clues)
+                        {
+                            <article class="enigma-system-clue-card">
+                                <strong>@CoopBoardJson.GetString(clue, "label")</strong>
+                                <span>@CoopBoardJson.GetString(clue, "text")</span>
+                            </article>
+                        }
+                    </div>
+                }
+            </aside>
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required JsonElement View { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string FamilyId { get; set; }
+
+    [Parameter, EditorRequired]
+    public required EventCallback<string> OnCommand { get; set; }
+
+    private JsonElement Board => CoopBoardJson.GetObject(View, "board");
+    private JsonElement SharedStage => CoopBoardJson.GetObject(Board, "shared_stage");
+    private JsonElement Summary => CoopBoardJson.GetObject(Board, "summary");
+    private JsonElement RolePanel => CoopBoardJson.GetObject(Board, "role_panel");
+    private JsonElement PartnerPanel => CoopBoardJson.GetObject(Board, "partner_panel");
+    private IReadOnlyList<JsonElement> Metrics => CoopBoardJson.GetArray(Board, "metrics");
+    private IReadOnlyList<JsonElement> Clues => CoopBoardJson.GetArray(Board, "clues");
+    private IReadOnlyList<JsonElement> LocalCells => CoopBoardJson.GetArray(SharedStage, "local_cells");
+    private IReadOnlyList<JsonElement> PartnerCells => CoopBoardJson.GetArray(SharedStage, "partner_cells");
+
+    private string DifficultyLabel => CoopBoardJson.GetString(Board, "difficulty_label", "CO-OP");
+    private string FamilyTitle => CoopBoardJson.GetString(Board, "family_title", FamilyId.Replace('_', ' '));
+    private string Subtitle => CoopBoardJson.GetString(SharedStage, "subtitle", "Reconstruct the shared pattern.");
+    private string RoleTitle => CoopBoardJson.GetString(RolePanel, "title", "Role");
+    private string PartnerTitle => CoopBoardJson.GetString(PartnerPanel, "title", "Partner");
+    private string StatusText => CoopBoardJson.GetString(Summary, "status", string.Empty);
+    private string PhaseLabel => CoopBoardJson.GetString(Summary, "phase", "configure").Replace('_', ' ');
+    private bool Ready => CoopBoardJson.GetBool(Summary, "ready");
+    private int ExactLocks => CoopBoardJson.GetInt(Summary, "exact_locks");
+    private int TotalLocks => CoopBoardJson.GetInt(Summary, "total_locks");
+    private int Attempt => CoopBoardJson.GetInt(Summary, "attempt", 1);
+
+    private async Task DispatchAsync(string command)
+    {
+        if (!string.IsNullOrWhiteSpace(command))
+        {
+            await OnCommand.InvokeAsync(command);
+        }
+    }
+}

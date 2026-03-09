@@ -122,7 +122,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
     [SupplyParameterFromQuery(Name = "tutorial")]
     public string? Tutorial { get; set; }
 
-    protected bool UsePlaceholderGraphics { get; } = true;
     protected string GameSurfaceId { get; } = $"enigma-game-{Guid.NewGuid():N}";
     protected MazeSeedDefinition? ParsedSeed { get; private set; }
     protected MazeRoomDefinition? CurrentRoom { get; private set; }
@@ -141,21 +140,21 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     protected IReadOnlyDictionary<char, string> RoomBackgrounds { get; } = new Dictionary<char, string>
     {
-        ['A'] = "linear-gradient(145deg, #22344f 0%, #142033 100%)",
-        ['B'] = "linear-gradient(145deg, #27413a 0%, #15231f 100%)",
-        ['C'] = "linear-gradient(145deg, #3a2f4c 0%, #1a1628 100%)",
-        ['D'] = "linear-gradient(145deg, #49372b 0%, #1f1610 100%)",
-        ['E'] = "linear-gradient(145deg, #2f4547 0%, #182326 100%)",
-        ['F'] = "linear-gradient(145deg, #4b2f3c 0%, #20131a 100%)",
-        ['G'] = "linear-gradient(145deg, #405129 0%, #1a2110 100%)",
-        ['H'] = "linear-gradient(145deg, #1f4153 0%, #0f202a 100%)",
-        ['I'] = "linear-gradient(145deg, #3d304f 0%, #191424 100%)",
-        ['J'] = "linear-gradient(145deg, #26494a 0%, #132021 100%)",
-        ['K'] = "linear-gradient(145deg, #524a28 0%, #211d10 100%)",
-        ['L'] = "linear-gradient(145deg, #42313c 0%, #1d151a 100%)",
-        ['M'] = "linear-gradient(145deg, #2a4b36 0%, #142219 100%)",
-        ['N'] = "linear-gradient(145deg, #4a3526 0%, #1c140e 100%)",
-        ['O'] = "linear-gradient(145deg, #3d4f58 0%, #182026 100%)",
+        ['A'] = BuildRoomBackground("A", "#22344fb8", "#142033d6"),
+        ['B'] = BuildRoomBackground("B", "#27413ab8", "#15231fd6"),
+        ['C'] = BuildRoomBackground("C", "#3a2f4cb8", "#1a1628d6"),
+        ['D'] = BuildRoomBackground("D", "#49372bb8", "#1f1610d6"),
+        ['E'] = BuildRoomBackground("E", "#2f4547b8", "#182326d6"),
+        ['F'] = BuildRoomBackground("F", "#4b2f3cb8", "#20131ad6"),
+        ['G'] = BuildRoomBackground("G", "#405129b8", "#1a2110d6"),
+        ['H'] = BuildRoomBackground("H", "#1f4153b8", "#0f202ad6"),
+        ['I'] = BuildRoomBackground("I", "#3d304fb8", "#191424d6"),
+        ['J'] = BuildRoomBackground("J", "#26494ab8", "#132021d6"),
+        ['K'] = BuildRoomBackground("K", "#524a28b8", "#211d10d6"),
+        ['L'] = BuildRoomBackground("L", "#42313cb8", "#1d151ad6"),
+        ['M'] = BuildRoomBackground("M", "#2a4b36b8", "#142219d6"),
+        ['N'] = BuildRoomBackground("N", "#4a3526b8", "#1c140ed6"),
+        ['O'] = BuildRoomBackground("O", "#3d4f58b8", "#182026d6"),
     };
 
     protected IReadOnlyDictionary<PlayerDirection, string> PlayerAnimationDirections { get; } = new Dictionary<PlayerDirection, string>
@@ -164,14 +163,6 @@ public partial class Game : ComponentBase, IAsyncDisposable
         [PlayerDirection.Right] = "right",
         [PlayerDirection.Down] = "down",
         [PlayerDirection.Left] = "left",
-    };
-
-    protected IReadOnlyDictionary<PlayerDirection, string> PlayerSpriteStates { get; } = new Dictionary<PlayerDirection, string>
-    {
-        [PlayerDirection.Up] = "placeholder-up",
-        [PlayerDirection.Right] = "placeholder-right",
-        [PlayerDirection.Down] = "placeholder-down",
-        [PlayerDirection.Left] = "placeholder-left",
     };
 
     protected int SolvedRoomCount => IsCoopRun
@@ -198,6 +189,11 @@ public partial class Game : ComponentBase, IAsyncDisposable
         string.Equals(Tutorial, "true", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(Tutorial, "1", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(Tutorial, "yes", StringComparison.OrdinalIgnoreCase);
+
+    private static string BuildRoomBackground(string roomKey, string tintStart, string tintEnd) =>
+        "linear-gradient(180deg, rgba(6, 11, 18, 0.12) 0%, rgba(3, 6, 10, 0.54) 100%), " +
+        $"linear-gradient(145deg, {tintStart} 0%, {tintEnd} 100%), " +
+        $"url('/images/room-art/{roomKey}.png') center center / cover no-repeat";
 
     protected override void OnParametersSet()
     {
@@ -1434,7 +1430,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         $"left: {ToPositionPercentX(PlayerX, PlayerSize)}%; top: {ToPercentY(PlayerY)}%; width: {ToLengthPercentX(PlayerSize)}%; height: {ToPercentY(PlayerSize)}%;";
 
     protected string GetPlayerClass() =>
-        $"facing-{PlayerAnimationDirections[PlayerFacing]} {PlayerSpriteStates[PlayerFacing]} {(IsMoving ? "is-moving" : string.Empty)}";
+        $"facing-{PlayerAnimationDirections[PlayerFacing]} {(IsMoving ? "is-moving" : string.Empty)}";
 
     protected bool ShowCarriedPayloadIndicator => TryGetCarriedPayloadLabel(out _);
 

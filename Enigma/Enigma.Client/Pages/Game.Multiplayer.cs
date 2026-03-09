@@ -72,7 +72,7 @@ public partial class Game
     protected string GetOtherPlayerClass()
     {
         var direction = ParseDirection(CoopOtherPlayer?.Facing);
-        return $"co-op-peer facing-{PlayerAnimationDirections[direction]} {PlayerSpriteStates[direction]}";
+        return $"co-op-peer facing-{PlayerAnimationDirections[direction]}";
     }
 
     protected string GetCoopVoteLabel()
