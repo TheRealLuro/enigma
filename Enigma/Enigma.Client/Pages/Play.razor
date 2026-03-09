@@ -1,6 +1,7 @@
 @page "/play"
 @using System.ComponentModel.DataAnnotations
 @using Enigma.Client.Models.Gameplay
+@using Enigma.Client.Services
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @using Microsoft.JSInterop
 
@@ -11,6 +12,9 @@
          SchemaType="WebPage" />
 
 <div class="container mt-5 play-page-shell" data-tour-id="play-shell">
+    <MobileTerminalNotice IsVisible="@ShowBrowseOnlyNotice"
+                          Title="Field terminal mode active."
+                          Message="You can configure expeditions here, but live anomaly deployment requires a desktop command station." />
 
     <section class="play-page-header play-page-banner" data-tour-id="play-banner">
         <div class="play-page-header-copy">
@@ -46,8 +50,12 @@
                         <ValidationMessage For="() => newMazeRequest.Size" />
                     </div>
 
-                    <button class="btn btn-success w-100" disabled="@IsBusy">
-                        @(IsBusy ? "Initializing..." : "Send Expedition Request")
+                    <button class="btn btn-success w-100 play-launch-button" disabled="@IsBusy">
+                        <span>@(IsBusy ? "Initializing..." : "Send Expedition Request")</span>
+                        @if (ShowBrowseOnlyNotice)
+                        {
+                            <DesktopRequiredBadge Label="Desktop" />
+                        }
                     </button>
                 </EditForm>
             </div>
@@ -67,8 +75,12 @@
                         <ValidationMessage For="() => loadMazeRequest.MapName" />
                     </div>
 
-                    <button class="btn btn-primary w-100" disabled="@IsBusy">
-                        @(IsBusy ? "Loading..." : "Load Sector")
+                    <button class="btn btn-primary w-100 play-launch-button" disabled="@IsBusy">
+                        <span>@(IsBusy ? "Loading..." : "Load Sector")</span>
+                        @if (ShowBrowseOnlyNotice)
+                        {
+                            <DesktopRequiredBadge Label="Desktop" />
+                        }
                     </button>
                 </EditForm>
             </div>
@@ -158,11 +170,19 @@
         </div>
     }
 
+    @if (ShowCompatibilityGate)
+    {
+        <MobileCompatibilityGate Inline="true"
+                                 TargetRoute="@PendingGameNavigationUrl"
+                                 OnClose="CloseCompatibilityGateAsync" />
+    }
+
 </div>
 
 @code {
     [Inject] NavigationManager NavigationManager { get; set; } = default!;
     [Inject] IJSRuntime JS { get; set; } = default!;
+    [Inject] DeviceCompatibilityService DeviceCompatibility { get; set; } = default!;
 
     private NewMazeRequest newMazeRequest = new();
     private LoadMazeRequest loadMazeRequest = new();
@@ -176,6 +196,7 @@
     private string FullscreenPreference { get; set; } = string.Empty;
     private string StatusMessage { get; set; } = string.Empty;
     private string? PendingGameNavigationUrl { get; set; }
+    private bool ShowCompatibilityGate { get; set; }
     private LoginUserSummary? Session { get; set; }
     private List<ItemCatalogEntry> Inventory { get; set; } = [];
     private Dictionary<string, int> SelectedItems { get; set; } = [];
@@ -199,6 +220,7 @@
             return;
         }
 
+        await DeviceCompatibility.EnsureInitializedAsync(JS);
         AudioPreference = await GetAudioPreferenceSafeAsync();
         DoNotAskAudioAgain = !string.IsNullOrWhiteSpace(AudioPreference);
         FullscreenPreference = await GetFullscreenPreferenceSafeAsync();
@@ -299,6 +321,15 @@
         }
 
         PendingGameNavigationUrl = navigationUrl;
+        var decision = await DeviceCompatibility.EvaluateGameplayAccessAsync(JS, navigationUrl);
+        if (decision != GameplayCompatibilityDecision.Allowed)
+        {
+            ShowCompatibilityGate = true;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        ShowCompatibilityGate = false;
         var loadout = Inventory
             .Where(item => SelectedItems.TryGetValue(item.ItemId, out var count) && count > 0)
             .Select(item => new RunLoadoutSelection
@@ -315,6 +346,14 @@
         await JS.InvokeVoidAsync("enigmaGame.setRunLoadout", loadout);
 
         await ContinueRunAfterAudioGateAsync();
+    }
+
+    private Task CloseCompatibilityGateAsync()
+    {
+        ShowCompatibilityGate = false;
+        DeviceCompatibility.ClearBlockedTarget();
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     private async Task EnterFullscreenAndStartAsync()
@@ -708,4 +747,6 @@
         [Required(ErrorMessage = "Cannot be empty.")]
         public string MapName { get; set; } = string.Empty;
     }
+
+    private bool ShowBrowseOnlyNotice => DeviceCompatibility.IsReady && DeviceCompatibility.IsBrowseOnly;
 }

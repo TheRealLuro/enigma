@@ -18,6 +18,9 @@ obj/
 .idea/
 .vscode/
 appsettings.Development.json
+appsettings.Local.json
+appsettings.*.Local.json
+launchSettings.local.json
 *.pfx
 Thumbs.db
 ehthumbs.db

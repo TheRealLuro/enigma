@@ -24,5 +24,6 @@ builder.Services.AddScoped(sp =>
 });
 builder.Services.AddScoped<EnigmaApiClient>();
 builder.Services.AddScoped<UiNotificationService>();
+builder.Services.AddScoped<DeviceCompatibilityService>();
 
 await builder.Build().RunAsync();

@@ -1,0 +1,8 @@
+C:\Users\jkwiatkowski\Desktop\enigma\Enigma\Enigma.Client\artifacts\testobj\Debug\net9.0\Enigma.Client.csproj.AssemblyReference.cache
+C:\Users\jkwiatkowski\Desktop\enigma\Enigma\Enigma.Client\artifacts\testobj\Debug\net9.0\rpswa.dswa.cache.json
+C:\Users\jkwiatkowski\Desktop\enigma\Enigma\Enigma.Client\artifacts\testobj\Debug\net9.0\Enigma.Client.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\jkwiatkowski\Desktop\enigma\Enigma\Enigma.Client\artifacts\testobj\Debug\net9.0\Enigma.Client.AssemblyInfoInputs.cache
+C:\Users\jkwiatkowski\Desktop\enigma\Enigma\Enigma.Client\artifacts\testobj\Debug\net9.0\Enigma.Client.AssemblyInfo.cs
+C:\Users\jkwiatkowski\Desktop\enigma\Enigma\Enigma.Client\artifacts\testobj\Debug\net9.0\Enigma.Client.csproj.CoreCompileInputs.cache
+C:\Users\jkwiatkowski\Desktop\enigma\Enigma\Enigma.Client\artifacts\testobj\Debug\net9.0\Enigma.Client.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\jkwiatkowski\Desktop\enigma\Enigma\Enigma.Client\artifacts\testobj\Debug\net9.0\Enigma.Client.sourcelink.json

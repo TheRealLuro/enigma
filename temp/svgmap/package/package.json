@@ -1,0 +1,27 @@
+{
+	"name": "@svg-maps/world",
+	"version": "2.0.0",
+	"description": "Map of World",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"files": [
+		"index.js",
+		"index.d.ts",
+		"world.svg"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/VictorCazanave/svg-maps/tree/master/packages/world"
+	},
+	"keywords": [
+		"svg",
+		"map",
+		"world"
+	],
+	"author": "Victor Cazanave <victor.cazanave@gmail.com>",
+	"publishConfig": {
+		"access": "public"
+	},
+	"license": "CC-BY-4.0",
+	"gitHead": "4309a09727040957d50f621d3cb9734b389b2745"
+}

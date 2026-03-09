@@ -1,0 +1,113 @@
+@using Enigma.Client.Models
+
+@if (Controller.PreviewFile is not null)
+{
+    <aside class="archive-hover-preview">
+        <div class="archive-hover-preview-head">
+            <span class="archive-hover-preview-kicker">Context rail</span>
+            <strong>@Controller.PreviewFile.Definition.Code</strong>
+        </div>
+
+        <div class="archive-hover-preview-copy">
+            <h3>@Controller.PreviewFile.Definition.Title</h3>
+            <p>@Controller.PreviewFile.Definition.PreviewText</p>
+        </div>
+
+        <div class="archive-hover-preview-meta">
+            <span>@Controller.PreviewFile.Definition.Classification</span>
+            <span>@Controller.GetDirectoryStatusLabel(Controller.PreviewFile)</span>
+            <span>@Controller.GetAccessLabel(Controller.PreviewFile)</span>
+        </div>
+
+        @if (TryGetActiveSector() is { } sector)
+        {
+            <div class="archive-hover-preview-context">
+                <span class="archive-hover-preview-kicker">Live sector context</span>
+                <article class="archive-hover-preview-panel">
+                    <strong>@sector.MapName</strong>
+                    <p>@sector.Theme // @sector.Difficulty</p>
+                    <small>Founder @sector.Founder // @sector.TimeFoundedDisplay</small>
+                </article>
+            </div>
+        }
+
+        @if (IsExplorerContext())
+        {
+            <div class="archive-hover-preview-context">
+                <span class="archive-hover-preview-kicker">Explorer telemetry</span>
+                <div class="archive-hover-preview-stack">
+                    @foreach (var explorer in Controller.TopExplorers.Take(3))
+                    {
+                        <article class="archive-hover-preview-panel">
+                            <strong>@explorer.Username</strong>
+                            <p>@explorer.DiscoveredMapsCount discovered // @explorer.MapsCompleted completed</p>
+                            <small>@($"{explorer.CompletionRate:0.#%}") completion rate // @FormatCompactNumber(explorer.MazeNuggets) MN</small>
+                        </article>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (IsGovernanceContext())
+        {
+            <div class="archive-hover-preview-context">
+                <span class="archive-hover-preview-kicker">Governance snapshot</span>
+                <article class="archive-hover-preview-panel">
+                    <strong>@(Controller.Governance.Available ? Controller.Governance.Title : "Unavailable")</strong>
+                    <p>@Controller.Governance.AvailabilityLabel</p>
+                    @if (Controller.Governance.Available)
+                    {
+                        <small>@Controller.Governance.TotalVotesCast votes // @Controller.Governance.UniqueVoterCount voters</small>
+                    }
+                </article>
+            </div>
+        }
+
+        @if (Controller.PreviewFile.Definition.PreviewFacts.Count > 0)
+        {
+            <ul class="archive-hover-preview-facts">
+                @foreach (var fact in Controller.PreviewFile.Definition.PreviewFacts)
+                {
+                    <li>@fact</li>
+                }
+            </ul>
+        }
+    </aside>
+}
+
+@code {
+    [CascadingParameter]
+    public ArchiveTerminalController Controller { get; set; } = default!;
+
+    private bool IsExplorerContext()
+    {
+        return Controller.TopExplorers.Count > 0 &&
+               (Controller.PreviewFile?.Definition.RightPanelType is ArchiveRightPanelType.ExplorerRoster or ArchiveRightPanelType.MaterialAnalysis);
+    }
+
+    private bool IsGovernanceContext()
+    {
+        return Controller.PreviewFile?.Definition.RightPanelType == ArchiveRightPanelType.GovernanceLattice;
+    }
+
+    private LoreSectorRecord? TryGetActiveSector()
+    {
+        return Controller.PreviewFile?.Definition.RightPanelType is ArchiveRightPanelType.GeospatialWatch
+            or ArchiveRightPanelType.CubeAnalysis
+            or ArchiveRightPanelType.SpatialReconstruction
+            or ArchiveRightPanelType.RecoveredImageCache
+            ? Controller.ActiveSectorRecord
+            : null;
+    }
+
+    private static string FormatCompactNumber(long value)
+    {
+        return value switch
+        {
+            >= 1_000_000_000 => $"{value / 1_000_000_000d:0.#}B",
+            >= 1_000_000 => $"{value / 1_000_000d:0.#}M",
+            >= 1_000 => $"{value / 1_000d:0.#}K",
+            _ => value.ToString()
+        };
+    }
+}

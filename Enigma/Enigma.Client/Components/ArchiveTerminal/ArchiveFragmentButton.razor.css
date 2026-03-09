@@ -1,0 +1,24 @@
+.archive-fragment-button {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    min-height: 3rem;
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid var(--archive-border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--archive-text);
+}
+
+.archive-fragment-button span {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.74rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+}
+
+.archive-fragment-button strong {
+    font-size: 0.92rem;
+}

@@ -1,0 +1,82 @@
+<button id="@ElementId"
+        class="@GetCssClass()"
+        type="button"
+        tabindex="@TabIndex"
+        aria-current="@(IsActive ? "true" : "false")"
+        @onclick="() => OnSelect.InvokeAsync(File.Definition.Id)"
+        @onmouseenter="() => OnHover.InvokeAsync(File.Definition.Id)"
+        @onmouseleave="() => OnHover.InvokeAsync(null)"
+        @onfocus="() => OnHover.InvokeAsync(File.Definition.Id)">
+    <span class="archive-file-card-led @GetStatusClass()" aria-hidden="true"></span>
+    <div class="archive-file-card-index">@File.Definition.SortOrder.ToString("00")</div>
+    <div class="archive-file-card-copy">
+        <span class="archive-file-card-code">@File.Definition.Code</span>
+        <strong>@File.Definition.Title</strong>
+        <small>@Controller.GetDirectoryStatusLabel(File)</small>
+        @if (!string.IsNullOrWhiteSpace(Controller.GetDirectoryLiveFact(File)))
+        {
+            <em>@Controller.GetDirectoryLiveFact(File)</em>
+        }
+    </div>
+    @if (File.IsNewlyUnlocked)
+    {
+        <span class="archive-file-card-new">New</span>
+    }
+</button>
+
+@code {
+    [CascadingParameter]
+    public ArchiveTerminalController Controller { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public required ArchiveResolvedFile File { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string ElementId { get; set; }
+
+    [Parameter]
+    public bool IsActive { get; set; }
+
+    [Parameter]
+    public int TabIndex { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnSelect { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> OnHover { get; set; }
+
+    private string GetCssClass()
+    {
+        var classes = new List<string> { "archive-file-card", $"status-{GetStatusClass()}" };
+        if (IsActive)
+        {
+            classes.Add("is-active");
+        }
+
+        if (File.IsNewlyUnlocked)
+        {
+            classes.Add("is-new");
+        }
+
+        if (!File.CanSelect)
+        {
+            classes.Add("is-denied");
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private string GetStatusClass()
+    {
+        return File.Status switch
+        {
+            ArchiveFileStatus.Corrupted => "corrupted",
+            ArchiveFileStatus.Restricted => "restricted",
+            ArchiveFileStatus.Redacted => "restricted",
+            ArchiveFileStatus.Observed => "observed",
+            ArchiveFileStatus.Locked => "locked",
+            _ => "open",
+        };
+    }
+}

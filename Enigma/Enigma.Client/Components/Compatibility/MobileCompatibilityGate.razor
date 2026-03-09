@@ -1,0 +1,123 @@
+@inject NavigationManager NavigationManager
+@inject Enigma.Client.Services.DeviceCompatibilityService Compatibility
+@inject Enigma.Client.Services.UiNotificationService Notifications
+
+<div class="mobile-compatibility-gate @(Inline ? "inline" : "fullscreen")"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="compatibility-gate-title">
+    @if (Inline)
+    {
+        <button class="mobile-compatibility-scrim"
+                type="button"
+                aria-label="Close compatibility notice"
+                @onclick="CloseAsync"></button>
+    }
+
+    <section class="mobile-compatibility-panel">
+        <span class="mobile-compatibility-kicker">Enigma Command Station</span>
+        <h2 id="compatibility-gate-title">Exploration Access Restricted</h2>
+        <p class="mobile-compatibility-copy">
+            This terminal supports archive review, research access, and observer functions.
+            Live anomaly navigation requires a full desktop command interface with stable precision input.
+            Reconnect from a desktop workstation to begin expedition operations.
+        </p>
+
+        <div class="mobile-compatibility-metrics">
+            <div>
+                <span>Input Precision</span>
+                <strong>@GetInputPrecisionLabel()</strong>
+            </div>
+            <div>
+                <span>Control Link</span>
+                <strong>@GetControlLinkLabel()</strong>
+            </div>
+            <div>
+                <span>Telemetry Reliability</span>
+                <strong>@GetTelemetryLabel()</strong>
+            </div>
+            <div>
+                <span>Expedition Runtime</span>
+                <strong>Blocked</strong>
+            </div>
+            <div>
+                <span>Archive Access</span>
+                <strong>Available</strong>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(TargetRoute))
+        {
+            <div class="mobile-compatibility-route">
+                <span>Pending desktop continuation</span>
+                <strong>@TargetRoute</strong>
+            </div>
+        }
+
+        <div class="mobile-compatibility-actions">
+            <a class="btn btn-secondary" href="/play">Return to Archive</a>
+            <a class="btn btn-secondary" href="/lore">Open Lore Terminal</a>
+            <a class="btn btn-secondary" href="/players">View Explorer Records</a>
+            <a class="btn btn-secondary" href="/home">Go to Dashboard</a>
+            <button class="btn btn-primary" type="button" @onclick="ContinueOnDesktopAsync">Continue on Desktop</button>
+            @if (Inline)
+            {
+                <button class="btn btn-secondary" type="button" @onclick="CloseAsync">Dismiss</button>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter]
+    public bool Inline { get; set; }
+
+    [Parameter]
+    public string? TargetRoute { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private async Task ContinueOnDesktopAsync()
+    {
+        var copied = await Compatibility.CopyContinuationRouteAsync(TargetRoute);
+        Notifications.Info(copied
+            ? "Desktop continuation link copied."
+            : "The expedition route has been saved for desktop continuation.");
+    }
+
+    private Task CloseAsync()
+    {
+        return OnClose.InvokeAsync();
+    }
+
+    private string GetInputPrecisionLabel()
+    {
+        return Compatibility.CurrentClass switch
+        {
+            DeviceCompatibilityClass.MobileBrowseOnly => "Insufficient",
+            DeviceCompatibilityClass.TabletBrowseOnly => "Field-terminal only",
+            _ => "Unverified",
+        };
+    }
+
+    private string GetControlLinkLabel()
+    {
+        return Compatibility.CurrentClass switch
+        {
+            DeviceCompatibilityClass.MobileBrowseOnly => "Degraded",
+            DeviceCompatibilityClass.TabletBrowseOnly => "Unstable",
+            _ => "Unknown",
+        };
+    }
+
+    private string GetTelemetryLabel()
+    {
+        return Compatibility.CurrentClass switch
+        {
+            DeviceCompatibilityClass.MobileBrowseOnly => "Observer-grade",
+            DeviceCompatibilityClass.TabletBrowseOnly => "Review-only",
+            _ => "Fallback only",
+        };
+    }
+}

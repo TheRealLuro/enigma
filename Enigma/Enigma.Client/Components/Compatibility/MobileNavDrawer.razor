@@ -1,0 +1,57 @@
+@if (IsOpen)
+{
+    <button class="mobile-nav-drawer-scrim"
+            type="button"
+            aria-label="Close navigation drawer"
+            @onclick="CloseAsync"></button>
+}
+
+<aside class="mobile-nav-drawer @(IsOpen ? "is-open" : string.Empty)">
+    <div class="mobile-nav-drawer-head">
+        <div>
+            <span class="mobile-nav-drawer-kicker">Field Terminal</span>
+            <strong>@(string.IsNullOrWhiteSpace(Username) ? "Observer Access" : Username)</strong>
+        </div>
+        <button class="mobile-nav-drawer-close" type="button" @onclick="CloseAsync">Close</button>
+    </div>
+
+    <nav class="mobile-nav-drawer-links" aria-label="Primary navigation">
+        <NavLink href="/home" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">Command</NavLink>
+        <NavLink href="/play" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">
+            Expeditions
+            <DesktopRequiredBadge />
+        </NavLink>
+        <NavLink href="/play/coop" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">
+            Co-op Operations
+            <DesktopRequiredBadge Label="Desktop Launch" />
+        </NavLink>
+        <NavLink href="/leaderboard" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">Rankings</NavLink>
+        <NavLink href="/players" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">Network</NavLink>
+        <NavLink href="/profile" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">Console</NavLink>
+        <NavLink href="/economy" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">Research</NavLink>
+        <NavLink href="/marketplace" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">Exchange</NavLink>
+        <NavLink href="/lore" class="mobile-nav-link" Match="NavLinkMatch.Prefix" @onclick="CloseAsync">Classified Logs</NavLink>
+    </nav>
+
+    <div class="mobile-nav-drawer-foot">
+        <MobileTerminalNotice IsVisible="true"
+                              Title="Archive and observer access are active on this terminal."
+                              Message="Live anomaly control remains locked to desktop command stations." />
+    </div>
+</aside>
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public string? Username { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private Task CloseAsync()
+    {
+        return OnClose.InvokeAsync();
+    }
+}

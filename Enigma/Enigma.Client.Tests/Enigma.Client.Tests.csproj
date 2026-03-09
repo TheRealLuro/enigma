@@ -4,6 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,5 +22,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Enigma.Client\Enigma.Client.csproj" />
+    <ProjectReference Include="..\Enigma\Enigma.csproj" />
   </ItemGroup>
 </Project>

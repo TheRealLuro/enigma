@@ -1,0 +1,16 @@
+.desktop-required-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.55rem;
+    padding: 0.1rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 205, 112, 0.28);
+    background: rgba(255, 205, 112, 0.1);
+    color: #ffd58d;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}

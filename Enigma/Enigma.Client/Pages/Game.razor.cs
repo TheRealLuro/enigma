@@ -107,6 +107,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
     [Inject] protected NavigationManager NavigationManager { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
     [Inject] protected EnigmaApiClient Api { get; set; } = default!;
+    [Inject] protected DeviceCompatibilityService DeviceCompatibility { get; set; } = default!;
 
     [SupplyParameterFromQuery(Name = "seed")]
     public string? Seed { get; set; }
@@ -206,6 +207,12 @@ public partial class Game : ComponentBase, IAsyncDisposable
         string.Equals(Tutorial, "true", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(Tutorial, "1", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(Tutorial, "yes", StringComparison.OrdinalIgnoreCase);
+    protected bool IsCompatibilityResolved { get; private set; }
+    protected GameplayCompatibilityDecision GameplayAccessDecision { get; private set; } = GameplayCompatibilityDecision.BlockedUnknown;
+    protected string CurrentRequestedGameRoute => new Uri(NavigationManager.Uri).PathAndQuery;
+
+    private string? _loadedRouteKey;
+    private bool CanInitializeRuntime => IsCompatibilityResolved && GameplayAccessDecision == GameplayCompatibilityDecision.Allowed;
 
     protected string GetRoomArtStyle()
     {
@@ -219,6 +226,26 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     protected override void OnParametersSet()
     {
+        if (!CanInitializeRuntime)
+        {
+            IsLoaded = false;
+            LoadError = null;
+            return;
+        }
+
+        ApplyRuntimeParameters();
+    }
+
+    private void ApplyRuntimeParameters()
+    {
+        var routeKey = $"{Seed}|{MapName}|{Source}|{Tutorial}|{Coop}|{CoopSessionId}";
+        if (string.Equals(_loadedRouteKey, routeKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _loadedRouteKey = routeKey;
+
         if (string.IsNullOrWhiteSpace(Seed))
         {
             LoadError = "Open a generated or loaded seed from the Play page before starting the game.";
@@ -277,6 +304,24 @@ public partial class Game : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!IsCompatibilityResolved)
+        {
+            GameplayAccessDecision = await DeviceCompatibility.EvaluateGameplayAccessAsync(JS, CurrentRequestedGameRoute);
+            IsCompatibilityResolved = true;
+            if (GameplayAccessDecision == GameplayCompatibilityDecision.Allowed)
+            {
+                ApplyRuntimeParameters();
+            }
+
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (!CanInitializeRuntime)
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(Seed))
         {
             LoadError = "Open a generated or loaded seed from the Play page before starting the game.";
@@ -339,6 +384,12 @@ public partial class Game : ComponentBase, IAsyncDisposable
             await InvokeAsync(StateHasChanged);
             return;
         }
+    }
+
+    protected Task HandleBlockedGameExitAsync()
+    {
+        NavigationManager.NavigateTo("/play", replace: true);
+        return Task.CompletedTask;
     }
 
     [JSInvokable]

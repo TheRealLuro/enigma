@@ -1,0 +1,187 @@
+@inject IJSRuntime JS
+@inject Enigma.Client.Services.EnigmaApiClient Api
+@inject NavigationManager NavigationManager
+
+@if (Controller.IsSidebarOpen)
+{
+    <button class="archive-sidebar-scrim"
+            type="button"
+            aria-label="Close archive file index"
+            @onclick="OnCloseSidebar"></button>
+}
+
+<aside class="archive-sidebar @(Controller.IsSidebarOpen ? "is-open" : string.Empty)"
+       @onkeydown="HandleKeyDown">
+    <div class="archive-sidebar-head">
+        <div>
+            <span class="archive-sidebar-kicker">Archive index</span>
+            <h2>Recovered records</h2>
+        </div>
+        <button class="archive-sidebar-close" type="button" @onclick="OnCloseSidebar">Close</button>
+    </div>
+
+    <div class="archive-sidebar-auth-links">
+        @if (IsAuthenticatedUser)
+        {
+            <button class="archive-sidebar-auth-link" type="button" @onclick="NavigateReturnAsync">Return to Command</button>
+        }
+        else
+        {
+            <button class="archive-sidebar-auth-link" type="button" @onclick="NavigateSignInAsync">Sign In</button>
+            <button class="archive-sidebar-auth-link primary" type="button" @onclick="NavigateCreateAccountAsync">Create Account</button>
+        }
+    </div>
+
+    <div class="archive-sidebar-filters" role="toolbar" aria-label="Archive filters">
+        <button class="@GetFilterClass(ArchiveDirectoryFilter.All)" type="button" @onclick="() => SetFilterAsync(ArchiveDirectoryFilter.All)">All</button>
+        <button class="@GetFilterClass(ArchiveDirectoryFilter.Open)" type="button" @onclick="() => SetFilterAsync(ArchiveDirectoryFilter.Open)">Open</button>
+        <button class="@GetFilterClass(ArchiveDirectoryFilter.Restricted)" type="button" @onclick="() => SetFilterAsync(ArchiveDirectoryFilter.Restricted)">Restricted</button>
+        <button class="@GetFilterClass(ArchiveDirectoryFilter.Corrupted)" type="button" @onclick="() => SetFilterAsync(ArchiveDirectoryFilter.Corrupted)">Corrupted</button>
+    </div>
+
+    <div class="archive-sidebar-groups">
+        @foreach (var group in Controller.Groups)
+        {
+            var files = Controller.GetFilesForGroup(group.Key);
+            if (files.Count == 0)
+            {
+                continue;
+            }
+
+            <section class="archive-sidebar-group">
+                <div class="archive-sidebar-group-head">
+                    <span>@group.Title</span>
+                    <small>@group.Description</small>
+                </div>
+
+                <div class="archive-sidebar-files">
+                    @foreach (var file in files)
+                    {
+                        <ArchiveFileCard File="file"
+                                         ElementId="@GetElementId(file.Definition.Id)"
+                                         IsActive="@(string.Equals(Controller.SelectedFileId, file.Definition.Id, StringComparison.OrdinalIgnoreCase))"
+                                         TabIndex="@GetTabIndex(file.Definition.Id)"
+                                         OnSelect="OnSelectFile"
+                                         OnHover="OnHoverFile" />
+                    }
+                </div>
+            </section>
+        }
+    </div>
+</aside>
+
+@code {
+    [CascadingParameter]
+    public ArchiveTerminalController Controller { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<string> OnSelectFile { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> OnHoverFile { get; set; }
+
+    [Parameter]
+    public EventCallback<ArchiveDirectoryFilter> OnFilterChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnCloseSidebar { get; set; }
+
+    [Parameter]
+    public bool IsAuthenticatedUser { get; set; }
+
+    private Task NavigateSignInAsync() => NavigateBySessionAsync(anonymousRoute: "/", authenticatedRoute: "/home");
+
+    private Task NavigateCreateAccountAsync() => NavigateBySessionAsync(anonymousRoute: "/register", authenticatedRoute: "/home");
+
+    private Task NavigateReturnAsync() => NavigateBySessionAsync(anonymousRoute: "/", authenticatedRoute: "/home");
+
+    private async Task NavigateBySessionAsync(string anonymousRoute, string authenticatedRoute)
+    {
+        try
+        {
+            var session = await Api.GetSessionAsync(lightweight: true);
+            var isAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
+            await OnCloseSidebar.InvokeAsync();
+            NavigationManager.NavigateTo(isAuthenticated ? authenticatedRoute : anonymousRoute);
+        }
+        catch
+        {
+            await OnCloseSidebar.InvokeAsync();
+            NavigationManager.NavigateTo(anonymousRoute);
+        }
+    }
+
+    private async Task SetFilterAsync(ArchiveDirectoryFilter filter)
+    {
+        await OnFilterChanged.InvokeAsync(filter);
+    }
+
+    private string GetFilterClass(ArchiveDirectoryFilter filter)
+    {
+        return Controller.IsFilterActive(filter)
+            ? "archive-sidebar-filter is-active"
+            : "archive-sidebar-filter";
+    }
+
+    private int GetTabIndex(string fileId)
+    {
+        var focusId = string.IsNullOrWhiteSpace(Controller.FocusedFileId)
+            ? Controller.SelectedFileId
+            : Controller.FocusedFileId;
+        return string.Equals(focusId, fileId, StringComparison.OrdinalIgnoreCase) ? 0 : -1;
+    }
+
+    private string GetElementId(string fileId) => $"archive-file-{fileId}";
+
+    private async Task HandleKeyDown(KeyboardEventArgs args)
+    {
+        var files = Controller.GetVisibleFiles();
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        var activeId = string.IsNullOrWhiteSpace(Controller.FocusedFileId)
+            ? Controller.SelectedFileId
+            : Controller.FocusedFileId;
+        var currentIndex = 0;
+        for (var index = 0; index < files.Count; index++)
+        {
+            if (string.Equals(files[index].Definition.Id, activeId, StringComparison.OrdinalIgnoreCase))
+            {
+                currentIndex = index;
+                break;
+            }
+        }
+
+        currentIndex = currentIndex < 0 ? 0 : currentIndex;
+        var nextIndex = currentIndex;
+
+        switch (args.Key)
+        {
+            case "ArrowDown":
+                nextIndex = Math.Min(files.Count - 1, currentIndex + 1);
+                break;
+            case "ArrowUp":
+                nextIndex = Math.Max(0, currentIndex - 1);
+                break;
+            case "Home":
+                nextIndex = 0;
+                break;
+            case "End":
+                nextIndex = files.Count - 1;
+                break;
+            case "Enter":
+            case " ":
+            case "Spacebar":
+                await OnSelectFile.InvokeAsync(files[currentIndex].Definition.Id);
+                return;
+            default:
+                return;
+        }
+
+        var nextId = files[nextIndex].Definition.Id;
+        Controller.SetFocusedFile(nextId);
+        await JS.InvokeVoidAsync("enigmaArchiveTerminal.focusElement", GetElementId(nextId));
+    }
+}

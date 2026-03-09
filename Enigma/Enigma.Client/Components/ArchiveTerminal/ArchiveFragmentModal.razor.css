@@ -1,0 +1,92 @@
+.archive-fragment-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(3, 8, 13, 0.8);
+    backdrop-filter: blur(12px);
+}
+
+.archive-fragment-modal {
+    width: min(760px, 100%);
+    display: grid;
+    gap: 1rem;
+    padding: 1.2rem;
+    border-radius: 1.35rem;
+    border: 1px solid var(--archive-border-strong);
+    background:
+        radial-gradient(circle at top left, var(--archive-accent-soft), transparent 32%),
+        linear-gradient(180deg, rgba(10, 16, 24, 0.98), rgba(7, 11, 18, 0.98));
+}
+
+.archive-fragment-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: start;
+}
+
+.archive-fragment-kicker,
+.archive-fragment-meta span {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+}
+
+.archive-fragment-head h2 {
+    margin: 0.2rem 0 0;
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 1.35rem;
+}
+
+.archive-fragment-close {
+    min-height: 2.4rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--archive-border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--archive-text);
+}
+
+.archive-fragment-panel,
+.archive-fragment-copy {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.archive-fragment-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.archive-fragment-meta span {
+    padding: 0.5rem 0.7rem;
+    border-radius: 0.85rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.archive-fragment-copy {
+    padding: 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.archive-fragment-copy p {
+    margin: 0;
+    color: var(--archive-body);
+    line-height: 1.72;
+}
+
+.archive-fragment-redaction {
+    height: 0.95rem;
+    width: 44%;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+}

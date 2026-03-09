@@ -1,0 +1,112 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="archive-boot-overlay" @ref="_bootRef" aria-live="polite">
+    <div class="archive-boot-panel @(IsFullBoot ? "full" : "reentry")">
+        <span class="archive-boot-kicker">Public Observer Terminal</span>
+        <strong class="archive-boot-title">Enigma Research Archive</strong>
+
+        <div class="archive-boot-lines" role="presentation">
+            @foreach (var line in LoreArchiveContent.BootLines)
+            {
+                <div class="archive-boot-line" data-boot-line="true">
+                    <span>@line</span>
+                    <em class="archive-boot-cursor">_</em>
+                </div>
+            }
+        </div>
+
+        @if (IsFullBoot)
+        {
+            <div class="archive-boot-actions">
+                <button class="archive-boot-skip"
+                        type="button"
+                        disabled="@(!_canSkip)"
+                        @onclick="SkipAsync">
+                    Skip boot
+                </button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private DotNetObjectReference<ArchiveBootSequence>? _dotNetRef;
+    private ElementReference _bootRef;
+    private bool _started;
+    private bool _canSkip;
+
+    [Parameter]
+    public bool IsFullBoot { get; set; }
+
+    [Parameter]
+    public EventCallback OnCompleted { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _started)
+        {
+            return;
+        }
+
+        _started = true;
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("enigmaArchiveTerminal.startBootSequence", _bootRef, _dotNetRef, IsFullBoot);
+
+        if (IsFullBoot)
+        {
+            _ = EnableSkipAsync();
+        }
+    }
+
+    [JSInvokable]
+    public async Task NotifyBootComplete()
+    {
+        await OnCompleted.InvokeAsync();
+    }
+
+    private async Task EnableSkipAsync()
+    {
+        try
+        {
+            await Task.Delay(700);
+        }
+        catch
+        {
+        }
+
+        _canSkip = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SkipAsync()
+    {
+        if (!_canSkip)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaArchiveTerminal.cancelBootSequence");
+        }
+        catch
+        {
+        }
+
+        await OnCompleted.InvokeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaArchiveTerminal.cancelBootSequence");
+        }
+        catch
+        {
+        }
+
+        _dotNetRef?.Dispose();
+    }
+}

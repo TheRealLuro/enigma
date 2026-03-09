@@ -4,6 +4,7 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @inject Enigma.Client.Services.EnigmaApiClient Api
+@inject Enigma.Client.Services.DeviceCompatibilityService DeviceCompatibility
 
 <SeoHead Title="Enigma Expedition Complete | Sector Cleared"
          Description="Review the completion summary for a finished Enigma sector expedition."
@@ -36,6 +37,9 @@ else if (!IsWin || Summary is null)
 else
 {
     <div class="content enigma-end-page">
+        <MobileTerminalNotice IsVisible="@ShowBrowseOnlyNotice"
+                              Title="Expedition report access active."
+                              Message="Summary review is available on this terminal. Redeploying into a live anomaly still requires a desktop command station." />
         <div class="card enigma-end-card">
             <span class="enigma-kicker">Expedition Logged</span>
             <h1>Anomaly Cleared</h1>
@@ -134,10 +138,23 @@ else
                         @(IsSubmitting ? "Submitting..." : Summary.HasBeenSubmitted ? "Submitted" : "Submit Sector Data")
                     </button>
                 }
-                <button class="btn btn-primary" @onclick="RetryMaze">Redeploy</button>
+                <button class="btn btn-primary play-launch-button" @onclick="RetryMaze">
+                    <span>Redeploy</span>
+                    @if (ShowBrowseOnlyNotice)
+                    {
+                        <DesktopRequiredBadge Label="Desktop" />
+                    }
+                </button>
                 <button class="btn btn-secondary" @onclick="GoHome">Command Hub</button>
             </div>
         </div>
+
+        @if (ShowCompatibilityGate)
+        {
+            <MobileCompatibilityGate Inline="true"
+                                     TargetRoute="@PendingGameRoute"
+                                     OnClose="CloseCompatibilityGateAsync" />
+        }
     </div>
 }
 
@@ -152,6 +169,8 @@ else
     private string? LoadError { get; set; }
     private string StatusMessage { get; set; } = string.Empty;
     private GameCompletionSummary? Summary { get; set; }
+    private bool ShowCompatibilityGate { get; set; }
+    private string? PendingGameRoute { get; set; }
     private string MapName { get; set; } = string.Empty;
     private int Rating { get; set; } = 8;
 
@@ -164,6 +183,7 @@ else
             return;
         }
 
+        await DeviceCompatibility.EnsureInitializedAsync(JS);
         Summary = await JS.InvokeAsync<GameCompletionSummary?>("enigmaGame.sessionGetJson", CompletionSummaryStorageKey);
         if (Summary is null)
         {
@@ -339,7 +359,7 @@ else
         throw new InvalidOperationException($"{prefix} {details}".Trim());
     }
 
-    private void RetryMaze()
+    private async Task RetryMaze()
     {
         if (Summary is null)
         {
@@ -359,6 +379,16 @@ else
             url += $"&mapName={Uri.EscapeDataString(Summary.LoadedMapName)}";
         }
 
+        PendingGameRoute = url;
+        var decision = await DeviceCompatibility.EvaluateGameplayAccessAsync(JS, url);
+        if (decision != GameplayCompatibilityDecision.Allowed)
+        {
+            ShowCompatibilityGate = true;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        ShowCompatibilityGate = false;
         NavigationManager.NavigateTo(url);
     }
 
@@ -377,6 +407,16 @@ else
         await JS.InvokeVoidAsync("enigmaGame.clearRunLoadout");
         NavigationManager.NavigateTo("/play");
     }
+
+    private Task CloseCompatibilityGateAsync()
+    {
+        ShowCompatibilityGate = false;
+        DeviceCompatibility.ClearBlockedTarget();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private bool ShowBrowseOnlyNotice => DeviceCompatibility.IsReady && DeviceCompatibility.IsBrowseOnly;
 
     private static TimeOnly ParseCompletionTime(string value)
     {

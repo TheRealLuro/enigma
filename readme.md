@@ -20,7 +20,7 @@
 
 <p align="center">
   <a href="https://buymeacoffee.com/enigmamaze">
-    <img alt="😴 Buy us an Energy Drink" src="https://img.shields.io/badge/%F0%9F%98%B4%20Buy%20us%20an-Energy%20Drink-ffdd57?logo=buymeacoffee&logoColor=000000" />
+    <img alt="😴 Buy me an Energy Drink" src="https://img.shields.io/badge/%F0%9F%98%B4%20Buy%20us%20an-Energy%20Drink-ffdd57?logo=buymeacoffee&logoColor=000000" />
   </a>
 </p>
 <p align="center">
@@ -157,6 +157,7 @@ Every maze is meant to feel identifiable, not disposable.
 
 ---
 
+
 ## Maze Themes
 
 Current curated theme labels:
@@ -167,7 +168,11 @@ Current curated theme labels:
 - Sewer
 - Hedge
 - Haunted House
-- ???
+- UnderWater
+- Cave
+- Forest
+- City
+- Lab
 
 Themes are selected by the backend image pipeline and used throughout the UI for maps, profiles, and leaderboards.
 
@@ -316,4 +321,4 @@ It is a project where:
 
 If you want to support development directly:
 
-[😴 Buy us an Energy Drink](https://buymeacoffee.com/enigmamaze)
+[😴 Buy me an Energy Drink](https://buymeacoffee.com/enigmamaze)

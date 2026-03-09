@@ -1,0 +1,63 @@
+.archive-statusbar {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.9rem 1.1rem;
+    border-radius: 1.2rem;
+    border: 1px solid var(--archive-border);
+    background: linear-gradient(180deg, rgba(8, 13, 21, 0.96), rgba(5, 9, 15, 0.94));
+}
+
+.archive-statusbar-line {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.archive-statusbar-kicker {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.66rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+}
+
+.archive-statusbar-log-list {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.archive-statusbar-log {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 0.84rem;
+}
+
+.archive-statusbar-log.warning {
+    border-color: rgba(246, 203, 121, 0.18);
+}
+
+.archive-statusbar-log.critical {
+    border-color: rgba(255, 129, 147, 0.18);
+}
+
+.archive-statusbar-log strong {
+    font-size: 0.74rem;
+    font-family: "Orbitron", "Inter", sans-serif;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+}
+
+.archive-statusbar-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    color: var(--archive-muted);
+    font-size: 0.82rem;
+}

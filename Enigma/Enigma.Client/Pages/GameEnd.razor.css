@@ -1,0 +1,13 @@
+.play-launch-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+    .play-launch-button {
+        width: 100%;
+    }
+}

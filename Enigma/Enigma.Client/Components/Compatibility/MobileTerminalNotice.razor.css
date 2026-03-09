@@ -1,0 +1,27 @@
+.mobile-terminal-notice {
+    display: grid;
+    gap: 0.45rem;
+    padding: 1rem 1.1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(116, 214, 236, 0.18);
+    background: linear-gradient(180deg, rgba(8, 18, 26, 0.95), rgba(6, 12, 18, 0.92));
+    color: #edf8fc;
+}
+
+.mobile-terminal-notice-kicker {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(189, 241, 250, 0.68);
+}
+
+.mobile-terminal-notice strong {
+    font-size: 0.98rem;
+}
+
+.mobile-terminal-notice p {
+    margin: 0;
+    color: rgba(214, 231, 242, 0.8);
+    line-height: 1.55;
+}

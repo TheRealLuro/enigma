@@ -1,0 +1,477 @@
+@using Enigma.Client.Models
+
+@if (Controller.SelectedFile is not null)
+{
+    var file = Controller.SelectedFile;
+
+    <section class="archive-viewer status-@file.Status.ToString().ToLowerInvariant()" @key="file.Definition.Id" @ref="_viewerRef">
+        <div class="archive-viewer-head">
+            <div class="archive-viewer-title">
+                <span class="archive-viewer-kicker">@file.Definition.Classification</span>
+                <h1>@file.Definition.Title</h1>
+                <p>@file.Definition.Subtitle</p>
+
+                <div class="archive-viewer-record-meta">
+                    <span>Threat @file.Definition.ThreatLevel</span>
+                    <span>Signal @file.Definition.SignalState</span>
+                    <span>@file.Definition.LastUpdatedText</span>
+                </div>
+            </div>
+
+            <div class="archive-viewer-badges">
+                <span class="archive-viewer-chip">@file.Definition.Code</span>
+                <span class="archive-viewer-chip">@Controller.GetDirectoryStatusLabel(file)</span>
+                <span class="archive-viewer-chip">@Controller.GetAccessLabel(file)</span>
+            </div>
+        </div>
+
+        <div class="archive-viewer-body">
+            <div class="archive-viewer-copy">
+                <div class="archive-viewer-notice @GetNoticeClass(file)">
+                    <span>@GetNoticeLabel(file)</span>
+                    <strong>@GetNoticeTitle(file)</strong>
+                    <p>@NormalizeLoreCopy(file.Definition.Summary)</p>
+                </div>
+
+                <p class="archive-viewer-lead">@NormalizeLoreCopy(file.Definition.Lead)</p>
+
+                <div class="archive-viewer-paragraphs">
+                    @foreach (var line in GetBodyLines(file))
+                    {
+                        <p class="@GetBodyLineClass(line.Mode)">@line.Text</p>
+                    }
+                </div>
+
+                @if (GetHighlights(file).Count > 0)
+                {
+                    <ul class="archive-viewer-highlights">
+                        @foreach (var highlight in GetHighlights(file))
+                        {
+                            <li>@highlight</li>
+                        }
+                    </ul>
+                }
+
+                @if (file.CanOpenFragment)
+                {
+                    <ArchiveFragmentButton FileId="@file.Definition.Id"
+                                           Label="@file.Definition.FragmentLabel"
+                                           OnOpen="OnOpenFragment" />
+                }
+
+                @if (string.Equals(file.Definition.Id, "unanswered-questions", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="archive-viewer-finale">
+                        <p>@NormalizeLoreCopy(LoreArchiveContent.FinalQuestionLine)</p>
+                        <a class="btn btn-primary archive-viewer-cta" href="/register">@LoreArchiveContent.JoinProgramCallToAction</a>
+                    </div>
+                }
+            </div>
+
+            <div class="archive-viewer-panel">
+                @switch (file.Definition.RightPanelType)
+                {
+                    case ArchiveRightPanelType.GeospatialWatch:
+                        <div class="archive-module atlas-module">
+                            <div class="archive-module-head">
+                                <span>Global anomaly watch</span>
+                                <strong>@GetAtlasHeadline()</strong>
+                            </div>
+
+                            @if (GetSectorMapMarkers().Count > 0)
+                            {
+                                <div class="archive-map-stage">
+                                    <div class="archive-map-grid"></div>
+                                    <img class="archive-map-world-image archive-map-world-image-shadow"
+                                         src="/images/archive/world-map.svg"
+                                         alt=""
+                                         loading="lazy"
+                                         decoding="async"
+                                         aria-hidden="true" />
+                                    <img class="archive-map-world-image"
+                                         src="/images/archive/world-map.svg"
+                                         alt=""
+                                         loading="lazy"
+                                         decoding="async"
+                                         aria-hidden="true" />
+                                    <div class="archive-map-note">
+                                        <span>Observer relay</span>
+                                        <strong>Public coordinates are intentionally obfuscated.</strong>
+                                    </div>
+
+                                    @foreach (var point in GetSectorMapMarkers())
+                                    {
+                                        <button class="archive-map-marker @point.Tone @(string.Equals(Controller.ActiveSectorRecord?.Id, point.Sector.Id, StringComparison.OrdinalIgnoreCase) ? "is-active" : string.Empty)"
+                                                type="button"
+                                                style="@($"left:{point.XPercent:0.##}%;top:{point.YPercent:0.##}%;")"
+                                                aria-label="@($"{point.Sector.MapName} // {point.RegionLabel}")"
+                                                @onclick="() => Controller.SetActiveSector(point.Sector.Id)"
+                                                @onmouseenter="() => Controller.SetActiveSector(point.Sector.Id)">
+                                            <span class="archive-map-marker-core"></span>
+                                        </button>
+                                    }
+                                </div>
+
+                                @if (Controller.ActiveSectorRecord is not null)
+                                {
+                                    <div class="archive-atlas-summary">
+                                        <span>Focused sector</span>
+                                        <strong>@Controller.ActiveSectorRecord.MapName</strong>
+                                        <p>@GetSectorMeta(Controller.ActiveSectorRecord)</p>
+                                        <small>Founded @Controller.ActiveSectorRecord.TimeFoundedDisplay // @GetSectorStat(Controller.ActiveSectorRecord)</small>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="archive-module-empty">
+                                    <strong>Public sector discovery data unavailable.</strong>
+                                    <p>The archive is not currently receiving live sector index data.</p>
+                                </div>
+                            }
+
+                            <div class="archive-module-metrics">
+                                <article>
+                                    <span>Sector index</span>
+                                    <strong>@(Controller.Overview.SectorDataAvailable ? Controller.Overview.SectorCount.ToString() : "Unavailable")</strong>
+                                </article>
+                                <article>
+                                    <span>Explorer network</span>
+                                    <strong>@(Controller.Overview.ExplorerDataAvailable ? Controller.Overview.ExplorerCount.ToString() : "Unavailable")</strong>
+                                </article>
+                                <article>
+                                    <span>Latest recovery</span>
+                                    <strong>@(string.IsNullOrWhiteSpace(Controller.Overview.LatestSectorFoundedDisplay) ? "Redacted" : Controller.Overview.LatestSectorFoundedDisplay)</strong>
+                                </article>
+                            </div>
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.InterferenceMatrix:
+                        <div class="archive-module technical-module">
+                            <div class="archive-module-head">
+                                <span>Entry interference</span>
+                                <strong>Technology denial field</strong>
+                            </div>
+                            <div class="archive-technical-grid">
+                                @foreach (var trace in InterferenceTraces)
+                                {
+                                    <article class="archive-technical-row @trace.Tone">
+                                        <span>@trace.Label</span>
+                                        <strong>@trace.Status</strong>
+                                        <small>@trace.Detail</small>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.RadarReconstruction:
+                        <div class="archive-module radar-module">
+                            <div class="archive-module-head">
+                                <span>E-Unit scan reconstruction</span>
+                                <strong>In-game scanner relay</strong>
+                            </div>
+                            <div class="archive-eunit-stage enigma-room-stage" style="@GetEUnitStageStyle()">
+                                <div class="enigma-room-stage-base" aria-hidden="true"></div>
+                                <div class="enigma-room-stage-tint" aria-hidden="true"></div>
+
+                                <div class="enigma-wall" style="left:20%;top:18%;width:14%;height:3%;"></div>
+                                <div class="enigma-wall" style="left:20%;top:18%;width:2.8%;height:20%;"></div>
+                                <div class="enigma-wall" style="left:48%;top:14%;width:16%;height:3%;"></div>
+                                <div class="enigma-wall" style="left:61%;top:14%;width:2.8%;height:18%;"></div>
+                                <div class="enigma-wall" style="left:34%;top:40%;width:30%;height:3%;"></div>
+                                <div class="enigma-wall" style="left:34%;top:40%;width:2.8%;height:16%;"></div>
+                                <div class="enigma-wall" style="left:36%;top:62%;width:12%;height:3%;"></div>
+                                <div class="enigma-wall" style="left:58%;top:54%;width:14%;height:3%;"></div>
+                                <div class="enigma-wall" style="left:58%;top:54%;width:2.8%;height:15%;"></div>
+
+                                <div class="enigma-radar-darkness" aria-hidden="true"></div>
+                                <div class="enigma-radar-wave-stack" aria-hidden="true">
+                                    <span class="enigma-radar-ring primary ring-a"></span>
+                                    <span class="enigma-radar-ring primary ring-b"></span>
+                                    <span class="enigma-radar-ring ripple ripple-a"></span>
+                                    <span class="enigma-radar-ring ripple ripple-b"></span>
+                                    <span class="enigma-radar-ring ripple ripple-c"></span>
+                                    <span class="enigma-radar-ring ripple ripple-d"></span>
+                                </div>
+                                <div class="archive-eunit-scan-sweep" aria-hidden="true"></div>
+                                <div class="archive-eunit-scan-trace trace-a" aria-hidden="true"></div>
+                                <div class="archive-eunit-scan-trace trace-b" aria-hidden="true"></div>
+
+                                <div class="enigma-world-interactable behavior-terminal center radar-core archive-eunit-core"
+                                     style="left:50%;top:52%;width:22%;height:18%;--radar-signal:1;">
+                                    <span>E-Unit relay</span>
+                                </div>
+                            </div>
+                            <div class="archive-atlas-summary compact">
+                                <span>Scanner relay summary</span>
+                                <strong>@GetRadarSummary()</strong>
+                                @if (Controller.ActiveSectorRecord is not null)
+                                {
+                                    <p>@Controller.ActiveSectorRecord.MapName // @GetSectorMeta(Controller.ActiveSectorRecord)</p>
+                                }
+                            </div>
+                            <div class="archive-module-metrics">
+                                <article>
+                                    <span>Recent sectors</span>
+                                    <strong>@Controller.RecentSectors.Count</strong>
+                                </article>
+                                <article>
+                                    <span>Image-ready sectors</span>
+                                    <strong>@Controller.RecentSectors.Count(sector => !string.IsNullOrWhiteSpace(sector.MapImage))</strong>
+                                </article>
+                                <article>
+                                    <span>Latest recovery</span>
+                                    <strong>@(string.IsNullOrWhiteSpace(Controller.Overview.LatestSectorFoundedDisplay) ? "Redacted" : Controller.Overview.LatestSectorFoundedDisplay)</strong>
+                                </article>
+                            </div>
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.ExplorerRoster:
+                        <div class="archive-module roster-module">
+                            <div class="archive-module-head">
+                                <span>Remote operator network</span>
+                                <strong>Live explorer leaderboard</strong>
+                            </div>
+                            @if (GetTopExplorerCards(4).Count > 0)
+                            {
+                                <div class="archive-roster-grid">
+                                    @foreach (var explorer in GetTopExplorerCards(4))
+                                    {
+                                        <article class="archive-roster-card @GetExplorerTone(explorer)">
+                                            <span>@GetExplorerStatusLabel(explorer)</span>
+                                            <strong>@explorer.Username</strong>
+                                            <p>@explorer.DiscoveredMapsCount discovered // @explorer.MapsCompleted completed</p>
+                                            <small>@GetExplorerCompletionRateLabel(explorer) // @FormatCompactNumber(explorer.MazeNuggets) MN</small>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="archive-module-empty">
+                                    <strong>Explorer telemetry unavailable.</strong>
+                                    <p>The public archive is not currently receiving explorer leaderboard data.</p>
+                                </div>
+                            }
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.CollapseSequence:
+                        <div class="archive-module sequence-module">
+                            <div class="archive-module-head">
+                                <span>Collapse sequence</span>
+                                <strong>Sector formation trace</strong>
+                            </div>
+                            <div class="archive-sequence-list">
+                                @foreach (var entry in CollapseTimeline)
+                                {
+                                    <article class="archive-sequence-item @entry.Tone">
+                                        <span>@entry.Title</span>
+                                        <strong>@entry.Detail</strong>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.LossPlayback:
+                        <div class="archive-module loss-module">
+                            <div class="archive-module-head">
+                                <span>Abandonment response</span>
+                                <strong>Loss memorandum playback</strong>
+                            </div>
+                            <div class="archive-sequence-list">
+                                @foreach (var entry in FailureTimeline)
+                                {
+                                    <article class="archive-sequence-item @entry.Tone">
+                                        <span>@entry.Title</span>
+                                        <strong>@entry.Detail</strong>
+                                    </article>
+                                }
+                            </div>
+                            <ArchiveCorruptedOverlay />
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.BehaviorMonitor:
+                        <div class="archive-module behavior-module">
+                            <div class="archive-module-head">
+                                <span>Behavior monitor</span>
+                                <strong>Commitment-bound logic chain</strong>
+                            </div>
+                            <div class="archive-behavior-flow">
+                                @foreach (var step in AwarenessSteps)
+                                {
+                                    <article class="archive-behavior-step">
+                                        <span>@step.Outcome</span>
+                                        <strong>@step.Title</strong>
+                                        <small>@step.Detail</small>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.CubeAnalysis:
+                        <div class="archive-module cube-module">
+                            <div class="archive-module-head">
+                                <span>Sector analysis</span>
+                                <strong>Live recovered sector records</strong>
+                            </div>
+                            @if (GetRecentSectorCards(4).Count > 0)
+                            {
+                                <div class="archive-sector-card-grid">
+                                    @foreach (var sector in GetRecentSectorCards(4))
+                                    {
+                                        <button class="archive-sector-card @GetSectorTone(sector)"
+                                                type="button"
+                                                @onclick="() => Controller.SetActiveSector(sector.Id)"
+                                                @onmouseenter="() => Controller.SetActiveSector(sector.Id)">
+                                            <span>@sector.TimeFoundedDisplay</span>
+                                            <strong>@sector.MapName</strong>
+                                            <small>@GetSectorMeta(sector)</small>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="archive-module-empty">
+                                    <strong>No live sector records available.</strong>
+                                    <p>The public archive has not returned recent sector recoveries.</p>
+                                </div>
+                            }
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.SpatialReconstruction:
+                        <div class="archive-module reconstruction-module">
+                            <div class="archive-module-head">
+                                <span>Spatial reconstruction feed</span>
+                                <strong>Public atlas only exposes archived sectors</strong>
+                            </div>
+                            <div class="archive-viewer-notice warning">
+                                <span>Public limitation</span>
+                                <strong>Reactivation internals are not present in the live website feed.</strong>
+                                <p>The archive can verify recovered sectors and their discoverers, but the reactivation subsystem itself remains outside the public data model.</p>
+                            </div>
+                            <div class="archive-sector-card-grid compact">
+                                @foreach (var sector in GetRecentSectorCards(3))
+                                {
+                                    <button class="archive-sector-card @GetSectorTone(sector)"
+                                            type="button"
+                                            @onclick="() => Controller.SetActiveSector(sector.Id)"
+                                            @onmouseenter="() => Controller.SetActiveSector(sector.Id)">
+                                        <span>@sector.TimeFoundedDisplay</span>
+                                        <strong>@sector.MapName</strong>
+                                        <small>@GetSectorStat(sector)</small>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.RecoveredImageCache:
+                        <div class="archive-module image-module">
+                            <div class="archive-module-head">
+                                <span>Recovered image cache</span>
+                                <strong>@GetSectorImageTitle()</strong>
+                            </div>
+
+                            @if (IsSectorImagesLoading)
+                            {
+                                <div class="archive-image-loading">Decoding recovered fragments...</div>
+                            }
+                            else if (SectorImages.Count > 0)
+                            {
+                                <div class="archive-image-grid">
+                                    @foreach (var image in SectorImages)
+                                    {
+                                        <article class="archive-image-card">
+                                            <img src="@image.MapImage" alt="@($"{image.MapName} sector image")" loading="lazy" />
+                                            <span class="archive-image-scan"></span>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="archive-image-failure">
+                                    @foreach (var log in SectorImageFailureLogs)
+                                    {
+                                        <article class="archive-image-failure-card">
+                                            <span>@log.Channel</span>
+                                            <strong>@log.Title</strong>
+                                            <small>@log.Detail</small>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.MaterialAnalysis:
+                        <div class="archive-module specimen-module">
+                            <div class="archive-module-head">
+                                <span>MN observer snapshot</span>
+                                <strong>Live Maze Nugget holdings</strong>
+                            </div>
+                            @if (GetMazeNuggetLeaders().Count > 0)
+                            {
+                                <div class="archive-specimen-grid">
+                                    @foreach (var entry in GetMazeNuggetLeaders())
+                                    {
+                                        <article class="archive-specimen-card @entry.Tone">
+                                            <span>@entry.Label</span>
+                                            <strong>@entry.Value</strong>
+                                            <small>@entry.Detail</small>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="archive-module-empty">
+                                    <strong>MN telemetry unavailable.</strong>
+                                    <p>The public archive is not currently receiving explorer holdings data.</p>
+                                </div>
+                            }
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.GovernanceLattice:
+                        <div class="archive-module governance-module">
+                            <div class="archive-module-head">
+                                <span>Explorer influence network</span>
+                                <strong>@Controller.Governance.AvailabilityLabel</strong>
+                            </div>
+                            <div class="archive-module-metrics governance">
+                                @foreach (var stat in GetGovernanceStats())
+                                {
+                                    <article>
+                                        <span>@stat.Label</span>
+                                        <strong>@stat.Value</strong>
+                                        <small>@stat.Detail</small>
+                                    </article>
+                                }
+                            </div>
+                        </div>
+                        break;
+                    case ArchiveRightPanelType.FinalRedaction:
+                        <div class="archive-module final-module">
+                            <div class="archive-module-head">
+                                <span>Final redaction</span>
+                                <strong>Archive remains open</strong>
+                            </div>
+                            <div class="archive-final-lines">
+                                <span></span>
+                                <span class="short"></span>
+                                <span></span>
+                                <span class="danger medium"></span>
+                                <span></span>
+                            </div>
+                            <div class="archive-final-question">@LoreArchiveContent.FinalQuestionLine</div>
+                        </div>
+                        break;
+                }
+            </div>
+        </div>
+
+        @if (file.Status == ArchiveFileStatus.Corrupted)
+        {
+            <ArchiveCorruptedOverlay />
+        }
+    </section>
+}

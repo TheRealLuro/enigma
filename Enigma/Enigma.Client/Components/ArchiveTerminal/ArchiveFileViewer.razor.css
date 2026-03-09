@@ -1,0 +1,1103 @@
+.archive-viewer {
+    position: relative;
+    display: grid;
+    gap: 1.15rem;
+    padding: clamp(1.2rem, 1.2vw, 1.65rem);
+    border-radius: 1.35rem;
+    border: 1px solid var(--archive-border);
+    background:
+        radial-gradient(circle at top left, var(--archive-accent-soft), transparent 24%),
+        linear-gradient(180deg, rgba(10, 16, 25, 0.98), rgba(7, 12, 19, 0.96));
+    overflow: hidden;
+}
+
+.archive-viewer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(121, 211, 235, 0.16) 48%, transparent 100%);
+    opacity: 0;
+    transform: translateX(-100%);
+    pointer-events: none;
+}
+
+.archive-viewer.transition-live::after {
+    opacity: 1;
+    transform: translateX(100%);
+    transition: transform 0.46s ease, opacity 0.46s ease;
+}
+
+.archive-viewer-head,
+.archive-viewer-body,
+.archive-viewer-title,
+.archive-viewer-badges,
+.archive-viewer-copy,
+.archive-viewer-paragraphs,
+.archive-module,
+.archive-module-head,
+.archive-module-metrics,
+.archive-sequence-list,
+.archive-behavior-flow,
+.archive-tile-grid,
+.archive-image-failure,
+.archive-specimen-grid {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.archive-viewer-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: start;
+}
+
+.archive-viewer-kicker,
+.archive-viewer-chip,
+.archive-module-head span,
+.archive-module-metrics span,
+.archive-map-readout span,
+.archive-roster-card span,
+.archive-sequence-item span,
+.archive-behavior-step span,
+.archive-tile span,
+.archive-specimen-card span,
+.archive-image-failure-card span {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.archive-viewer-kicker,
+.archive-module-head span,
+.archive-module-metrics span,
+.archive-map-readout span,
+.archive-roster-card span,
+.archive-sequence-item span,
+.archive-behavior-step span,
+.archive-tile span,
+.archive-specimen-card span,
+.archive-image-failure-card span {
+    color: var(--archive-muted);
+}
+
+.archive-viewer-title h1 {
+    margin: 0.18rem 0 0;
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: clamp(1.95rem, 2.6vw, 2.8rem);
+    letter-spacing: -0.03em;
+}
+
+.archive-viewer-title p,
+.archive-viewer-lead,
+.archive-viewer-line,
+.archive-roster-card p {
+    margin: 0;
+    color: var(--archive-body);
+    line-height: 1.72;
+}
+
+.archive-viewer-record-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.archive-viewer-record-meta span {
+    padding: 0.5rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--archive-muted);
+    font-size: 0.78rem;
+}
+
+.archive-viewer-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    justify-content: flex-end;
+}
+
+.archive-viewer-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.2rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--archive-text);
+}
+
+.archive-viewer-body {
+    grid-template-columns: minmax(340px, 0.8fr) minmax(420px, 1.2fr);
+    gap: 1.25rem;
+    align-items: start;
+}
+
+.archive-viewer-copy {
+    gap: 1rem;
+    min-width: 0;
+}
+
+.archive-viewer-notice,
+.archive-module-metrics article,
+.archive-technical-row,
+.archive-roster-card,
+.archive-sequence-item,
+.archive-behavior-step,
+.archive-tile,
+.archive-specimen-card,
+.archive-map-readout,
+.archive-image-failure-card {
+    padding: 0.9rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.archive-module-empty,
+.archive-atlas-summary,
+.archive-sector-card {
+    padding: 0.95rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.archive-viewer-notice {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.archive-viewer-notice span {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+}
+
+.archive-viewer-notice p {
+    margin: 0;
+    color: var(--archive-body);
+    line-height: 1.65;
+}
+
+.archive-viewer-notice.warning {
+    border-color: rgba(246, 203, 121, 0.22);
+}
+
+.archive-viewer-notice.critical {
+    border-color: rgba(255, 129, 147, 0.22);
+    background:
+        linear-gradient(180deg, rgba(255, 129, 147, 0.08), rgba(255, 255, 255, 0.03)),
+        rgba(255, 255, 255, 0.03);
+}
+
+.archive-viewer-lead {
+    font-size: 1.08rem;
+    color: var(--archive-text);
+}
+
+.archive-viewer-line.notice,
+.archive-viewer-line.redacted,
+.archive-viewer-line.corrupted {
+    padding: 0.85rem 0.95rem;
+    border-radius: 0.95rem;
+}
+
+.archive-viewer-line.notice {
+    border: 1px dashed rgba(121, 211, 235, 0.28);
+    background: rgba(121, 211, 235, 0.08);
+}
+
+.archive-viewer-line.redacted {
+    border: 1px solid rgba(246, 203, 121, 0.22);
+    background:
+        linear-gradient(90deg, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.78) 52%, transparent 52%, transparent 100%),
+        rgba(255, 255, 255, 0.03);
+}
+
+.archive-viewer-line.corrupted {
+    border: 1px solid rgba(255, 129, 147, 0.2);
+    background:
+        linear-gradient(180deg, rgba(255, 129, 147, 0.08), rgba(255, 255, 255, 0.03)),
+        rgba(255, 255, 255, 0.03);
+}
+
+.archive-viewer-highlights {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.archive-viewer-highlights li {
+    position: relative;
+    padding: 0.85rem 0.95rem 0.85rem 2.35rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--archive-body);
+}
+
+.archive-viewer-highlights li::before {
+    content: "";
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    transform: translateY(-50%);
+    background: var(--archive-accent);
+}
+
+.archive-viewer-finale {
+    display: grid;
+    gap: 1rem;
+    padding: 1.1rem;
+    border-radius: 1.15rem;
+    border: 1px solid rgba(255, 129, 147, 0.22);
+    background:
+        radial-gradient(circle at top left, rgba(255, 129, 147, 0.12), transparent 38%),
+        rgba(255, 255, 255, 0.03);
+}
+
+.archive-viewer-finale p,
+.archive-final-question {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: clamp(1.2rem, 1.8vw, 1.6rem);
+    line-height: 1.36;
+}
+
+.archive-viewer-cta {
+    min-height: 3.2rem;
+    border-radius: 999px;
+}
+
+.archive-viewer-panel {
+    display: grid;
+    min-width: 0;
+}
+
+.archive-module {
+    position: relative;
+    min-height: 100%;
+    padding: 1.1rem;
+    border-radius: 1.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background:
+        radial-gradient(circle at top left, var(--archive-accent-soft), transparent 32%),
+        rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+}
+
+.archive-module-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.archive-module-head strong,
+.archive-module-metrics strong,
+.archive-technical-row strong,
+.archive-roster-card strong,
+.archive-sequence-item strong,
+.archive-behavior-step strong,
+.archive-tile strong,
+.archive-specimen-card strong {
+    font-size: 0.96rem;
+}
+
+.archive-module-metrics {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.archive-module-metrics article small {
+    color: var(--archive-muted);
+    line-height: 1.45;
+}
+
+.archive-map-stage,
+.archive-radar-stage,
+.archive-governance-map {
+    position: relative;
+    min-height: 20.5rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(121, 211, 235, 0.2);
+    overflow: hidden;
+    background:
+        radial-gradient(circle at 22% 24%, rgba(121, 211, 235, 0.12), transparent 18%),
+        radial-gradient(circle at 76% 20%, rgba(121, 211, 235, 0.08), transparent 22%),
+        linear-gradient(180deg, rgba(5, 11, 17, 0.95), rgba(4, 8, 13, 0.98));
+}
+
+.archive-map-stage {
+    min-height: 0;
+    aspect-ratio: 1010 / 666;
+}
+
+.archive-atlas-stage {
+    position: relative;
+    min-height: 20.5rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(121, 211, 235, 0.2);
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(5, 11, 17, 0.95), rgba(4, 8, 13, 0.98)),
+        linear-gradient(90deg, rgba(121, 211, 235, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(121, 211, 235, 0.04) 1px, transparent 1px);
+    background-size: auto, 42px 42px, 42px 42px;
+}
+
+.archive-atlas-lane {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    border-top: 1px dashed rgba(121, 211, 235, 0.18);
+}
+
+.archive-atlas-lane span {
+    position: absolute;
+    top: -0.75rem;
+    left: 0.9rem;
+    padding: 0 0.45rem;
+    background: rgba(4, 8, 13, 0.95);
+    color: var(--archive-muted);
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.archive-atlas-point {
+    position: absolute;
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    transform: translate(-50%, -50%);
+}
+
+.archive-atlas-point span,
+.archive-radar-contact,
+.archive-governance-node span {
+    display: block;
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 999px;
+    background: var(--archive-accent);
+    box-shadow: 0 0 18px rgba(121, 211, 235, 0.46);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.archive-atlas-point:hover span,
+.archive-atlas-point:focus-visible span,
+.archive-atlas-point.is-active span {
+    transform: scale(1.18);
+    box-shadow: 0 0 0 4px rgba(121, 211, 235, 0.08), 0 0 20px rgba(121, 211, 235, 0.42);
+}
+
+.archive-map-grid,
+.archive-radar-grid,
+.archive-governance-map::before {
+    position: absolute;
+    inset: 0;
+    content: "";
+    background:
+        linear-gradient(90deg, rgba(121, 211, 235, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(121, 211, 235, 0.04) 1px, transparent 1px);
+    background-size: 42px 42px;
+}
+
+.archive-map-world {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.96;
+}
+
+.archive-map-world-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    opacity: 0.42;
+    filter: brightness(0) saturate(100%) invert(86%) sepia(12%) saturate(534%) hue-rotate(169deg) brightness(101%) contrast(94%) drop-shadow(0 0 8px rgba(121, 211, 235, 0.12));
+    pointer-events: none;
+}
+
+.archive-map-world-image-shadow {
+    opacity: 0.18;
+    filter: brightness(0) saturate(100%) invert(79%) sepia(17%) saturate(616%) hue-rotate(164deg) brightness(96%) contrast(92%) blur(1.2px);
+    transform: scale(1.005);
+}
+
+.archive-map-marker,
+.archive-governance-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+}
+
+.archive-map-marker {
+    z-index: 2;
+    width: 0.92rem;
+    height: 0.92rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.archive-map-marker::before,
+.archive-map-marker-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+}
+
+.archive-map-marker::before {
+    content: "";
+    width: 0.78rem;
+    height: 0.78rem;
+    border: 1px solid rgba(121, 211, 235, 0.4);
+    background: rgba(121, 211, 235, 0.04);
+    box-shadow: 0 0 0 1px rgba(121, 211, 235, 0.05);
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.archive-map-marker-core {
+    display: block;
+    width: 0.2rem;
+    height: 0.2rem;
+    background: var(--archive-accent);
+    box-shadow: 0 0 8px rgba(121, 211, 235, 0.34);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.archive-map-marker:hover::before,
+.archive-map-marker:focus-visible::before,
+.archive-map-marker.is-active::before {
+    transform: translate(-50%, -50%) scale(1.08);
+    border-color: rgba(121, 211, 235, 0.68);
+    background: rgba(121, 211, 235, 0.1);
+}
+
+.archive-map-marker:hover .archive-map-marker-core,
+.archive-map-marker:focus-visible .archive-map-marker-core,
+.archive-map-marker.is-active .archive-map-marker-core {
+    transform: translate(-50%, -50%) scale(1.18);
+    box-shadow: 0 0 12px rgba(121, 211, 235, 0.54);
+}
+
+.archive-map-marker.warning::before,
+.archive-atlas-point.warning span {
+    border-color: rgba(246, 203, 121, 0.46);
+    background: rgba(246, 203, 121, 0.08);
+}
+
+.archive-map-marker.warning .archive-map-marker-core {
+    background: var(--archive-warning);
+    box-shadow: 0 0 10px rgba(246, 203, 121, 0.42);
+}
+
+.archive-map-marker.critical::before,
+.archive-atlas-point.critical span,
+.archive-governance-node.critical span {
+    border-color: rgba(255, 129, 147, 0.48);
+    background: rgba(255, 129, 147, 0.08);
+}
+
+.archive-map-marker.critical .archive-map-marker-core {
+    background: var(--archive-danger);
+    box-shadow: 0 0 10px rgba(255, 129, 147, 0.42);
+}
+
+.archive-map-note {
+    position: absolute;
+    top: 0.9rem;
+    right: 0.9rem;
+    z-index: 1;
+    display: grid;
+    gap: 0.18rem;
+    max-width: 12rem;
+    padding: 0.55rem 0.72rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(5, 11, 17, 0.82);
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+}
+
+.archive-map-note span,
+.archive-radar-core-kicker {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+}
+
+.archive-map-note strong {
+    color: var(--archive-text);
+    font-size: 0.84rem;
+    line-height: 1.45;
+}
+
+.archive-eunit-stage.enigma-room-stage {
+    min-height: 0;
+    border-radius: 1rem;
+    border: 1px solid rgba(121, 211, 235, 0.2);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.archive-eunit-stage .enigma-room-stage-base,
+.archive-eunit-stage .enigma-room-stage-tint,
+.archive-eunit-stage::after,
+.archive-eunit-stage .enigma-radar-darkness,
+.archive-eunit-stage .enigma-radar-wave-stack,
+.archive-eunit-scan-sweep {
+    border-radius: inherit;
+}
+
+.archive-eunit-core {
+    pointer-events: none;
+    z-index: 2;
+}
+
+.archive-eunit-core span {
+    min-width: 0;
+    padding: 0 0.8rem;
+    white-space: nowrap;
+}
+
+.archive-eunit-scan-sweep,
+.archive-eunit-scan-trace {
+    position: absolute;
+    pointer-events: none;
+}
+
+.archive-eunit-scan-sweep {
+    inset: 0;
+    z-index: 1;
+    background:
+        conic-gradient(from 18deg at 50% 56%,
+            rgba(121, 211, 235, 0.2) 0deg,
+            rgba(121, 211, 235, 0.1) 16deg,
+            rgba(121, 211, 235, 0) 38deg,
+            rgba(121, 211, 235, 0) 360deg);
+    mask:
+        radial-gradient(circle at 50% 56%, transparent 0 10%, black 26% 88%, transparent 100%);
+    mix-blend-mode: screen;
+    opacity: 0.46;
+    animation: archive-eunit-sweep-rotate 7.4s linear infinite;
+}
+
+.archive-eunit-scan-trace {
+    left: 50%;
+    top: 56%;
+    transform-origin: left center;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(186, 230, 255, 0.3), rgba(121, 211, 235, 0));
+    filter: drop-shadow(0 0 4px rgba(121, 211, 235, 0.16));
+    opacity: 0.55;
+    z-index: 1;
+}
+
+.archive-eunit-scan-trace.trace-a {
+    width: 23%;
+    transform: rotate(18deg);
+}
+
+.archive-eunit-scan-trace.trace-b {
+    width: 18%;
+    transform: rotate(-41deg);
+    opacity: 0.28;
+}
+
+@keyframes archive-eunit-sweep-rotate {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .archive-eunit-scan-sweep {
+        animation: none;
+    }
+}
+
+.archive-map-legend,
+.archive-image-grid,
+.archive-specimen-grid {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.archive-image-loading {
+    padding: 1rem;
+    border-radius: 1rem;
+    border: 1px dashed var(--archive-border);
+    color: var(--archive-body);
+}
+
+.archive-map-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.archive-map-readout small,
+.archive-roster-card small,
+.archive-technical-row small,
+.archive-sequence-item small,
+.archive-behavior-step small,
+.archive-tile small,
+.archive-specimen-card small,
+.archive-image-failure-card small {
+    color: var(--archive-muted);
+    line-height: 1.45;
+}
+
+.archive-technical-grid,
+.archive-roster-grid,
+.archive-tile-grid,
+.archive-specimen-grid,
+.archive-sector-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.archive-roster-card {
+    min-height: 10.25rem;
+}
+
+.archive-roster-card small {
+    color: var(--archive-text);
+    opacity: 0.85;
+}
+
+.archive-roster-card.warning,
+.archive-sequence-item.warning {
+    border-color: rgba(246, 203, 121, 0.22);
+}
+
+.archive-roster-card.critical,
+.archive-sequence-item.critical,
+.archive-image-failure-card {
+    border-color: rgba(255, 129, 147, 0.22);
+}
+
+.archive-radar-stage {
+    display: grid;
+    place-items: center;
+}
+
+.archive-radar-sweep,
+.archive-radar-scanline,
+.archive-radar-paths,
+.archive-radar-core {
+    position: absolute;
+}
+
+.archive-radar-sweep {
+    width: 140%;
+    aspect-ratio: 1;
+    border-radius: 999px;
+    background: conic-gradient(from 0deg, rgba(121, 211, 235, 0.2), transparent 10%, transparent 100%);
+    mix-blend-mode: screen;
+    opacity: 0.75;
+    animation: archive-radar-sweep 6.8s linear infinite;
+}
+
+.archive-radar-scanline {
+    inset: 0;
+    background: linear-gradient(180deg, transparent 0%, rgba(121, 211, 235, 0.08) 48%, transparent 100%);
+    opacity: 0.45;
+    animation: archive-radar-scanline 4.8s ease-in-out infinite;
+}
+
+.archive-radar-ring {
+    position: absolute;
+    border-radius: 999px;
+    border: 1px solid rgba(121, 211, 235, 0.22);
+}
+
+.archive-radar-ring.ring-a { width: 26%; height: 26%; }
+.archive-radar-ring.ring-b { width: 48%; height: 48%; }
+.archive-radar-ring.ring-c { width: 72%; height: 72%; }
+
+.archive-radar-core {
+    display: grid;
+    gap: 0.18rem;
+    place-items: center;
+    padding: 0.9rem 1rem;
+    border-radius: 1.1rem;
+    border: 1px solid rgba(121, 211, 235, 0.18);
+    background: rgba(4, 8, 13, 0.82);
+    box-shadow: inset 0 0 0 1px rgba(121, 211, 235, 0.05);
+    z-index: 1;
+}
+
+.archive-radar-core strong {
+    color: var(--archive-text);
+    font-size: 0.92rem;
+}
+
+.archive-radar-paths {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+.archive-radar-geometry {
+    fill: rgba(121, 211, 235, 0.03);
+    stroke: rgba(121, 211, 235, 0.16);
+    stroke-width: 0.35;
+}
+
+.archive-radar-path {
+    fill: none;
+    stroke: rgba(121, 211, 235, 0.4);
+    stroke-width: 0.35;
+    stroke-dasharray: 2.5 3.5;
+    animation: archive-radar-path 4.6s linear infinite;
+}
+
+.archive-radar-path.warning {
+    stroke: rgba(246, 203, 121, 0.42);
+}
+
+.archive-radar-path.critical {
+    stroke: rgba(255, 129, 147, 0.42);
+}
+
+.archive-radar-contact {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    display: grid;
+    justify-items: center;
+    gap: 0.18rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--archive-text);
+}
+
+.archive-radar-contact-dot,
+.archive-radar-contact-pulse {
+    grid-area: 1 / 1;
+    border-radius: 999px;
+}
+
+.archive-radar-contact-dot {
+    width: 0.82rem;
+    height: 0.82rem;
+    background: var(--archive-accent);
+    box-shadow: 0 0 14px rgba(121, 211, 235, 0.48);
+}
+
+.archive-radar-contact-pulse {
+    width: 1.55rem;
+    height: 1.55rem;
+    border: 1px solid rgba(121, 211, 235, 0.22);
+    animation: archive-radar-contact 2.8s ease-out infinite;
+}
+
+.archive-radar-contact.warning .archive-radar-contact-dot {
+    background: var(--archive-warning);
+    box-shadow: 0 0 14px rgba(246, 203, 121, 0.48);
+}
+
+.archive-radar-contact.warning .archive-radar-contact-pulse {
+    border-color: rgba(246, 203, 121, 0.22);
+}
+
+.archive-radar-contact.critical .archive-radar-contact-dot {
+    background: var(--archive-danger);
+    box-shadow: 0 0 14px rgba(255, 129, 147, 0.48);
+}
+
+.archive-radar-contact.critical .archive-radar-contact-pulse {
+    border-color: rgba(255, 129, 147, 0.22);
+}
+
+.archive-radar-contact.is-active .archive-radar-contact-dot,
+.archive-radar-contact:hover .archive-radar-contact-dot,
+.archive-radar-contact:focus-visible .archive-radar-contact-dot {
+    transform: scale(1.12);
+}
+
+.archive-radar-contact-label {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.5rem;
+    margin-top: 1.1rem;
+    padding: 0 0.5rem;
+    border-radius: 999px;
+    background: rgba(5, 11, 17, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.archive-image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.archive-image-card,
+.archive-image-failure-card {
+    min-height: 11rem;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.archive-image-card {
+    position: relative;
+}
+
+.archive-image-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(1.02) contrast(1.05) brightness(0.92);
+}
+
+.archive-image-scan {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, transparent 0%, rgba(121, 211, 235, 0.1) 48%, transparent 100%),
+        repeating-linear-gradient(0deg, rgba(121, 211, 235, 0.08) 0, rgba(121, 211, 235, 0.08) 2px, transparent 2px, transparent 6px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.archive-image-card:hover .archive-image-scan,
+.archive-image-card:focus-within .archive-image-scan {
+    opacity: 1;
+}
+
+.archive-image-failure {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.archive-governance-map {
+    min-height: 18.5rem;
+}
+
+.archive-governance-node {
+    display: grid;
+    gap: 0.25rem;
+    justify-items: center;
+    text-align: center;
+}
+
+.archive-sector-card-grid {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.archive-sector-card-grid.compact {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.archive-sector-card {
+    display: grid;
+    gap: 0.35rem;
+    text-align: left;
+    color: var(--archive-text);
+}
+
+.archive-sector-card span,
+.archive-atlas-summary span {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.archive-sector-card small,
+.archive-atlas-summary p,
+.archive-atlas-summary small,
+.archive-module-empty p {
+    margin: 0;
+    color: var(--archive-muted);
+    line-height: 1.5;
+}
+
+.archive-module-empty strong {
+    font-size: 1rem;
+}
+
+.archive-sector-card.warning {
+    border-color: rgba(246, 203, 121, 0.22);
+}
+
+.archive-sector-card.critical {
+    border-color: rgba(255, 129, 147, 0.22);
+}
+
+.archive-atlas-summary {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.archive-atlas-summary.compact strong {
+    font-size: 0.96rem;
+}
+
+.archive-specimen-card {
+    position: relative;
+    display: grid;
+    gap: 0.35rem;
+    min-height: 9.25rem;
+    color: var(--archive-text);
+    background:
+        linear-gradient(180deg, rgba(18, 27, 40, 0.98), rgba(10, 16, 24, 0.96));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.archive-specimen-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 0.28rem;
+    border-radius: 1rem 1rem 0 0;
+    background: var(--archive-accent);
+}
+
+.archive-specimen-card.warning::before {
+    background: var(--archive-warning);
+}
+
+.archive-specimen-card.critical::before {
+    background: var(--archive-danger);
+}
+
+.archive-specimen-card.warning {
+    border-color: rgba(246, 203, 121, 0.22);
+}
+
+.archive-specimen-card.critical {
+    border-color: rgba(255, 129, 147, 0.22);
+}
+
+.archive-specimen-card strong,
+.archive-specimen-card small {
+    color: var(--archive-text);
+}
+
+.archive-specimen-card small {
+    opacity: 0.82;
+}
+
+.archive-final-lines {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.archive-final-lines span {
+    height: 0.95rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.archive-final-lines .short { width: 48%; }
+.archive-final-lines .medium { width: 74%; }
+.archive-final-lines .danger { background: rgba(255, 129, 147, 0.2); }
+
+@media (max-width: 1180px) {
+    .archive-viewer-body {
+        grid-template-columns: 1fr;
+    }
+
+    .archive-module-metrics,
+    .archive-image-failure {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1500px) {
+    .archive-image-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    .archive-viewer {
+        padding: 1rem;
+    }
+
+    .archive-viewer-head {
+        grid-template-columns: 1fr;
+    }
+
+    .archive-viewer-badges {
+        justify-content: flex-start;
+    }
+
+    .archive-map-legend,
+    .archive-technical-grid,
+    .archive-roster-grid,
+    .archive-tile-grid,
+    .archive-specimen-grid,
+    .archive-module-metrics,
+    .archive-image-grid,
+    .archive-image-failure,
+    .archive-sector-card-grid,
+    .archive-sector-card-grid.compact {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .archive-image-scan,
+    .archive-atlas-point span,
+    .archive-map-marker span,
+    .archive-radar-sweep,
+    .archive-radar-scanline,
+    .archive-radar-contact-pulse,
+    .archive-radar-path {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+@keyframes archive-radar-sweep {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes archive-radar-scanline {
+    0%, 100% { transform: translateY(-34%); opacity: 0; }
+    20%, 80% { opacity: 0.42; }
+    50% { transform: translateY(36%); opacity: 0.58; }
+}
+
+@keyframes archive-radar-contact {
+    0% { transform: scale(0.35); opacity: 0.9; }
+    100% { transform: scale(1.15); opacity: 0; }
+}
+
+@keyframes archive-radar-path {
+    from { stroke-dashoffset: 14; }
+    to { stroke-dashoffset: 0; }
+}

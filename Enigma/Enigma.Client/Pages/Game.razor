@@ -9,7 +9,21 @@
          OpenGraphType="website"
          SchemaType="WebPage" />
 
-@if (!string.IsNullOrWhiteSpace(LoadError))
+@if (!IsCompatibilityResolved)
+{
+    <div class="content">
+        <div class="card enigma-game-message">
+            <div class="loader"></div>
+            <p>Evaluating command fidelity...</p>
+        </div>
+    </div>
+}
+else if (GameplayAccessDecision != GameplayCompatibilityDecision.Allowed)
+{
+    <MobileCompatibilityGate TargetRoute="@CurrentRequestedGameRoute"
+                             OnClose="HandleBlockedGameExitAsync" />
+}
+else if (!string.IsNullOrWhiteSpace(LoadError))
 {
     <div class="content">
         <div class="card enigma-game-message">

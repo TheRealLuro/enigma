@@ -28,6 +28,9 @@ else if (ProfileData is null)
 else
 {
     <div class="content profile-shell profile-release-shell">
+        <MobileTerminalNotice IsVisible="@ShowBrowseOnlyNotice"
+                              Title="Explorer console access active."
+                              Message="Profiles, sector records, and assets remain available here. Entering a live sector still requires a desktop command station." />
         <section class="profile-banner profile-release-banner" data-tour-id="profile-banner">
             <div class="profile-banner-main">
                 <ProfileAvatar Image="@ProfileData.ProfileImage" AltText="@($"{ProfileData.Username} profile picture")" FallbackText="@GetInitials(ProfileData.Username)" Class="profile-avatar-hero" IsOnline="@ProfileData.IsOnline" />
@@ -47,7 +50,7 @@ else
                     <div class="profile-balance-card profile-balance-card-tight">
                         <span>Explorer Reserve</span>
                         <strong>@ProfileData.MazeNuggets.ToString("N0") MN</strong>
-                        <small>@ProfileData.MapsCompleted completed sectors | @FormatPercent(ProfileData.WinRate) success rate</small>
+                        <small>@ProfileData.MapsCompleted completed sectors | @FormatPercent(ProfileData.WinRate) completion rate</small>
                     </div>
                 }
                 else if (ProfileData.Relationship.AreFriends)
@@ -111,7 +114,7 @@ else
                         <article class="profile-stat-card accent-blue"><span>Sectors Played</span><strong>@ProfileData.NumberOfMapsPlayed</strong></article>
                         <article class="profile-stat-card accent-green"><span>Completed</span><strong>@ProfileData.MapsCompleted</strong></article>
                         <article class="profile-stat-card accent-red"><span>Failed</span><strong>@ProfileData.MapsLost</strong></article>
-                        <article class="profile-stat-card accent-gold"><span>Success Rate</span><strong>@FormatPercent(ProfileData.WinRate)</strong></article>
+                        <article class="profile-stat-card accent-gold"><span>Completion Rate</span><strong>@FormatPercent(ProfileData.WinRate)</strong></article>
                     </div>
                 </section>
                 @if (IsOwnProfile)
@@ -519,6 +522,13 @@ else
                     </EditForm>
                 </section>
             </div>
+        }
+
+        @if (ShowCompatibilityGate)
+        {
+            <MobileCompatibilityGate Inline="true"
+                                     TargetRoute="@PendingGameRoute"
+                                     OnClose="CloseCompatibilityGateAsync" />
         }
     </div>
 }

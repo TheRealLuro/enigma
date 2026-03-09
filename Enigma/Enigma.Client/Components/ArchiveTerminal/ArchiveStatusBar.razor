@@ -1,0 +1,32 @@
+<footer class="archive-statusbar" aria-live="polite">
+    <div class="archive-statusbar-line">
+        <span class="archive-statusbar-kicker">System log</span>
+        <div class="archive-statusbar-log-list">
+            @foreach (var entry in Controller.SystemLogEntries.Take(4))
+            {
+                <div class="archive-statusbar-log @entry.Tone">
+                    <strong>@entry.Timestamp</strong>
+                    <span>@entry.Message</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="archive-statusbar-metrics">
+        <span>Decrypted files @Controller.GetDecryptedFileCount().ToString("00")</span>
+        <span>Sectors @(Controller.Overview.SectorDataAvailable ? Controller.Overview.SectorCount.ToString() : "Unavailable")</span>
+        <span>Explorers @(Controller.Overview.ExplorerDataAvailable ? Controller.Overview.ExplorerCount.ToString() : "Unavailable")</span>
+        <span>Governance @(Controller.Governance.Available ? (Controller.Governance.VotingOpen ? "Live" : "Archived") : "Unavailable")</span>
+        <span>Last access @GetLastAccessLabel()</span>
+    </div>
+</footer>
+
+@code {
+    [CascadingParameter]
+    public ArchiveTerminalController Controller { get; set; } = default!;
+
+    private string GetLastAccessLabel()
+    {
+        return Controller.LastAccessedUtc?.ToLocalTime().ToString("MMM dd, yyyy HH:mm") ?? "Pending";
+    }
+}

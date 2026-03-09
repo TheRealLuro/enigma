@@ -10,6 +10,10 @@ using System.IO;
 using System.Xml.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration
+    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.Local.json", optional: true, reloadOnChange: true);
+
 var renderPort = Environment.GetEnvironmentVariable("PORT");
 var isManagedProxyHost =
     !string.IsNullOrWhiteSpace(renderPort) ||
@@ -56,6 +60,11 @@ builder.Services.AddScoped(sp =>
 });
 builder.Services.AddScoped<EnigmaApiClient>();
 builder.Services.AddScoped<UiNotificationService>();
+builder.Services.AddScoped<DeviceCompatibilityService>();
+builder.Services.AddMemoryCache();
+builder.Services.Configure<EmailVerificationOptions>(builder.Configuration.GetSection(EmailVerificationOptions.SectionName));
+builder.Services.AddSingleton<IEmailVerificationSender, SmtpEmailVerificationSender>();
+builder.Services.AddSingleton<PendingSignUpVerificationService>();
 builder.Services.AddControllers();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -182,6 +191,7 @@ app.MapGet("/sitemap.xml", (HttpContext context) =>
     var publicPaths = new[]
     {
         "/",
+        "/lore",
         "/about",
         "/how-enigma-works",
         "/enigma-game-mechanics",
@@ -211,6 +221,7 @@ Enigma is a puzzle maze game with solo runs, co-op expeditions, collectible maps
 
 Public pages:
 - {baseUrl}/
+- {baseUrl}/lore
 - {baseUrl}/about
 - {baseUrl}/how-enigma-works
 - {baseUrl}/enigma-game-mechanics

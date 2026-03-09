@@ -1,7 +1,10 @@
 using System.Net.Http.Json;
+using System.Net.Mail;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Globalization;
+using Enigma;
+using Enigma.Client.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +16,15 @@ public class APIController : ControllerBase
 {
     private readonly string _backendBaseUrl;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly PendingSignUpVerificationService _pendingSignUpVerificationService;
 
-    public APIController(IConfiguration configuration, IHttpClientFactory httpClientFactory)
+    public APIController(
+        IConfiguration configuration,
+        IHttpClientFactory httpClientFactory,
+        PendingSignUpVerificationService pendingSignUpVerificationService)
     {
         _httpClientFactory = httpClientFactory;
+        _pendingSignUpVerificationService = pendingSignUpVerificationService;
         _backendBaseUrl =
             configuration["Backend:BaseUrl"]
             ?? Environment.GetEnvironmentVariable("ENIGMA_BACKEND_URL")
@@ -112,6 +120,43 @@ public class APIController : ControllerBase
             });
     }
 
+    private static IActionResult BuildValidationFailureResponse(IReadOnlyList<ApiValidationIssue> issues, string detail)
+    {
+        return new BadRequestObjectResult(new
+        {
+            status = "error",
+            detail,
+            errors = issues,
+        });
+    }
+
+    private IActionResult BuildEmailDeliveryFailureResponse(SmtpException exception)
+    {
+        if (exception is SmtpFailedRecipientsException failedRecipientsException)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = "Verification email could not be delivered to one or more recipient addresses. Use a valid inbox that can receive external mail and try again.",
+            });
+        }
+
+        if (exception is SmtpFailedRecipientException failedRecipientException)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = "Verification email could not be delivered to that address. Check the email spelling and use a real inbox that can receive external mail.",
+            });
+        }
+
+        return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+        {
+            status = "error",
+            detail = "Email verification is currently unavailable. Try again later.",
+        });
+    }
+
     [HttpPost("session/login")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] SessionLoginRequest request)
@@ -156,14 +201,83 @@ public class APIController : ControllerBase
     [HttpPost("signUp")]
     public async Task<IActionResult> SignUp([FromBody] SessionSignUpRequest request)
     {
+        var issues = RegistrationValidationRules.ValidateRegistration(request.Username, request.Email, request.Password);
+        if (issues.Count > 0)
+        {
+            return BuildValidationFailureResponse(issues, "Registration validation failed.");
+        }
+
+        try
+        {
+            var challenge = await _pendingSignUpVerificationService.CreateChallengeAsync(
+                request.Username,
+                request.Email,
+                request.Password,
+                HttpContext.RequestAborted);
+
+            return Ok(new SignUpVerificationChallengeResponse
+            {
+                Status = "verification_required",
+                VerificationRequestId = challenge.VerificationRequestId,
+                EmailHint = challenge.EmailHint,
+                ExpiresAtUtc = challenge.ExpiresAtUtc.UtcDateTime.ToString("O"),
+                Detail = "Verification code sent.",
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                status = "error",
+                detail = exception.Message,
+            });
+        }
+        catch (SmtpException exception)
+        {
+            return BuildEmailDeliveryFailureResponse(exception);
+        }
+    }
+
+    [HttpPost("session/signup/verify")]
+    public async Task<IActionResult> VerifySignUp([FromBody] SessionSignUpVerifyRequest request)
+    {
+        var codeIssues = RegistrationValidationRules.ValidateVerificationCode(request.Code);
+        if (codeIssues.Count > 0)
+        {
+            return BuildValidationFailureResponse(codeIssues, "Verification code is invalid.");
+        }
+
+        PendingSignUpVerificationService.PendingSignUpValidationResult validation;
+        try
+        {
+            validation = _pendingSignUpVerificationService.ValidateChallenge(request.VerificationRequestId, request.Code);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = exception.Message,
+            });
+        }
+
+        if (!validation.Succeeded || validation.Payload is null)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = validation.Error ?? "Verification failed.",
+            });
+        }
+
         try
         {
             using var client = CreateClient();
             using var signUpResponse = await client.PostAsJsonAsync("database/users/signup", new
             {
-                username = request.Username,
-                email = request.Email,
-                passwd = request.Password,
+                username = validation.Payload.Username,
+                email = validation.Payload.Email,
+                passwd = validation.Payload.Password,
             });
 
             if (!signUpResponse.IsSuccessStatusCode)
@@ -173,8 +287,8 @@ public class APIController : ControllerBase
 
             using var loginResponse = await client.PostAsJsonAsync("database/users/login", new
             {
-                username = request.Username,
-                passwd = request.Password,
+                username = validation.Payload.Username,
+                passwd = validation.Payload.Password,
             });
 
             if (!loginResponse.IsSuccessStatusCode)
@@ -183,12 +297,45 @@ public class APIController : ControllerBase
             }
 
             var content = await ReadContentAsync(loginResponse);
-            await SignInAsync(request.Username, request.RememberMe);
+            await SignInAsync(validation.Payload.Username, request.RememberMe);
+            _pendingSignUpVerificationService.RemoveChallenge(request.VerificationRequestId);
             return Content(content, loginResponse.Content.Headers.ContentType?.ToString() ?? "application/json");
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
         {
             return BuildBackendFailureResponse(ex);
+        }
+    }
+
+    [HttpPost("session/signup/resend")]
+    public async Task<IActionResult> ResendSignUpCode([FromBody] SessionSignUpResendRequest request)
+    {
+        try
+        {
+            var challenge = await _pendingSignUpVerificationService.ResendChallengeAsync(
+                request.VerificationRequestId,
+                HttpContext.RequestAborted);
+
+            return Ok(new SignUpVerificationChallengeResponse
+            {
+                Status = "verification_required",
+                VerificationRequestId = challenge.VerificationRequestId,
+                EmailHint = challenge.EmailHint,
+                ExpiresAtUtc = challenge.ExpiresAtUtc.UtcDateTime.ToString("O"),
+                Detail = "Verification code resent.",
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = exception.Message,
+            });
+        }
+        catch (SmtpException exception)
+        {
+            return BuildEmailDeliveryFailureResponse(exception);
         }
     }
 
@@ -975,6 +1122,18 @@ public sealed class SessionSignUpRequest
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public bool RememberMe { get; set; }
+}
+
+public sealed class SessionSignUpVerifyRequest
+{
+    public string VerificationRequestId { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public bool RememberMe { get; set; }
+}
+
+public sealed class SessionSignUpResendRequest
+{
+    public string VerificationRequestId { get; set; } = string.Empty;
 }
 
 public sealed class SubmitMapRequest

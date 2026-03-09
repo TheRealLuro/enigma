@@ -1,0 +1,8 @@
+<span class="desktop-required-badge">
+    @(string.IsNullOrWhiteSpace(Label) ? "Desktop Required" : Label)
+</span>
+
+@code {
+    [Parameter]
+    public string? Label { get; set; }
+}

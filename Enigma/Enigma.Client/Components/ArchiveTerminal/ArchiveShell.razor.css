@@ -1,0 +1,34 @@
+.archive-shell {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 1rem;
+}
+
+.archive-shell-workspace {
+    display: grid;
+    grid-template-columns: clamp(300px, 21vw, 360px) minmax(0, 1fr) clamp(250px, 16vw, 305px);
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (max-width: 1420px) {
+    .archive-shell-workspace {
+        grid-template-columns: clamp(290px, 26vw, 345px) minmax(0, 1fr);
+    }
+
+    .archive-shell-workspace > :last-child {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 860px) {
+    .archive-shell-workspace {
+        grid-template-columns: 1fr;
+        gap: 0.8rem;
+    }
+
+    .archive-shell-workspace > :first-child {
+        display: block;
+    }
+}

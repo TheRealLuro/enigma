@@ -1,0 +1,31 @@
+.archive-corruption-overlay {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.archive-corruption-overlay span {
+    position: absolute;
+    left: -8%;
+    right: -8%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255, 129, 147, 0.42), transparent);
+    opacity: 0.32;
+    animation: archiveCorruptionSweep 3.8s linear infinite;
+}
+
+.archive-corruption-overlay span:nth-child(1) { top: 18%; }
+.archive-corruption-overlay span:nth-child(2) { top: 46%; animation-delay: 0.7s; }
+.archive-corruption-overlay span:nth-child(3) { top: 71%; animation-delay: 1.4s; }
+
+@keyframes archiveCorruptionSweep {
+    from { transform: translateX(-18%); }
+    to { transform: translateX(18%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .archive-corruption-overlay span {
+        animation: none !important;
+    }
+}

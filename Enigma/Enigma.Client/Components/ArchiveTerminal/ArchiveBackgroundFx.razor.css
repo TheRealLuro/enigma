@@ -1,0 +1,44 @@
+.archive-bg,
+.archive-bg-gradient,
+.archive-bg-grid,
+.archive-bg-rings,
+.archive-bg-scanlines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.archive-bg {
+    z-index: -1;
+    overflow: clip;
+    border-radius: 2rem;
+}
+
+.archive-bg-gradient {
+    background:
+        radial-gradient(circle at var(--archive-pointer-x, 50%) var(--archive-pointer-y, 25%), var(--archive-accent-soft), transparent 18%),
+        radial-gradient(circle at 85% 14%, rgba(255, 130, 147, 0.1), transparent 16%),
+        radial-gradient(circle at 18% 82%, rgba(114, 223, 205, 0.08), transparent 18%),
+        linear-gradient(180deg, rgba(4, 8, 14, 0.98), rgba(4, 7, 12, 1));
+}
+
+.archive-bg-grid {
+    opacity: 0.18;
+    background:
+        linear-gradient(90deg, rgba(121, 211, 235, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(121, 211, 235, 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+}
+
+.archive-bg-rings {
+    opacity: 0.12;
+    background:
+        radial-gradient(circle at 20% 22%, rgba(121, 211, 235, 0.28) 0, rgba(121, 211, 235, 0.08) 12%, transparent 22%),
+        radial-gradient(circle at 74% 30%, rgba(121, 211, 235, 0.22) 0, rgba(121, 211, 235, 0.04) 10%, transparent 18%);
+    filter: blur(8px);
+}
+
+.archive-bg-scanlines {
+    opacity: 0.08;
+    background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.07) 1px, transparent 1px, transparent 4px);
+}

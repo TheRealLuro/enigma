@@ -7,7 +7,7 @@
     <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
     <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
-    <DefaultItemExcludes>$(DefaultItemExcludes);obj_verify/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj_verify/**;artifacts/**;.build/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,0 +1,92 @@
+@inject Enigma.Client.Services.EnigmaApiClient Api
+@inject NavigationManager NavigationManager
+
+<div class="archive-topbar">
+    <div class="archive-topbar-block brand">
+        <span class="archive-topbar-kicker">Enigma Research Archive</span>
+        <strong>Public Observer Workstation</strong>
+        <small>@GetGovernanceLabel()</small>
+    </div>
+
+    <div class="archive-topbar-meta">
+        <div class="archive-topbar-block">
+            <span class="archive-topbar-kicker">Active record</span>
+            <strong>@(Controller.SelectedFile?.Definition.Code ?? "SYNC")</strong>
+            <small>@(Controller.SelectedFile?.Definition.Title ?? "Syncing archive")</small>
+        </div>
+        <div class="archive-topbar-block">
+            <span class="archive-topbar-kicker">Sector index</span>
+            <strong>@(Controller.Overview.SectorDataAvailable ? Controller.Overview.SectorCount.ToString() : "Unavailable")</strong>
+            <small>Live website sector records</small>
+        </div>
+        <div class="archive-topbar-block">
+            <span class="archive-topbar-kicker">Explorer network</span>
+            <strong>@(Controller.Overview.ExplorerDataAvailable ? Controller.Overview.ExplorerCount.ToString() : "Unavailable")</strong>
+            <small>Indexed public explorers</small>
+        </div>
+        <div class="archive-topbar-block">
+            <span class="archive-topbar-kicker">Latest sector found</span>
+            <strong>@(string.IsNullOrWhiteSpace(Controller.Overview.LatestSectorFoundedDisplay) ? "Redacted" : Controller.Overview.LatestSectorFoundedDisplay)</strong>
+            <small>@GetRefreshLabel()</small>
+        </div>
+    </div>
+
+    <div class="archive-topbar-actions">
+        @if (IsAuthenticatedUser)
+        {
+            <button class="archive-topbar-action" type="button" @onclick="NavigateReturnAsync">Return to Command</button>
+        }
+        else
+        {
+            <button class="archive-topbar-action" type="button" @onclick="NavigateSignInAsync">Sign In</button>
+            <button class="archive-topbar-action primary" type="button" @onclick="NavigateCreateAccountAsync">Create Account</button>
+        }
+
+        <button class="archive-sidebar-toggle" type="button" @onclick="OnToggleSidebar">
+            Index
+        </button>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    public ArchiveTerminalController Controller { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback OnToggleSidebar { get; set; }
+
+    [Parameter]
+    public bool IsAuthenticatedUser { get; set; }
+
+    private Task NavigateSignInAsync() => NavigateBySessionAsync(anonymousRoute: "/", authenticatedRoute: "/home");
+
+    private Task NavigateCreateAccountAsync() => NavigateBySessionAsync(anonymousRoute: "/register", authenticatedRoute: "/home");
+
+    private Task NavigateReturnAsync() => NavigateBySessionAsync(anonymousRoute: "/", authenticatedRoute: "/home");
+
+    private async Task NavigateBySessionAsync(string anonymousRoute, string authenticatedRoute)
+    {
+        try
+        {
+            var session = await Api.GetSessionAsync(lightweight: true);
+            var isAuthenticated = session is not null && !string.IsNullOrWhiteSpace(session.Username);
+            NavigationManager.NavigateTo(isAuthenticated ? authenticatedRoute : anonymousRoute);
+        }
+        catch
+        {
+            NavigationManager.NavigateTo(anonymousRoute);
+        }
+    }
+
+    private string GetGovernanceLabel()
+    {
+        return Controller.Governance.Available
+            ? Controller.Governance.AvailabilityLabel
+            : "Public governance telemetry unavailable";
+    }
+
+    private string GetRefreshLabel()
+    {
+        return Controller.LastLiveDataRefreshUtc?.ToLocalTime().ToString("MMM dd, yyyy HH:mm") ?? "Awaiting sync";
+    }
+}

@@ -1,0 +1,15 @@
+<button class="archive-fragment-button" type="button" @onclick="() => OnOpen.InvokeAsync(FileId)">
+    <span>@Label</span>
+    <strong>Execute</strong>
+</button>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string FileId { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Label { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnOpen { get; set; }
+}

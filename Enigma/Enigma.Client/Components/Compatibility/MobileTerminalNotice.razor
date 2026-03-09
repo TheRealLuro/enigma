@@ -1,0 +1,19 @@
+@if (IsVisible)
+{
+    <section class="mobile-terminal-notice" role="status" aria-live="polite">
+        <span class="mobile-terminal-notice-kicker">Field Terminal Mode</span>
+        <strong>@Title</strong>
+        <p>@Message</p>
+    </section>
+}
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "Archive and observer systems are available on this device.";
+
+    [Parameter]
+    public string Message { get; set; } = "Live anomaly navigation still requires a desktop command station with stable precision input.";
+}

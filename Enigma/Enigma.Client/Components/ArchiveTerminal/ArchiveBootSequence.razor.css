@@ -1,0 +1,112 @@
+.archive-boot-overlay {
+    position: relative;
+    z-index: 3;
+    min-height: 76vh;
+    display: grid;
+    place-items: center;
+}
+
+.archive-boot-panel {
+    width: min(760px, 100%);
+    display: grid;
+    gap: 1rem;
+    padding: clamp(1.35rem, 2vw, 1.9rem);
+    border-radius: 1.5rem;
+    border: 1px solid var(--archive-border-strong);
+    background:
+        radial-gradient(circle at top left, var(--archive-accent-soft), transparent 28%),
+        linear-gradient(180deg, rgba(8, 13, 20, 0.98), rgba(5, 9, 14, 0.98));
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+}
+
+.archive-boot-panel.reentry {
+    width: min(620px, 100%);
+}
+
+.archive-boot-kicker,
+.archive-boot-title {
+    font-family: "Orbitron", "Inter", sans-serif;
+}
+
+.archive-boot-kicker {
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+    font-size: 0.72rem;
+}
+
+.archive-boot-title {
+    font-size: clamp(1.4rem, 2.4vw, 2rem);
+}
+
+.archive-boot-lines {
+    display: grid;
+    gap: 0.5rem;
+    min-height: 16rem;
+    padding: 1rem 1.05rem;
+    border-radius: 1rem;
+    border: 1px solid var(--archive-border);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.archive-boot-line {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    min-height: 1.2rem;
+    opacity: 0;
+    color: var(--archive-body);
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.84rem;
+    letter-spacing: 0.06em;
+    transform: translateY(4px);
+}
+
+.archive-boot-line.is-visible {
+    opacity: 1;
+    transform: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.archive-boot-cursor {
+    color: var(--archive-accent);
+    font-style: normal;
+    opacity: 0;
+}
+
+.archive-boot-cursor.is-live {
+    opacity: 1;
+    animation: archiveBootCursor 0.8s steps(1) infinite;
+}
+
+.archive-boot-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.archive-boot-skip {
+    min-height: 2.5rem;
+    padding: 0 0.95rem;
+    border-radius: 999px;
+    border: 1px solid var(--archive-border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--archive-text);
+}
+
+.archive-boot-skip:disabled {
+    opacity: 0.42;
+}
+
+@keyframes archiveBootCursor {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .archive-boot-line,
+    .archive-boot-cursor {
+        transition: none !important;
+        animation: none !important;
+    }
+}

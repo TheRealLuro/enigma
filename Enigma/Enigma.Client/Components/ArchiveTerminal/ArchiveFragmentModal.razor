@@ -1,0 +1,57 @@
+<div class="archive-fragment-backdrop" @onclick="HandleBackdropClick" @onkeydown="HandleKeyDown">
+    <div class="archive-fragment-modal"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="archive-fragment-title"
+         @onclick:stopPropagation="true"
+         tabindex="-1">
+        <div class="archive-fragment-head">
+            <div>
+                <span class="archive-fragment-kicker">@File.Definition.Classification</span>
+                <h2 id="archive-fragment-title">@File.Definition.FragmentLabel</h2>
+            </div>
+            <button class="archive-fragment-close" type="button" autofocus @onclick="CloseAsync">Close</button>
+        </div>
+
+        <div class="archive-fragment-panel">
+            <div class="archive-fragment-meta">
+                <span>@File.Definition.Code</span>
+                <span>@File.Definition.Title</span>
+                <span>Recovered attachment</span>
+            </div>
+
+            <div class="archive-fragment-copy">
+                <div class="archive-fragment-redaction"></div>
+                <p>@File.Definition.FragmentContent</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required ArchiveResolvedFile File { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private Task CloseAsync()
+    {
+        return OnClose.InvokeAsync();
+    }
+
+    private Task HandleBackdropClick()
+    {
+        return CloseAsync();
+    }
+
+    private Task HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (string.Equals(args.Key, "Escape", StringComparison.OrdinalIgnoreCase))
+        {
+            return CloseAsync();
+        }
+
+        return Task.CompletedTask;
+    }
+}

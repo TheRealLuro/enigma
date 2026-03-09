@@ -1,0 +1,124 @@
+.archive-topbar {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(280px, 1.2fr) minmax(0, 2.6fr) auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1.05rem 1.2rem;
+    border-radius: 1.3rem;
+    border: 1px solid var(--archive-border);
+    background: linear-gradient(180deg, rgba(10, 16, 24, 0.96), rgba(7, 12, 19, 0.94));
+}
+
+.archive-topbar-meta {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+}
+
+.archive-topbar-block {
+    display: grid;
+    gap: 0.24rem;
+    min-height: 3.35rem;
+    align-content: center;
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.95rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.archive-topbar-block.brand {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02));
+}
+
+.archive-topbar-kicker {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+}
+
+.archive-topbar-block strong {
+    font-size: 0.95rem;
+}
+
+.archive-topbar-block small {
+    color: var(--archive-muted);
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.archive-sidebar-toggle {
+    min-height: 2.8rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--archive-border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--archive-text);
+    display: none;
+}
+
+.archive-topbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.archive-topbar-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.8rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--archive-border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--archive-text);
+    text-decoration: none;
+    font-size: 0.84rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.archive-topbar-action.primary {
+    border-color: rgba(121, 211, 235, 0.4);
+    background: rgba(121, 211, 235, 0.12);
+}
+
+@media (max-width: 1180px) {
+    .archive-topbar {
+        grid-template-columns: 1fr;
+    }
+
+    .archive-topbar-meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .archive-topbar-actions {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 860px) {
+    .archive-sidebar-toggle {
+        display: inline-flex;
+        justify-self: start;
+        align-items: center;
+    }
+}
+
+@media (max-width: 640px) {
+    .archive-topbar-meta {
+        grid-template-columns: 1fr;
+    }
+
+    .archive-topbar-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

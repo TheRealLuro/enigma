@@ -1,0 +1,51 @@
+@using Enigma.Client.Models
+
+<div class="archive-shell">
+    <ArchiveTopbar IsAuthenticatedUser="IsAuthenticatedUser"
+                   OnToggleSidebar="OnToggleSidebar" />
+
+    <div class="archive-shell-workspace">
+        <ArchiveSidebarIndex OnSelectFile="OnSelectFile"
+                             OnHoverFile="OnHoverFile"
+                             OnFilterChanged="OnFilterChanged"
+                             IsAuthenticatedUser="IsAuthenticatedUser"
+                             OnCloseSidebar="OnCloseSidebar" />
+
+        <ArchiveFileViewer SectorImages="SectorImages"
+                           IsSectorImagesLoading="IsSectorImagesLoading"
+                           OnOpenFragment="OnOpenFragment" />
+
+        <ArchiveHoverPreview />
+    </div>
+
+    <ArchiveStatusBar />
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<LoreSectorImageRecord> SectorImages { get; set; } = [];
+
+    [Parameter]
+    public bool IsSectorImagesLoading { get; set; }
+
+    [Parameter]
+    public bool IsAuthenticatedUser { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnSelectFile { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> OnHoverFile { get; set; }
+
+    [Parameter]
+    public EventCallback<ArchiveDirectoryFilter> OnFilterChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnOpenFragment { get; set; }
+
+    [Parameter]
+    public EventCallback OnToggleSidebar { get; set; }
+
+    [Parameter]
+    public EventCallback OnCloseSidebar { get; set; }
+}

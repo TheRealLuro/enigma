@@ -61,6 +61,7 @@ public partial class Profile : IAsyncDisposable
     [Inject] private UiNotificationService Notifications { get; set; } = default!;
     [Inject] private NavigationManager NavigationManager { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private DeviceCompatibilityService DeviceCompatibility { get; set; } = default!;
 
     [Parameter] public string? ViewedUsername { get; set; }
     [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
@@ -107,6 +108,8 @@ public partial class Profile : IAsyncDisposable
     private Dictionary<string, DateTimeOffset> StakedMapLockById { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _ownProfileRefreshCancellation;
     private Task? _ownProfileRefreshTask;
+    private bool ShowCompatibilityGate { get; set; }
+    private string? PendingGameRoute { get; set; }
 
     private bool IsOwnProfile =>
         Session is not null
@@ -257,6 +260,17 @@ public partial class Profile : IAsyncDisposable
             ConfigureOwnProfileRefreshLoop();
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await DeviceCompatibility.EnsureInitializedAsync(JS);
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task LoadInventoryAsync()
@@ -901,7 +915,17 @@ public partial class Profile : IAsyncDisposable
                 throw new InvalidOperationException("The selected sector did not return a seed.");
             }
 
-            NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(payload.Seed)}&source=load&mapName={Uri.EscapeDataString(mapName)}");
+            PendingGameRoute = $"/game?seed={Uri.EscapeDataString(payload.Seed)}&source=load&mapName={Uri.EscapeDataString(mapName)}";
+            var decision = await DeviceCompatibility.EvaluateGameplayAccessAsync(JS, PendingGameRoute);
+            if (decision != GameplayCompatibilityDecision.Allowed)
+            {
+                ShowCompatibilityGate = true;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            ShowCompatibilityGate = false;
+            NavigationManager.NavigateTo(PendingGameRoute);
         }
         catch (Exception ex)
         {
@@ -1344,6 +1368,16 @@ public partial class Profile : IAsyncDisposable
     private void GoHome() => NavigationManager.NavigateTo("/home");
 
     private void GoPlayers() => NavigationManager.NavigateTo("/players");
+
+    private Task CloseCompatibilityGateAsync()
+    {
+        ShowCompatibilityGate = false;
+        DeviceCompatibility.ClearBlockedTarget();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private bool ShowBrowseOnlyNotice => DeviceCompatibility.IsReady && DeviceCompatibility.IsBrowseOnly;
 
     private static bool EqualsIgnoreCase(string? left, string? right)
     {

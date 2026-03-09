@@ -3,6 +3,7 @@
 @inject IJSRuntime JS
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @inject Enigma.Client.Services.UiNotificationService Notifications
+@inject DeviceCompatibilityService DeviceCompatibility
 @implements IAsyncDisposable
 @using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
@@ -19,6 +20,10 @@
                     <span class="app-shell-brand-tag">Anomaly Research Division (A.R.D)</span>
                 </div>
             </div>
+
+            <button class="app-shell-mobile-toggle" type="button" @onclick="ToggleMobileNavDrawer">
+                Menu
+            </button>
 
             <nav class="app-shell-nav">
                 <NavLink class="nav-link" href="/home" data-tour-id="nav-home">Command</NavLink>
@@ -56,6 +61,21 @@
         </header>
     }
 
+    @if (ShouldShowHeader)
+    {
+        <MobileNavDrawer IsOpen="@IsMobileNavDrawerOpen"
+                         Username="@(Session?.Username)"
+                         OnClose="CloseMobileNavDrawer" />
+    }
+
+    @if (ShouldShowArchiveAccessChip)
+    {
+        <a class="app-archive-chip @(ShouldShowHeader ? "shell" : "public")" href="/lore">
+            <span class="app-archive-chip-kicker">Archive Access</span>
+            <strong>Classified Logs</strong>
+        </a>
+    }
+
     @if (IsAuthenticated && !IsPublicPath() && _notifications.Count > 0)
     {
         <div class="global-notification-stack" role="status" aria-live="polite">
@@ -72,7 +92,7 @@
     <main>
         @if (CanRenderCurrentRoute)
         {
-            <article class="content px-4 app-shell-content">
+            <article class="@GetContentArticleClass()">
                 @Body
             </article>
         }
@@ -87,6 +107,13 @@
         }
     </main>
 </div>
+
+@if (ShowGlobalCompatibilityGate)
+{
+    <MobileCompatibilityGate Inline="true"
+                             TargetRoute="@BlockedGameplayRoute"
+                             OnClose="CloseCompatibilityGateAsync" />
+}
 
 @if (TutorialVisible && CurrentTutorialStep is not null)
 {
@@ -153,6 +180,10 @@
     {
         "",
         "register",
+        "lore",
+        "lore/explorers",
+        "lore/sectors",
+        "lore/directive",
         "about",
         "how-enigma-works",
         "enigma-game-mechanics",
@@ -174,6 +205,9 @@
     private bool AuthCheckComplete { get; set; }
     private bool IsAuthenticated { get; set; }
     private bool IsAccountMenuOpen { get; set; }
+    private bool IsMobileNavDrawerOpen { get; set; }
+    private bool ShowGlobalCompatibilityGate { get; set; }
+    private string? BlockedGameplayRoute { get; set; }
     private bool TutorialVisible { get; set; }
     private bool _tutorialSeenRecorded;
     private int _tutorialIndex;
@@ -351,18 +385,33 @@
 
     private bool ShouldShowHeader => !IsPublicPath() && !IsGamePath() && AuthCheckComplete && IsAuthenticated;
     private bool ShouldShowHeaderBalance => ShouldShowHeader && Session is not null;
+    private bool ShouldShowArchiveAccessChip => CanRenderCurrentRoute && !IsGamePath() && !IsLosePath() && !IsLorePath();
 
     private bool CanRenderCurrentRoute => IsPublicPath() || (AuthCheckComplete && IsAuthenticated);
+
+    private string GetContentArticleClass()
+    {
+        return IsLorePath()
+            ? "content app-shell-content lore-route-shell"
+            : "content px-4 app-shell-content";
+    }
 
     protected override void OnInitialized()
     {
         NavigationManager.LocationChanged += HandleLocationChanged;
         Notifications.NotificationPublished += HandleNotificationPublished;
+        DeviceCompatibility.Changed += HandleDeviceCompatibilityChanged;
         ResetAuthStateForCurrentPath();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            await DeviceCompatibility.EnsureInitializedAsync(JS);
+            await InvokeAsync(StateHasChanged);
+        }
+
         if (firstRender && !_tutorialListenerRegistered)
         {
             _tutorialListenerRef = DotNetObjectReference.Create(this);
@@ -440,6 +489,7 @@
     private void GoHome()
     {
         IsAccountMenuOpen = false;
+        IsMobileNavDrawerOpen = false;
         NavigationManager.NavigateTo("/home");
     }
 
@@ -451,13 +501,36 @@
         }
 
         IsAccountMenuOpen = false;
+        IsMobileNavDrawerOpen = false;
         NavigationManager.NavigateTo($"/profile/{Uri.EscapeDataString(Session.Username)}");
     }
 
     private void GoToSettings()
     {
         IsAccountMenuOpen = false;
+        IsMobileNavDrawerOpen = false;
         NavigationManager.NavigateTo("/profile?tab=settings");
+    }
+
+    private void ToggleMobileNavDrawer()
+    {
+        IsMobileNavDrawerOpen = !IsMobileNavDrawerOpen;
+    }
+
+    private Task CloseMobileNavDrawer()
+    {
+        IsMobileNavDrawerOpen = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task CloseCompatibilityGateAsync()
+    {
+        ShowGlobalCompatibilityGate = false;
+        BlockedGameplayRoute = null;
+        DeviceCompatibility.ClearBlockedTarget();
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     private void ToggleAccountMenu()
@@ -468,6 +541,7 @@
     private async Task LogoutAsync()
     {
         IsAccountMenuOpen = false;
+        IsMobileNavDrawerOpen = false;
         StopGlobalSessionRefreshLoop();
         ResetRealtimeTracking();
         try
@@ -502,6 +576,9 @@
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs args)
     {
         IsAccountMenuOpen = false;
+        IsMobileNavDrawerOpen = false;
+        ShowGlobalCompatibilityGate = false;
+        BlockedGameplayRoute = null;
         if (TutorialVisible)
         {
             UpdateTutorialIndexFromUri(args.Location);
@@ -552,10 +629,17 @@
         return string.Equals(cleanPath, "lose", StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool IsLorePath(string? uri = null)
+    {
+        var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
+        return string.Equals(cleanPath, "lore", StringComparison.OrdinalIgnoreCase)
+            || cleanPath.StartsWith("lore/", StringComparison.OrdinalIgnoreCase);
+    }
+
     private bool IsPublicPath(string? uri = null)
     {
         var cleanPath = GetCleanPath(uri ?? NavigationManager.Uri);
-        return PublicPaths.Contains(cleanPath);
+        return PublicPaths.Contains(cleanPath) || IsLorePath(uri);
     }
 
     private static string GetCleanPath(string uri)
@@ -672,6 +756,11 @@
         {
             _handlingUserSessionUpdate = false;
         }
+    }
+
+    private void HandleDeviceCompatibilityChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private void UpdateTutorialIndexFromUri(string uri)
@@ -1241,7 +1330,19 @@
         var step = _tutorialSteps[index];
         if (string.Equals(GetCleanPath(new Uri(new Uri(NavigationManager.BaseUri), step.Path).AbsoluteUri), "game", StringComparison.OrdinalIgnoreCase))
         {
-            NavigationManager.NavigateTo($"/game?seed={Uri.EscapeDataString(TutorialDemoSeed)}&source=new&tutorial=true", replace: true);
+            var tutorialGameRoute = $"/game?seed={Uri.EscapeDataString(TutorialDemoSeed)}&source=new&tutorial=true";
+            var decision = await DeviceCompatibility.EvaluateGameplayAccessAsync(JS, tutorialGameRoute);
+            if (decision != GameplayCompatibilityDecision.Allowed)
+            {
+                BlockedGameplayRoute = tutorialGameRoute;
+                ShowGlobalCompatibilityGate = true;
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            ShowGlobalCompatibilityGate = false;
+            BlockedGameplayRoute = null;
+            NavigationManager.NavigateTo(tutorialGameRoute, replace: true);
             return;
         }
 
@@ -1668,6 +1769,7 @@
     {
         NavigationManager.LocationChanged -= HandleLocationChanged;
         Notifications.NotificationPublished -= HandleNotificationPublished;
+        DeviceCompatibility.Changed -= HandleDeviceCompatibilityChanged;
         StopGlobalSessionRefreshLoop();
         CancelPendingTutorialRouteCompletion();
         HideFriendRequestToast();

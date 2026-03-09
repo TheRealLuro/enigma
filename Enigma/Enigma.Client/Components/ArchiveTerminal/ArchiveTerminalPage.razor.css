@@ -1,0 +1,82 @@
+.archive-terminal {
+    --archive-bg: #050910;
+    --archive-surface: rgba(9, 15, 24, 0.92);
+    --archive-surface-strong: rgba(12, 20, 31, 0.97);
+    --archive-surface-soft: rgba(12, 19, 28, 0.86);
+    --archive-border: rgba(121, 199, 224, 0.16);
+    --archive-border-strong: rgba(146, 216, 239, 0.32);
+    --archive-text: #f3f8fb;
+    --archive-body: rgba(220, 231, 239, 0.9);
+    --archive-muted: rgba(167, 186, 200, 0.7);
+    --archive-dim: rgba(132, 156, 171, 0.58);
+    --archive-accent: #79d3eb;
+    --archive-accent-soft: rgba(121, 211, 235, 0.18);
+    --archive-danger: #ff8193;
+    --archive-warning: #f6cb79;
+    --archive-success: #7ee1cb;
+    position: relative;
+    isolation: isolate;
+    min-height: calc(100vh - 2rem);
+    max-width: 1800px;
+    width: 100%;
+    margin: 0 auto;
+    padding: clamp(0.9rem, 1.5vw, 1.6rem);
+    color: var(--archive-text);
+}
+
+.archive-terminal.theme-interference-matrix,
+.archive-terminal.theme-loss-playback,
+.archive-terminal.theme-final-redaction {
+    --archive-accent: #ff9a82;
+    --archive-accent-soft: rgba(255, 154, 130, 0.16);
+}
+
+.archive-terminal.theme-radar-reconstruction,
+.archive-terminal.theme-explorer-roster {
+    --archive-accent: #72dfcd;
+    --archive-accent-soft: rgba(114, 223, 205, 0.18);
+}
+
+.archive-terminal.theme-cube-analysis,
+.archive-terminal.theme-spatial-reconstruction,
+.archive-terminal.theme-governance-lattice,
+.archive-terminal.theme-material-analysis {
+    --archive-accent: #8bc9ff;
+    --archive-accent-soft: rgba(139, 201, 255, 0.18);
+}
+
+.archive-terminal.theme-recovered-image-cache,
+.archive-terminal.theme-collapse-sequence {
+    --archive-accent: #ffd37b;
+    --archive-accent-soft: rgba(255, 211, 123, 0.18);
+}
+
+.archive-terminal-loading {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 0.4rem;
+    place-items: center;
+    min-height: 70vh;
+    text-align: center;
+}
+
+.archive-terminal-loading-kicker {
+    font-family: "Orbitron", "Inter", sans-serif;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--archive-muted);
+    font-size: 0.72rem;
+}
+
+.archive-terminal-loading strong {
+    font-family: "Orbitron", "Inter", sans-serif;
+    font-size: clamp(1.1rem, 2vw, 1.45rem);
+}
+
+@media (max-width: 760px) {
+    .archive-terminal {
+        min-height: calc(100vh - 1rem);
+        padding: 0.5rem;
+    }
+}

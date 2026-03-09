@@ -28,78 +28,118 @@
     </section>
 
     <div class="card p-4 shadow-sm auth-card">
+        @if (!IsAwaitingVerification)
+        {
+            <h2 class="mb-4 text-center">Create Explorer Account</h2>
 
-        <h2 class="mb-4 text-center">Create Explorer Account</h2>
+            <EditForm EditContext="RegisterEditContext" OnValidSubmit="OnRegisterClick" OnInvalidSubmit="OnInvalidRegisterAttempt">
+                <DataAnnotationsValidator />
 
-        <EditForm EditContext="RegisterEditContext" OnValidSubmit="OnRegisterClick" OnInvalidSubmit="OnInvalidRegisterAttempt">
-            <DataAnnotationsValidator />
-
-            <div class="mb-3">
-                <label class="form-label">Display Name</label>
-                <InputText class="form-control"
-                           @bind-Value="newUser.DisplayName"
-                           placeholder="Explorer42" />
-                <ValidationMessage For="() => newUser.DisplayName" />
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">Email</label>
-                <input class="form-control"
-                       type="email"
-                       value="@newUser.Email"
-                       @oninput="OnEmailInput"
-                       placeholder="you@example.com"
-                       autocomplete="email" />
-                <ValidationMessage For="() => newUser.Email" />
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">Password</label>
-                <div class="password-field-wrap">
-                    <input type="@(ShowPassword ? "text" : "password")"
-                           class="form-control"
-                           @bind="newUser.Password"
-                           @bind:event="oninput"
-                           placeholder="Choose a password" />
-                    <button type="button" class="password-toggle-button" @onclick="TogglePasswordVisibility">
-                        @(ShowPassword ? "Hide" : "Show")
-                    </button>
+                <div class="mb-3">
+                    <label class="form-label">Display Name</label>
+                    <InputText class="form-control"
+                               @bind-Value="newUser.DisplayName"
+                               placeholder="Explorer42" />
+                    <ValidationMessage For="() => newUser.DisplayName" />
                 </div>
-                @if (ShouldShowPasswordIssues)
-                {
-                    <div class="password-issue-list" aria-live="polite">
-                        @foreach (var issue in PasswordIssues)
-                        {
-                            <div class="password-issue-item">
-                                <span class="password-issue-icon" aria-hidden="true">!</span>
-                                <span>@issue</span>
-                            </div>
-                        }
+
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input class="form-control"
+                           type="email"
+                           value="@newUser.Email"
+                           @oninput="OnEmailInput"
+                           placeholder="you@example.com"
+                           autocomplete="email" />
+                    <ValidationMessage For="() => newUser.Email" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <div class="password-field-wrap">
+                        <input type="@(ShowPassword ? "text" : "password")"
+                               class="form-control"
+                               @bind="newUser.Password"
+                               @bind:event="oninput"
+                               placeholder="Choose a password" />
+                        <button type="button" class="password-toggle-button" @onclick="TogglePasswordVisibility">
+                            @(ShowPassword ? "Hide" : "Show")
+                        </button>
                     </div>
-                }
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label">Confirm Password</label>
-                <div class="password-field-wrap">
-                    <input type="@(ShowPassword ? "text" : "password")"
-                           class="form-control"
-                           @bind="newUser.ConfirmPassword"
-                           @bind:event="oninput"
-                           placeholder="Repeat your password" />
+                    @if (ShouldShowPasswordIssues)
+                    {
+                        <div class="password-issue-list" aria-live="polite">
+                            @foreach (var issue in PasswordIssues)
+                            {
+                                <div class="password-issue-item">
+                                    <span class="password-issue-icon" aria-hidden="true">!</span>
+                                    <span>@issue</span>
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
-                <ValidationMessage For="() => newUser.ConfirmPassword" />
-            </div>
 
-            <div class="mb-3">
-                <InputCheckbox @bind-Value="rememberMe" class="form-check-input" id="remember-signup" />
-                <label for="remember-signup" class="form-check-label ms-1">Keep me signed in</label>
-            </div>
+                <div class="mb-3">
+                    <label class="form-label">Confirm Password</label>
+                    <div class="password-field-wrap">
+                        <input type="@(ShowPassword ? "text" : "password")"
+                               class="form-control"
+                               @bind="newUser.ConfirmPassword"
+                               @bind:event="oninput"
+                               placeholder="Repeat your password" />
+                    </div>
+                    <ValidationMessage For="() => newUser.ConfirmPassword" />
+                </div>
 
-            <button type="submit" class="btn btn-primary w-100" disabled="@IsSubmitting">
-                @(IsSubmitting ? "Signing up..." : "Sign Up")
-            </button>
-        </EditForm>
+                <div class="mb-3">
+                    <InputCheckbox @bind-Value="rememberMe" class="form-check-input" id="remember-signup" />
+                    <label for="remember-signup" class="form-check-label ms-1">Keep me signed in after verification</label>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100" disabled="@IsSubmitting">
+                    @(IsSubmitting ? "Sending code..." : "Send Verification Code")
+                </button>
+            </EditForm>
+        }
+        else
+        {
+            <div class="signup-verification-step">
+                <span class="profile-kicker">Email Verification</span>
+                <h2 class="mb-3 text-center">Verify Explorer Access</h2>
+                <p class="signup-verification-copy">
+                    Enter the 6-digit verification code sent to <strong>@VerificationEmailHint</strong>.
+                    @if (!string.IsNullOrWhiteSpace(VerificationExpiryDisplay))
+                    {
+                        <span> Code expires @VerificationExpiryDisplay.</span>
+                    }
+                </p>
+
+                <EditForm EditContext="VerifyEditContext" OnValidSubmit="OnVerifyCodeAsync" OnInvalidSubmit="OnInvalidVerifyAttempt">
+                    <DataAnnotationsValidator />
+
+                    <div class="mb-3">
+                        <label class="form-label">Verification Code</label>
+                        <InputText class="form-control signup-code-input"
+                                   @bind-Value="verification.Code"
+                                   autocomplete="one-time-code"
+                                   inputmode="numeric"
+                                   maxlength="6"
+                                   placeholder="000000" />
+                        <ValidationMessage For="() => verification.Code" />
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100" disabled="@IsSubmitting">
+                        @(IsSubmitting ? "Verifying..." : "Verify and Create Account")
+                    </button>
+                </EditForm>
+
+                <div class="signup-verification-actions">
+                    <button type="button" class="btn btn-secondary" @onclick="OnResendCodeAsync" disabled="@IsSubmitting">Resend Code</button>
+                    <button type="button" class="btn btn-secondary" @onclick="ReturnToRegistrationForm" disabled="@IsSubmitting">Change Email</button>
+                </div>
+            </div>
+        }
 
         @if (!string.IsNullOrEmpty(errorMessage))
         {
@@ -115,7 +155,6 @@
                 Sign In
             </button>
         </div>
-
     </div>
 </div>
 
@@ -128,15 +167,22 @@
 
     RegisterUser newUser = new();
     EditContext RegisterEditContext = default!;
+    VerifyCodeForm verification = new();
+    EditContext VerifyEditContext = default!;
     bool rememberMe;
     bool IsSubmitting;
     bool ShowPassword;
+    bool IsAwaitingVerification;
+    string VerificationRequestId = string.Empty;
+    string VerificationEmailHint = string.Empty;
+    DateTimeOffset? VerificationExpiresAtUtc;
 
     string? errorMessage;
 
     protected override void OnInitialized()
     {
         RegisterEditContext = new EditContext(newUser);
+        VerifyEditContext = new EditContext(verification);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -162,7 +208,6 @@
     async Task OnRegisterClick()
     {
         errorMessage = null;
-
         IsSubmitting = true;
 
         try
@@ -185,25 +230,16 @@
                 return;
             }
 
-            var response = await Api.ReadJsonAsync<LoginResponse>(httpResponse);
-            if (response is null || response.Status != "success" || string.IsNullOrWhiteSpace(response.User?.Username))
+            var response = await Api.ReadJsonAsync<SignUpVerificationChallengeResponse>(httpResponse);
+            if (response is null || !string.Equals(response.Status, "verification_required", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(response.VerificationRequestId))
             {
-                errorMessage = "Sign up failed.";
+                errorMessage = "Verification could not be started.";
                 Notifications.Error(errorMessage);
                 return;
             }
 
-            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = response.User.Username }, rememberMe);
-            await JS.InvokeVoidAsync("enigmaGame.setUserSession", response.User, rememberMe);
-            if (response.DailyRewardGranted)
-            {
-                Notifications.Success($"Account created. Daily reward granted: {response.DailyRewardAmount:N0} MN.");
-            }
-            else
-            {
-                Notifications.Success("Account created. Welcome to Enigma.");
-            }
-            NavigationManager.NavigateTo("/home");
+            ApplyVerificationChallenge(response);
+            Notifications.Success(response.Detail ?? "Verification code sent.");
         }
         catch (Exception ex)
         {
@@ -218,6 +254,124 @@
 
     private void OnInvalidRegisterAttempt(EditContext _)
     {
+        errorMessage = null;
+    }
+
+    private async Task OnVerifyCodeAsync()
+    {
+        errorMessage = null;
+        IsSubmitting = true;
+
+        try
+        {
+            using var httpResponse = await Api.PostJsonAsync("api/auth/session/signup/verify", new SignUpVerificationRequest
+            {
+                VerificationRequestId = VerificationRequestId,
+                Code = verification.Code,
+                RememberMe = rememberMe,
+            });
+
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                errorMessage = await ExtractErrorDetailAsync(httpResponse, "Verification failed.");
+                if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    Notifications.Warning(errorMessage);
+                }
+                return;
+            }
+
+            var response = await Api.ReadJsonAsync<LoginResponse>(httpResponse);
+            if (response is null || response.Status != "success" || string.IsNullOrWhiteSpace(response.User?.Username))
+            {
+                errorMessage = "Verification failed.";
+                Notifications.Error(errorMessage);
+                return;
+            }
+
+            await JS.InvokeVoidAsync("enigmaGame.setPlayerIdentity", new PlayerIdentity { Username = response.User.Username }, rememberMe);
+            await JS.InvokeVoidAsync("enigmaGame.setUserSession", response.User, rememberMe);
+            if (response.DailyRewardGranted)
+            {
+                Notifications.Success($"Account created. Daily reward granted: {response.DailyRewardAmount:N0} MN.");
+            }
+            else
+            {
+                Notifications.Success("Account created. Welcome to Enigma.");
+            }
+
+            NavigationManager.NavigateTo("/home");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+            Notifications.Error(errorMessage);
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private async Task OnResendCodeAsync()
+    {
+        errorMessage = null;
+        IsSubmitting = true;
+
+        try
+        {
+            using var httpResponse = await Api.PostJsonAsync("api/auth/session/signup/resend", new ResendSignUpVerificationRequest
+            {
+                VerificationRequestId = VerificationRequestId,
+            });
+
+            if (!httpResponse.IsSuccessStatusCode)
+            {
+                errorMessage = await ExtractErrorDetailAsync(httpResponse, "Could not resend the verification code.");
+                if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    Notifications.Warning(errorMessage);
+                }
+                return;
+            }
+
+            var response = await Api.ReadJsonAsync<SignUpVerificationChallengeResponse>(httpResponse);
+            if (response is null || string.IsNullOrWhiteSpace(response.VerificationRequestId))
+            {
+                errorMessage = "Could not resend the verification code.";
+                Notifications.Error(errorMessage);
+                return;
+            }
+
+            ApplyVerificationChallenge(response);
+            verification.Code = string.Empty;
+            VerifyEditContext = new EditContext(verification);
+            Notifications.Success(response.Detail ?? "Verification code resent.");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+            Notifications.Error(errorMessage);
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private void OnInvalidVerifyAttempt(EditContext _)
+    {
+        errorMessage = null;
+    }
+
+    private void ReturnToRegistrationForm()
+    {
+        IsAwaitingVerification = false;
+        VerificationRequestId = string.Empty;
+        VerificationEmailHint = string.Empty;
+        VerificationExpiresAtUtc = null;
+        verification = new VerifyCodeForm();
+        VerifyEditContext = new EditContext(verification);
         errorMessage = null;
     }
 
@@ -236,6 +390,22 @@
         newUser.Email = args.Value?.ToString() ?? string.Empty;
         RegisterEditContext.NotifyFieldChanged(FieldIdentifier.Create(() => newUser.Email));
     }
+
+    private void ApplyVerificationChallenge(SignUpVerificationChallengeResponse response)
+    {
+        VerificationRequestId = response.VerificationRequestId;
+        VerificationEmailHint = response.EmailHint;
+        VerificationExpiresAtUtc = DateTimeOffset.TryParse(response.ExpiresAtUtc, out var expiresAtUtc)
+            ? expiresAtUtc
+            : null;
+        verification = new VerifyCodeForm();
+        VerifyEditContext = new EditContext(verification);
+        IsAwaitingVerification = true;
+        errorMessage = null;
+    }
+
+    private string VerificationExpiryDisplay =>
+        VerificationExpiresAtUtc?.ToLocalTime().ToString("MMM dd, yyyy h:mm tt") ?? string.Empty;
 
     private bool IsPasswordLengthValid => CurrentPassword.Length >= 10 && CurrentPassword.Length <= 128;
     private bool IsPasswordUpperValid => CurrentPassword.Any(char.IsUpper);
@@ -409,5 +579,12 @@
                 }
             }
         }
+    }
+
+    public sealed class VerifyCodeForm
+    {
+        [Required(ErrorMessage = "Verification code is required.")]
+        [RegularExpression(@"^\d{6}$", ErrorMessage = "Verification code must be 6 digits.")]
+        public string Code { get; set; } = string.Empty;
     }
 }

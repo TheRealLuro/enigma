@@ -1,0 +1,25 @@
+@page "/lore"
+@page "/lore/{LegacyGroup}"
+@implements IAsyncDisposable
+@inject Enigma.Client.Services.EnigmaApiClient Api
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
+
+<SeoHead Title="@PageTitle"
+         Description="@PageDescription"
+         OpenGraphType="article"
+         SchemaType="Article"
+         Keywords="Enigma lore, archive terminal, classified archive, anomaly research, E-Units, Sectors, Maze Nuggets" />
+
+<ArchiveTerminalPage Controller="@Controller"
+                     SectorImages="@SectorImages"
+                     IsSectorImagesLoading="@IsSectorImagesLoading"
+                     IsAuthenticatedUser="@IsAuthenticatedUser"
+                     OnBootComplete="HandleBootCompletedAsync"
+                     OnSelectFile="HandleSelectFileAsync"
+                     OnHoverFile="HandleHoverFileAsync"
+                     OnFilterChanged="HandleFilterChangedAsync"
+                     OnOpenFragment="HandleOpenFragmentAsync"
+                     OnCloseFragment="HandleCloseFragmentAsync"
+                     OnToggleSidebar="HandleToggleSidebarAsync"
+                     OnCloseSidebar="HandleCloseSidebarAsync" />
