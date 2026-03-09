@@ -2,8 +2,8 @@
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @inject IJSRuntime JS
 
-<SeoHead Title="Enigma Leaderboard | Top Maps and Players"
-         Description="Review Enigma rankings for maps and players, including discovery counts, Maze Nuggets, records, and leaderboard standings."
+<SeoHead Title="Enigma Council Rankings | Top Sectors and Explorers"
+         Description="Review Enigma council rankings for sectors and explorers, including discovery counts, MN reserves, records, and standing tiers."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -11,21 +11,21 @@
 <div class="content leaderboard-shell" data-tour-id="leaderboard-shell">
     <section class="leaderboard-banner">
         <div>
-            <span class="profile-kicker">Global Rankings</span>
-            <h1>@(IsPlayerMode ? "Top Players" : "Top Maps")</h1>
+            <span class="profile-kicker">Research Council Rankings</span>
+            <h1>@(IsPlayerMode ? "Top Explorers" : "Top Sectors")</h1>
         </div>
-        <button class="btn btn-secondary" @onclick="GoHome">Back to Main Menu</button>
+        <button class="btn btn-secondary" @onclick="GoHome">Back to Command</button>
     </section>
 
     <section class="panel leaderboard-controls-panel">
         <div class="leaderboard-mode-toggle">
-            <button class="@(GetModeButtonClass("maps"))" type="button" @onclick='@(() => SetBoardModeAsync("maps"))'>Maps</button>
-            <button class="@(GetModeButtonClass("players"))" type="button" @onclick='@(() => SetBoardModeAsync("players"))'>Players</button>
+            <button class="@(GetModeButtonClass("maps"))" type="button" @onclick='@(() => SetBoardModeAsync("maps"))'>Sectors</button>
+            <button class="@(GetModeButtonClass("players"))" type="button" @onclick='@(() => SetBoardModeAsync("players"))'>Explorers</button>
         </div>
 
         <div class="leaderboard-controls-grid">
             <div>
-                <label class="form-label">Sort By</label>
+                <label class="form-label">Rank By</label>
                 <EnigmaDropdown TValue="string"
                                 Class="form-control"
                                 Options="CurrentSortDropdownOptions"
@@ -42,7 +42,7 @@
 
             <div class="leaderboard-actions">
                 <button class="btn btn-primary" disabled="@IsLoading" @onclick="ApplyLeaderboardSettingsAsync">
-                    @(IsLoading ? "Loading..." : "Apply")
+                    @(IsLoading ? "Syncing..." : "Sync Board")
                 </button>
             </div>
         </div>
@@ -57,7 +57,7 @@
     {
         <div class="card enigma-game-message">
             <div class="loader"></div>
-            <p>Loading leaderboard...</p>
+            <p>Loading council rankings...</p>
         </div>
     }
     else if (IsPlayerMode)
@@ -65,8 +65,8 @@
         @if (Players.Count == 0)
         {
             <div class="panel leaderboard-empty-panel">
-                <h2>No players found</h2>
-                <p>The player leaderboard API returned an empty list.</p>
+                <h2>No explorers found</h2>
+                <p>The explorer rankings feed returned an empty list.</p>
             </div>
         }
         else
@@ -83,17 +83,17 @@
                         <p>@GetPlayerKicker(entry.Player)</p>
                         <div class="podium-metrics player-podium-metrics">
                             <div>
-                                <span>Maze Nuggets</span>
+                                <span>MN Reserve</span>
                                 <strong>@entry.Player.MazeNuggets.ToString("N0")</strong>
                             </div>
                             <div>
-                                <span>Owned</span>
+                                <span>Owned Sectors</span>
                                 <strong>@entry.Player.OwnedMapsCount</strong>
                             </div>
                             <div class="podium-best-time-card">
-                                <span>Wins / Losses</span>
+                                <span>Completions / Fails</span>
                                 <strong>@entry.Player.MapsCompleted / @entry.Player.MapsLost</strong>
-                                <span class="leaderboard-secondary-text">@FormatWinRate(entry.Player.WinRate) win rate</span>
+                                <span class="leaderboard-secondary-text">@FormatWinRate(entry.Player.WinRate) success rate</span>
                             </div>
                         </div>
                     </article>
@@ -128,8 +128,8 @@
             <section class="panel leaderboard-table-panel">
                 <div class="panel-heading maps-heading">
                     <div>
-                        <span class="profile-eyebrow">Player Board</span>
-                        <h2>All Ranked Players</h2>
+                        <span class="profile-eyebrow">Explorer Board</span>
+                        <h2>All Ranked Explorers</h2>
                     </div>
                     <span class="section-count">@CurrentSectionBadge</span>
                 </div>
@@ -139,13 +139,13 @@
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Player</th>
-                                <th>Maze Nuggets</th>
-                                <th>Owned</th>
-                                <th>Discovered</th>
-                                <th>Wins</th>
-                                <th>Losses</th>
-                                <th>Win Rate</th>
+                                <th>Explorer</th>
+                                <th>MN Reserve</th>
+                                <th>Owned Sectors</th>
+                                <th>Archived Sectors</th>
+                                <th>Completions</th>
+                                <th>Fails</th>
+                                <th>Success Rate</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -173,31 +173,31 @@
                                     <td>
                                         <div class="leaderboard-stat-cell">
                                             <strong>@entry.Player.OwnedMapsCount</strong>
-                                            <span class="leaderboard-secondary-text">owned maps</span>
+                                            <span class="leaderboard-secondary-text">owned sectors</span>
                                         </div>
                                     </td>
                                     <td>
                                         <div class="leaderboard-stat-cell">
                                             <strong>@entry.Player.DiscoveredMapsCount</strong>
-                                            <span class="leaderboard-secondary-text">discovered maps</span>
+                                            <span class="leaderboard-secondary-text">archived sectors</span>
                                         </div>
                                     </td>
                                     <td>
                                         <div class="leaderboard-stat-cell">
                                             <strong>@entry.Player.MapsCompleted</strong>
-                                            <span class="leaderboard-secondary-text">wins</span>
+                                            <span class="leaderboard-secondary-text">completions</span>
                                         </div>
                                     </td>
                                     <td>
                                         <div class="leaderboard-stat-cell">
                                             <strong>@entry.Player.MapsLost</strong>
-                                            <span class="leaderboard-secondary-text">losses</span>
+                                            <span class="leaderboard-secondary-text">fails</span>
                                         </div>
                                     </td>
                                     <td>
                                         <div class="leaderboard-stat-cell">
                                             <strong>@FormatWinRate(entry.Player.WinRate)</strong>
-                                            <span class="leaderboard-secondary-text">@entry.Player.MapsPlayed matches</span>
+                                            <span class="leaderboard-secondary-text">@entry.Player.MapsPlayed runs</span>
                                         </div>
                                     </td>
                                 </tr>
@@ -211,8 +211,8 @@
     else if (Maps.Count == 0)
     {
         <div class="panel leaderboard-empty-panel">
-            <h2>No maps found</h2>
-            <p>The leaderboard API returned an empty list.</p>
+            <h2>No sectors found</h2>
+            <p>The sector rankings feed returned an empty list.</p>
         </div>
     }
     else
@@ -226,18 +226,18 @@
                     <button class="map-link-button podium-map-title" type="button" @onclick="() => OpenMapAsync(entry.Map.MapName)">
                         @entry.Map.MapName
                     </button>
-                    <p>@entry.Map.Difficulty maze - @FormatThemeLabel(entry.Map)</p>
+                    <p>@entry.Map.Difficulty sector - @FormatThemeLabel(entry.Map)</p>
                     <div class="podium-metrics">
                         <div>
                             <span>Rating</span>
                             <strong>@entry.Map.RatingAverage.ToString("0.0")</strong>
                         </div>
                         <div>
-                            <span>Plays</span>
+                            <span>Runs</span>
                             <strong>@entry.Map.Plays</strong>
                         </div>
                         <div class="podium-best-time-card">
-                            <span>Best Time</span>
+                            <span>Fastest Run</span>
                             <strong>@FormatHumanTime(entry.Map)</strong>
                             @if (!string.IsNullOrWhiteSpace(entry.Map.UserWithBestTime))
                             {
@@ -249,7 +249,7 @@
                     </div>
                     <div class="leaderboard-podium-links">
                         <button class="inline-link-button" type="button" @onclick="() => GoToProfile(entry.Map.Founder)">
-                            Founder: @entry.Map.Founder
+                            First Explorer: @entry.Map.Founder
                         </button>
                     </div>
                 </article>
@@ -284,8 +284,8 @@
         <section class="panel leaderboard-table-panel">
             <div class="panel-heading maps-heading">
                 <div>
-                    <span class="profile-eyebrow">Map Board</span>
-                    <h2>All Ranked Maps</h2>
+                    <span class="profile-eyebrow">Sector Board</span>
+                    <h2>All Ranked Sectors</h2>
                 </div>
                 <span class="section-count">@CurrentSectionBadge</span>
             </div>
@@ -295,12 +295,12 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Map</th>
+                            <th>Sector</th>
                             <th>Difficulty</th>
                             <th>Rating</th>
-                            <th>Plays</th>
-                            <th>Best Time</th>
-                            <th>Founded</th>
+                            <th>Runs</th>
+                            <th>Fastest Run</th>
+                            <th>Discovered</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -328,7 +328,7 @@
                                             @if (!string.IsNullOrWhiteSpace(entry.Map.Founder))
                                             {
                                                 <button class="inline-link-button compact leaderboard-user-link" type="button" @onclick="() => GoToProfile(entry.Map.Founder)">
-                                                    by @entry.Map.Founder
+                                                    charted by @entry.Map.Founder
                                                 </button>
                                             }
                                         </div>
@@ -340,13 +340,13 @@
                                 <td>
                                     <div class="leaderboard-stat-cell">
                                         <strong>@entry.Map.RatingAverage.ToString("0.0")</strong>
-                                        <span class="leaderboard-secondary-text">@entry.Map.RatingCount votes</span>
+                                        <span class="leaderboard-secondary-text">@entry.Map.RatingCount ratings</span>
                                     </div>
                                 </td>
                                 <td>
                                     <div class="leaderboard-stat-cell">
                                         <strong>@entry.Map.Plays</strong>
-                                        <span class="leaderboard-secondary-text">total plays</span>
+                                        <span class="leaderboard-secondary-text">total runs</span>
                                     </div>
                                 </td>
                                 <td>
@@ -360,14 +360,14 @@
                                         }
                                         else
                                         {
-                                            <span class="leaderboard-secondary-text">No record holder</span>
+                                            <span class="leaderboard-secondary-text">No record explorer</span>
                                         }
                                     </div>
                                 </td>
                                 <td>
                                     <div class="leaderboard-stat-cell">
                                         <strong>@FormatFoundedDate(entry.Map)</strong>
-                                        <span class="leaderboard-secondary-text">founded</span>
+                                        <span class="leaderboard-secondary-text">discovered</span>
                                     </div>
                                 </td>
                             </tr>
@@ -402,31 +402,31 @@
     private int CurrentPageCount => IsPlayerMode ? Players.Count : Maps.Count;
     private int CurrentRankStart => TotalCount == 0 ? 0 : CurrentOffset + 1;
     private int CurrentRankEnd => TotalCount == 0 ? 0 : Math.Min(CurrentOffset + CurrentPageCount, TotalCount);
-    private string CurrentSectionSummary => TotalCount == 0 ? "No results" : $"Showing {CurrentRankStart}-{CurrentRankEnd} of {TotalCount}";
-    private string CurrentSectionBadge => TotalCount == 0 ? "No results" : $"{CurrentRankStart}-{CurrentRankEnd} of {TotalCount}";
+    private string CurrentSectionSummary => TotalCount == 0 ? "No records" : $"Showing {CurrentRankStart}-{CurrentRankEnd} of {TotalCount}";
+    private string CurrentSectionBadge => TotalCount == 0 ? "No records" : $"{CurrentRankStart}-{CurrentRankEnd} of {TotalCount}";
     private bool CanGoToPreviousSection => CurrentSectionIndex > 0;
     private bool CanGoToNextSection => CurrentSectionIndex + 1 < TotalSections;
 
     private static readonly IReadOnlyList<(string Value, string Label)> MapSortOptions =
     [
         ("rating", "Rating"),
-        ("plays", "Plays"),
-        ("best_time", "Best Time"),
-        ("time_founded", "Founded"),
+        ("plays", "Runs"),
+        ("best_time", "Fastest Run"),
+        ("time_founded", "Discovery Date"),
         ("difficulty", "Difficulty"),
-        ("map_name", "Map Name"),
+        ("map_name", "Sector Name"),
     ];
 
     private static readonly IReadOnlyList<(string Value, string Label)> PlayerSortOptions =
     [
-        ("maze_nuggets", "Maze Nuggets"),
-        ("owned_maps", "Owned Maps"),
-        ("discovered_maps", "Discovered Maps"),
-        ("wins", "Wins"),
-        ("losses", "Losses"),
-        ("win_rate", "Win Rate"),
-        ("maps_played", "Maps Played"),
-        ("username", "Username"),
+        ("maze_nuggets", "MN Reserve"),
+        ("owned_maps", "Owned Sectors"),
+        ("discovered_maps", "Archived Sectors"),
+        ("wins", "Completions"),
+        ("losses", "Fails"),
+        ("win_rate", "Success Rate"),
+        ("maps_played", "Runs Played"),
+        ("username", "Explorer"),
     ];
 
     private IReadOnlyList<(string Value, string Label)> CurrentSortOptions => IsPlayerMode ? PlayerSortOptions : MapSortOptions;
@@ -434,8 +434,8 @@
         CurrentSortOptions.Select(static option => new SelectOption<string>(option.Value, option.Label)).ToArray();
     private static readonly IReadOnlyList<SelectOption<string>> OrderOptions =
     [
-        new("desc", "Descending"),
-        new("asc", "Ascending"),
+        new("desc", "High to Low"),
+        new("asc", "Low to High"),
     ];
 
     protected override async Task OnInitializedAsync()
@@ -649,7 +649,7 @@
 
             if (string.IsNullOrWhiteSpace(response?.Seed))
             {
-                throw new InvalidOperationException("The requested map did not return a seed.");
+                throw new InvalidOperationException("The requested sector did not return a seed.");
             }
 
             NavigationManager.NavigateTo(
@@ -768,7 +768,7 @@
 
     private static string GetPlayerKicker(PlayerLeaderboardEntry player)
     {
-        return $"{player.OwnedMapsCount} owned | {player.DiscoveredMapsCount} discovered | {player.MapsPlayed} played";
+        return $"{player.OwnedMapsCount} owned sectors | {player.DiscoveredMapsCount} archived | {player.MapsPlayed} runs";
     }
 
     private static string GetInitials(string value)

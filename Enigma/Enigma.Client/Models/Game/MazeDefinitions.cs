@@ -111,7 +111,7 @@ public sealed class RoomRuntimeState
         return PuzzleGoldReward;
     }
 
-    public int CollectRewardPickup()
+    public int CollectRewardPickup(double multiplier = 1d)
     {
         if (!RewardPickupVisible)
         {
@@ -119,7 +119,8 @@ public sealed class RoomRuntimeState
         }
 
         RewardPickupCollected = true;
-        return RewardPickupGold;
+        var scaled = RewardPickupGold * Math.Max(1d, multiplier);
+        return (int)Math.Round(scaled, MidpointRounding.AwayFromZero);
     }
 
     public void SyncCoopProgress(bool puzzleSolved, bool rewardPickupCollected)
@@ -146,6 +147,8 @@ public sealed class PuzzleUpdateContext
 {
     public required PlayAreaRect PlayerBounds { get; init; }
     public required double DeltaTimeSeconds { get; init; }
+    public required double NowSeconds { get; init; }
+    public required PlayerDirection PlayerFacing { get; init; }
 }
 
 public sealed class MazeSeedParseException(string message) : Exception(message);

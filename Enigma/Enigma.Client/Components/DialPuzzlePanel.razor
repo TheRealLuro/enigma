@@ -1,0 +1,565 @@
+@using System.Globalization
+@using System.Text
+@using Enigma.Client.Models.Gameplay
+
+<div class="enigma-advanced-panel-shell enigma-dial-template @FamilyCss @DifficultyCss @DensityCss">
+    <section class="enigma-advanced-stage-card">
+        <header class="enigma-advanced-stage-head">
+            <div>
+                <span class="enigma-kicker">@DifficultyLabel Console</span>
+                <strong>@FamilyTitle</strong>
+                <p>@Subtitle</p>
+            </div>
+            <div class="enigma-advanced-stage-badges">
+                <span class="enigma-advanced-stage-pill">@SummaryToken</span>
+                <span class="enigma-advanced-stage-pill muted">@TargetVisibilityLabel</span>
+            </div>
+        </header>
+
+        <div class="enigma-dial-template-main">
+            <div class="enigma-dial-visual-card">
+                @if (IsDeadReckoning)
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-dial-visual-svg" aria-hidden="true">
+                        @for (var index = 0; index < 7; index++)
+                        {
+                            var y = 28 + (index * 32);
+                            <line x1="24" y1="@y" x2="396" y2="@y" class="grid-line" />
+                        }
+                        @for (var index = 0; index < Math.Max(2, Dials.Count); index++)
+                        {
+                            var x = 34 + (index * (352d / Math.Max(1, Dials.Count - 1)));
+                            <line x1="@x.ToString("0.###", CultureInfo.InvariantCulture)"
+                                  y1="20"
+                                  x2="@x.ToString("0.###", CultureInfo.InvariantCulture)"
+                                  y2="236"
+                                  class="grid-line" />
+                        }
+                        @if (ShowTarget)
+                        {
+                            <polyline points="@BuildRoutePoints(target: true)" class="route-line target" />
+                        }
+                        <polyline points="@BuildRoutePoints(target: false)" class="route-line current" />
+                        @foreach (var waypoint in Dials.Select((dial, index) => new { dial, index }))
+                        {
+                            <circle cx="@GetWaypointX(waypoint.index).ToString("0.###", CultureInfo.InvariantCulture)"
+                                    cy="@GetWaypointY(waypoint.dial, target: false).ToString("0.###", CultureInfo.InvariantCulture)"
+                                    r="6"
+                                    class="waypoint current" />
+                        }
+                    </svg>
+                }
+                else if (IsCipherWheel)
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-dial-visual-svg" aria-hidden="true">
+                        <circle cx="210" cy="130" r="92" class="orbital-track" />
+                        <circle cx="210" cy="130" r="66" class="orbital-track" />
+                        <circle cx="210" cy="130" r="40" class="orbital-track" />
+                        @foreach (var dial in Dials.Take(3).Select((value, index) => new { value, index }))
+                        {
+                            var radius = 92 - (dial.index * 26);
+                            var angle = dial.value.CurrentPercent * 3.6d;
+                            var x = 210d + (Math.Cos((angle - 90d) * Math.PI / 180d) * radius);
+                            var y = 130d + (Math.Sin((angle - 90d) * Math.PI / 180d) * radius);
+                            <circle cx="@x.ToString("0.###", CultureInfo.InvariantCulture)"
+                                    cy="@y.ToString("0.###", CultureInfo.InvariantCulture)"
+                                    r="7"
+                                    class="wheel-node current" />
+                            @if (ShowTarget)
+                            {
+                                var targetAngle = dial.value.TargetPercent * 3.6d;
+                                var targetX = 210d + (Math.Cos((targetAngle - 90d) * Math.PI / 180d) * radius);
+                                var targetY = 130d + (Math.Sin((targetAngle - 90d) * Math.PI / 180d) * radius);
+                                <circle cx="@targetX.ToString("0.###", CultureInfo.InvariantCulture)"
+                                        cy="@targetY.ToString("0.###", CultureInfo.InvariantCulture)"
+                                        r="6"
+                                        class="wheel-node target" />
+                            }
+                        }
+                        @BuildSvgText(210d, 136d, "center-token", SummaryToken)
+                        @BuildSvgText(210d, 176d, "center-caption", CipherStream)
+                    </svg>
+                }
+                else if (IsGravityWell)
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-dial-visual-svg" aria-hidden="true">
+                        @for (var index = 0; index < Dials.Count; index++)
+                        {
+                            <circle cx="@GetGravityNodeX(index).ToString("0.###", CultureInfo.InvariantCulture)"
+                                    cy="146"
+                                    r="34"
+                                    class="orbital-track" />
+                        }
+                        @if (ShowTarget)
+                        {
+                            <polyline points="@BuildGravityPath(target: true)" class="route-line target" />
+                        }
+                        <polyline points="@BuildGravityPath(target: false)" class="route-line current" />
+                        <circle cx="54" cy="192" r="10" class="beam-emitter" />
+                        @foreach (var dial in Dials.Select((value, index) => new { value, index }))
+                        {
+                            var x = GetGravityNodeX(dial.index);
+                            var y = GetGravityNodeY(dial.value, target: false);
+                            <circle cx="@x.ToString("0.###", CultureInfo.InvariantCulture)"
+                                    cy="@y.ToString("0.###", CultureInfo.InvariantCulture)"
+                                    r="7"
+                                    class="gravity-body current" />
+                            @BuildSvgText(x, Math.Max(36d, y - 16d), "center-caption", GetGravityLabel(dial.index))
+                            @if (ShowTarget)
+                            {
+                                var targetY = GetGravityNodeY(dial.value, target: true);
+                                <circle cx="@x.ToString("0.###", CultureInfo.InvariantCulture)"
+                                        cy="@targetY.ToString("0.###", CultureInfo.InvariantCulture)"
+                                        r="5"
+                                        class="wheel-node target" />
+                            }
+                        }
+                        <circle cx="356" cy="74" r="12" class="receiver-node" />
+                        @BuildSvgText(356d, 54d, "center-caption", ReceiverArc)
+                    </svg>
+                }
+                else if (IsEchoChamber)
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-dial-visual-svg" aria-hidden="true">
+                        <rect x="38" y="28" width="344" height="198" rx="16" class="beam-frame" />
+                        <polyline points="@BuildEchoBeamPoints()" class="beam-path" />
+                        <circle cx="76" cy="130" r="10" class="beam-emitter" />
+                        <circle cx="344" cy="94" r="12" class="receiver-node" />
+                        @BuildSvgText(344d, 68d, "center-caption", BounceWindowLabel)
+                    </svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-dial-visual-svg" aria-hidden="true">
+                        @for (var layer = 0; layer < Math.Max(4, Dials.Count + 1); layer++)
+                        {
+                            var offset = 42 + (layer * 32);
+                            <path d="@BuildFaultLinePath(offset, layer)"
+                                  class="fault-layer @(layer % 2 == 0 ? "primary" : "secondary")" />
+                        }
+                        <line x1="210" y1="26" x2="210" y2="234" class="fault-seam" />
+                        @BuildSvgText(210d, 40d, "center-caption", StressBand)
+                    </svg>
+                }
+            </div>
+
+            <aside class="enigma-advanced-telemetry-panel">
+                <div class="enigma-advanced-telemetry-grid">
+                    <article>
+                        <span>Aligned</span>
+                        <strong>@($"{AlignedCount}/{Dials.Count}")</strong>
+                    </article>
+                    <article>
+                        <span>Target</span>
+                        <strong>@TargetVisibilityLabel</strong>
+                    </article>
+                    <article>
+                        <span>Axis</span>
+                        <strong>@AxisBandLabel</strong>
+                    </article>
+                    <article>
+                        <span>Timer</span>
+                        <strong>@($"{Math.Max(0, Math.Ceiling(View.TimerRemainingSeconds)):0}s")</strong>
+                    </article>
+                </div>
+
+                <div class="enigma-advanced-status-card">
+                    <span class="enigma-kicker">Telemetry</span>
+                    <strong>@VariantHeadline</strong>
+                    <p>@View.StatusText</p>
+                    <small class="enigma-dial-stage-note">@InteractionHint</small>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="enigma-dial-bank">
+        @foreach (var dial in Dials)
+        {
+            <article class="enigma-dial-bank-card @(dial.Aligned ? "aligned" : string.Empty)">
+                <header>
+                    <span>@dial.Label</span>
+                    <strong>@dial.Current / @(ShowTarget ? dial.TargetText : "MASK")</strong>
+                </header>
+                <div class="enigma-dial-bank-track interactive">
+                    <div class="fill" style="@($"width:{dial.CurrentPercent.ToString("0.###", CultureInfo.InvariantCulture)}%;")"></div>
+                    @if (ShowTarget)
+                    {
+                        <span class="marker" style="@($"left:{dial.TargetPercent.ToString("0.###", CultureInfo.InvariantCulture)}%;")"></span>
+                    }
+                    <input class="enigma-dial-bank-slider"
+                           type="range"
+                           min="0"
+                           max="@dial.Max"
+                           step="1"
+                           value="@GetDialDisplayValue(dial.Key, dial.Current)"
+                           @oninput="((ChangeEventArgs args) => DispatchDialRangeAsync(dial, args.Value))" />
+                </div>
+                <div class="enigma-dial-bank-meta">
+                    <small>@(dial.Aligned ? "Aligned" : $"Drift {dial.Distance}")</small>
+                    <small>@dial.Key.ToUpperInvariant()</small>
+                </div>
+                <div class="enigma-dial-bank-controls refined">
+                    <button class="btn enigma-panel-action tone-dial"
+                            disabled="@(dial.DownAction is null || !dial.DownAction.Value.Enabled)"
+                            @onclick="(() => DispatchAsync(dial.DownAction?.Command))">
+                        Down
+                    </button>
+                    <button class="btn enigma-panel-action tone-dial"
+                            disabled="@(dial.UpAction is null || !dial.UpAction.Value.Enabled)"
+                            @onclick="(() => DispatchAsync(dial.UpAction?.Command))">
+                        Up
+                    </button>
+                </div>
+            </article>
+        }
+    </section>
+
+    <div class="enigma-advanced-action-row">
+        @if (CommitAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-commit"
+                    disabled="@(!CommitAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(CommitAction.Value.Command))">
+                Commit
+            </button>
+        }
+        @if (ResetAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-reset"
+                    disabled="@(!ResetAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(ResetAction.Value.Command))">
+                Reset
+            </button>
+        }
+        @if (HintAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-hint"
+                    disabled="@(!HintAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(HintAction.Value.Command))">
+                Hint
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required SoloPanelView View { get; set; }
+
+    [Parameter, EditorRequired]
+    public required EventCallback<string> OnAction { get; set; }
+
+    private readonly Dictionary<string, int> _pendingDialValues = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly record struct DialVm(
+        string Key,
+        string Label,
+        int Current,
+        int Max,
+        string TargetText,
+        double CurrentPercent,
+        double TargetPercent,
+        int Distance,
+        bool Aligned,
+        SoloPanelActionItem? DownAction,
+        SoloPanelActionItem? UpAction);
+
+    private string FamilyCss => $"family-{View.FamilyId}";
+    private string DifficultyCss => $"diff-{DifficultyKey}";
+    private string DensityCss => $"density-{GetBoardText("visual:density", "balanced")}";
+    private string DifficultyKey => GetBoardText("visual:difficulty", "medium");
+    private string DifficultyLabel => GetBoardText("visual:difficulty_label", DifficultyKey.ToUpperInvariant());
+    private string FamilyTitle => GetBoardText("visual:family_title", View.FamilyId.Replace('_', ' '));
+    private string Subtitle => GetBoardText("dialviz:subtitle", "Channel telemetry");
+    private string SummaryToken => GetBoardText("dialviz:summary_token", "LOCK");
+    private string CipherStream => GetBoardText("cipher_wheel:token_stream", SummaryToken);
+    private string ReceiverArc => GetBoardText("gravity_well:receiver_arc", "000 deg");
+    private string BounceWindowLabel => $"Bounce {GetBoardText("echo_chamber:bounce_window", "3")}";
+    private string StressBand => $"Stress {GetBoardText("fault_line:stress_band", "00%")}";
+    private string TargetVisibilityLabel => ShowTarget ? "Visible" : "Concealed";
+    private string AxisBandLabel => GetBoardText("visual:guidance", "medium").ToUpperInvariant();
+    private string VariantHeadline => View.FamilyId switch
+    {
+        "dead_reckoning" => "Route Plot",
+        "cipher_wheel" => "Decoder Drum",
+        "gravity_well" => "Projected Trajectory",
+        "echo_chamber" => "Beam Return",
+        "fault_line" => "Seam Alignment",
+        _ => "Telemetry",
+    };
+    private string InteractionHint => View.FamilyId switch
+    {
+        "gravity_well" => "Drag the scrub bar to bend the live route through each well and into the receiver window.",
+        "dead_reckoning" => "Scrub each vector until the live route overlays the target route.",
+        "cipher_wheel" => "Drag each drum for coarse movement, then use Down and Up for fine correction.",
+        "echo_chamber" => "Adjust reflector banks until the live beam path lands on the receiver.",
+        "fault_line" => "Shift each seam until the live fault profile settles on the target line.",
+        _ => "Use the scrub bar for coarse tuning and the buttons for fine adjustment.",
+    };
+    private bool ShowTarget => GetBoardText("dialviz:show_target", "1") == "1";
+    private bool IsDeadReckoning => string.Equals(View.FamilyId, "dead_reckoning", StringComparison.OrdinalIgnoreCase);
+    private bool IsCipherWheel => string.Equals(View.FamilyId, "cipher_wheel", StringComparison.OrdinalIgnoreCase);
+    private bool IsGravityWell => string.Equals(View.FamilyId, "gravity_well", StringComparison.OrdinalIgnoreCase);
+    private bool IsEchoChamber => string.Equals(View.FamilyId, "echo_chamber", StringComparison.OrdinalIgnoreCase);
+    private int AlignedCount => Dials.Count(dial => dial.Aligned);
+    private SoloPanelActionItem? CommitAction => FindAction("commit");
+    private SoloPanelActionItem? ResetAction => FindAction("reset");
+    private SoloPanelActionItem? HintAction => FindAction("hint");
+
+    protected override void OnParametersSet()
+    {
+        foreach (var dial in Dials)
+        {
+            _pendingDialValues[dial.Key] = dial.Current;
+        }
+    }
+
+    private IReadOnlyList<DialVm> Dials =>
+        View.Actions
+            .Select(action => TryParseDialCommand(action.Command, out var key, out _) ? key : null)
+            .Where(static key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(static key => ExtractNumericSuffix(key!), Comparer<int>.Default)
+            .Select(static key => key!)
+            .Select(BuildDial)
+            .ToArray();
+
+    private DialVm BuildDial(string key)
+    {
+        var label = GetBoardText($"dialviz:{key}:label", key.ToUpperInvariant());
+        var current = GetBoardInt($"cur:{key}");
+        var max = Math.Max(1, GetBoardInt($"max:{key}", 1));
+        var currentPercent = GetBoardDouble($"dialviz:{key}:current_pct", (current / (double)max) * 100d);
+        var targetText = GetBoardText($"tgt:{key}", "--");
+        var targetPercent = GetBoardDouble($"dialviz:{key}:target_pct", 0d);
+        var distance = GetBoardInt($"dialviz:{key}:distance", 0);
+        var aligned = GetBoardText($"dialviz:{key}:aligned", "0") == "1";
+        TryGetDialAction(key, "down", out var downAction);
+        TryGetDialAction(key, "up", out var upAction);
+        return new DialVm(key, label, current, max, targetText, currentPercent, targetPercent, distance, aligned, downAction, upAction);
+    }
+
+    private string BuildRoutePoints(bool target)
+    {
+        var builder = new StringBuilder();
+        for (var index = 0; index < Dials.Count; index++)
+        {
+            var x = GetWaypointX(index);
+            var y = target ? GetWaypointY(Dials[index], target: true) : GetWaypointY(Dials[index], target: false);
+            if (builder.Length > 0)
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(x.ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(',')
+                .Append(y.ToString("0.###", CultureInfo.InvariantCulture));
+        }
+
+        return builder.ToString();
+    }
+
+    private double GetWaypointX(int index) =>
+        34d + (index * (352d / Math.Max(1, Dials.Count - 1)));
+
+    private static double GetWaypointY(DialVm dial, bool target) =>
+        220d - ((target ? dial.TargetPercent : dial.CurrentPercent) * 1.72d);
+
+    private string BuildGravityPath(bool target)
+    {
+        var builder = new StringBuilder("54,192");
+        for (var index = 0; index < Dials.Count; index++)
+        {
+            var x = GetGravityNodeX(index);
+            var y = GetGravityNodeY(Dials[index], target);
+            builder.Append(' ')
+                .Append(x.ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(',')
+                .Append(y.ToString("0.###", CultureInfo.InvariantCulture));
+        }
+
+        builder.Append(" 356,74");
+        return builder.ToString();
+    }
+
+    private double GetGravityNodeX(int index) =>
+        86d + (index * (210d / Math.Max(1, Dials.Count - 1)));
+
+    private double GetGravityNodeY(DialVm dial, bool target) =>
+        198d - ((target ? dial.TargetPercent : dial.CurrentPercent) * 0.92d);
+
+    private static string GetGravityLabel(int index) => $"Well {(char)('A' + index)}";
+
+    private string BuildEchoBeamPoints()
+    {
+        if (Dials.Count == 0)
+        {
+            return "76,130 344,94";
+        }
+
+        var points = new List<string> { "76,130" };
+        var x = 76d;
+        var y = 130d;
+        var direction = 1d;
+        foreach (var dial in Dials.Take(4))
+        {
+            x += 62d;
+            y += ((dial.CurrentPercent / 100d) - 0.5d) * 84d * direction;
+            y = Math.Clamp(y, 48d, 206d);
+            direction *= -1d;
+            points.Add($"{x.ToString("0.###", CultureInfo.InvariantCulture)},{y.ToString("0.###", CultureInfo.InvariantCulture)}");
+        }
+
+        points.Add("344,94");
+        return string.Join(' ', points);
+    }
+
+    private string BuildFaultLinePath(double offset, int layer)
+    {
+        var builder = new StringBuilder();
+        builder.Append("M26 ")
+            .Append(offset.ToString("0.###", CultureInfo.InvariantCulture));
+        for (var index = 0; index < Math.Max(1, Dials.Count); index++)
+        {
+            var dial = Dials[index];
+            var x = 26d + ((index + 1d) * (368d / (Dials.Count + 1d)));
+            var amplitude = ((dial.CurrentPercent / 100d) - 0.5d) * (16d + (layer * 3d));
+            var y = offset + amplitude;
+            builder.Append(" L")
+                .Append(x.ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(' ')
+                .Append(y.ToString("0.###", CultureInfo.InvariantCulture));
+        }
+
+        builder.Append(" L394 ")
+            .Append((offset + (layer % 2 == 0 ? 8d : -8d)).ToString("0.###", CultureInfo.InvariantCulture));
+        return builder.ToString();
+    }
+
+    private SoloPanelActionItem? FindAction(string command) =>
+        View.Actions.FirstOrDefault(action => string.Equals(action.Command, command, StringComparison.OrdinalIgnoreCase));
+
+    private void TryGetDialAction(string key, string direction, out SoloPanelActionItem? result)
+    {
+        result = View.Actions.FirstOrDefault(action =>
+            TryParseDialCommand(action.Command, out var candidateKey, out var candidateDirection) &&
+            string.Equals(candidateKey, key, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(candidateDirection, direction, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task DispatchAsync(string? command)
+    {
+        if (!OnAction.HasDelegate || string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        await OnAction.InvokeAsync(command);
+    }
+
+    private static MarkupString BuildSvgText(double x, double y, string cssClass, string text)
+    {
+        var encoded = System.Net.WebUtility.HtmlEncode(text ?? string.Empty);
+        var markup = string.Create(
+            CultureInfo.InvariantCulture,
+            $"<text x=\"{x:0.###}\" y=\"{y:0.###}\" text-anchor=\"middle\" class=\"{cssClass}\">{encoded}</text>");
+        return (MarkupString)markup;
+    }
+
+    private int GetDialDisplayValue(string key, int fallback) =>
+        _pendingDialValues.TryGetValue(key, out var value) ? value : fallback;
+
+    private async Task DispatchDialRangeAsync(DialVm dial, object? rawValue)
+    {
+        if (rawValue is null)
+        {
+            return;
+        }
+
+        var text = Convert.ToString(rawValue, CultureInfo.InvariantCulture) ?? string.Empty;
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var desired))
+        {
+            return;
+        }
+
+        desired = Math.Clamp(desired, 0, dial.Max);
+        var current = GetDialDisplayValue(dial.Key, dial.Current);
+        if (desired == current)
+        {
+            return;
+        }
+
+        var upSteps = desired >= current
+            ? desired - current
+            : (dial.Max + 1 - current) + desired;
+        var downSteps = current >= desired
+            ? current - desired
+            : current + (dial.Max + 1 - desired);
+
+        var useUp = upSteps <= downSteps;
+        var steps = useUp ? upSteps : downSteps;
+        var action = useUp ? dial.UpAction : dial.DownAction;
+        if (action is null || !action.Value.Enabled)
+        {
+            return;
+        }
+
+        _pendingDialValues[dial.Key] = desired;
+        for (var step = 0; step < steps; step++)
+        {
+            await DispatchAsync(action.Value.Command);
+        }
+    }
+
+    private static bool TryParseDialCommand(string command, out string key, out string direction)
+    {
+        key = string.Empty;
+        direction = string.Empty;
+        if (!command.StartsWith("dial:", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var parts = command.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 3)
+        {
+            return false;
+        }
+
+        key = parts[1];
+        direction = parts[2];
+        return true;
+    }
+
+    private static int ExtractNumericSuffix(string value)
+    {
+        var builder = new StringBuilder();
+        foreach (var character in value)
+        {
+            if (char.IsDigit(character))
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.Length == 0 || !int.TryParse(builder.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? int.MaxValue
+            : parsed;
+    }
+
+    private int GetBoardInt(string key, int fallback = 0) =>
+        View.Board.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private double GetBoardDouble(string key, double fallback = 0d) =>
+        View.Board.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private string GetBoardText(string key, string fallback = "") =>
+        View.Board.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+}

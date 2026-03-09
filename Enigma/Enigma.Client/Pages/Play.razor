@@ -4,7 +4,7 @@
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @using Microsoft.JSInterop
 
-<SeoHead Title="Enigma Play | Enter Anomaly Sector"
+<SeoHead Title="Enigma Expeditions | Enter Anomaly Sector"
          Description="Initialize a new anomaly sector, load a mapped sector, assign field tools, and begin your expedition."
          Robots="noindex,follow"
          OpenGraphType="website"
@@ -14,17 +14,17 @@
 
     <section class="play-page-header play-page-banner" data-tour-id="play-banner">
         <div class="play-page-header-copy">
-            <h1 class="mb-2">Enter Anomaly Sector</h1>
+            <h1 class="mb-2">Start an Expedition</h1>
         </div>
         <div class="play-header-actions">
-            <button class="btn btn-secondary" type="button" data-tour-id="play-open-coop" @onclick="OpenCoopLobby">Co-op Command</button>
+            <button class="btn btn-secondary" type="button" data-tour-id="play-open-coop" @onclick="OpenCoopLobby">Co-op Operation</button>
         </div>
     </section>
 
     <div class="play-setup-grid" data-tour-id="play-setup-grid">
         <div class="play-forms-column">
             <div class="card shadow-sm p-4 mb-4 play-card">
-                <h4 class="mb-3">Initialize New Sector</h4>
+                <h4 class="mb-3">Request an Expedition</h4>
 
                 <EditForm FormName="NewForm" OnValidSubmit="OnNewClick" Model="newMazeRequest">
                     <DataAnnotationsValidator />
@@ -38,7 +38,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label">Sector Size</label>
+                        <label class="form-label">Anomaly Size</label>
                         <EnigmaIntStepper Class="form-control"
                                           Min="2"
                                           Max="250"
@@ -47,7 +47,7 @@
                     </div>
 
                     <button class="btn btn-success w-100" disabled="@IsBusy">
-                        @(IsBusy ? "Initializing..." : "Initialize Sector")
+                        @(IsBusy ? "Initializing..." : "Send Expedition Request")
                     </button>
                 </EditForm>
             </div>
@@ -86,7 +86,7 @@
 
             @if (Inventory.Count == 0)
             {
-                <div class="empty-state-inline">No owned items yet. Buy items from the marketplace item shop.</div>
+                <div class="empty-state-inline">No owned items yet. Buy items from the exchange item shop.</div>
             }
             else
             {
@@ -120,13 +120,32 @@
         <div class="alert alert-warning">@StatusMessage</div>
     }
 
+    @if (IsAudioPromptOpen)
+    {
+        <div class="enigma-modal-backdrop">
+            <div class="enigma-modal-card fullscreen-modal-card">
+                <span class="profile-kicker">Before You Enter</span>
+                <h2>Enable Audio?</h2>
+                <p>Allow game ambiance and radar audio for this run. Best experienced with headphones, but you can continue muted if you prefer.</p>
+                <label class="fullscreen-optout-toggle">
+                    <input type="checkbox" @bind="DoNotAskAudioAgain" />
+                    <span>Don't ask me again</span>
+                </label>
+                <div class="enigma-end-actions">
+                    <button class="btn btn-primary" @onclick="EnableAudioAndContinueAsync">Enable Audio</button>
+                    <button class="btn btn-secondary" @onclick="StartMutedAndContinueAsync">Continue Muted</button>
+                </div>
+            </div>
+        </div>
+    }
+
     @if (IsFullscreenPromptOpen)
     {
         <div class="enigma-modal-backdrop">
             <div class="enigma-modal-card fullscreen-modal-card">
                 <span class="profile-kicker">Before You Enter</span>
                 <h2>Go Fullscreen?</h2>
-                <p>The maze plays better fullscreen. You can keep playing windowed if you want.</p>
+                <p>The anomaly interface plays better fullscreen. You can keep playing windowed if you want.</p>
                 <label class="fullscreen-optout-toggle">
                     <input type="checkbox" @bind="DoNotAskFullscreenAgain" />
                     <span>Don't ask me again</span>
@@ -149,8 +168,11 @@
     private LoadMazeRequest loadMazeRequest = new();
     private bool IsBusy { get; set; }
     private bool HasError { get; set; }
+    private bool IsAudioPromptOpen { get; set; }
     private bool IsFullscreenPromptOpen { get; set; }
+    private bool DoNotAskAudioAgain { get; set; }
     private bool DoNotAskFullscreenAgain { get; set; }
+    private string AudioPreference { get; set; } = string.Empty;
     private string FullscreenPreference { get; set; } = string.Empty;
     private string StatusMessage { get; set; } = string.Empty;
     private string? PendingGameNavigationUrl { get; set; }
@@ -177,6 +199,8 @@
             return;
         }
 
+        AudioPreference = await GetAudioPreferenceSafeAsync();
+        DoNotAskAudioAgain = !string.IsNullOrWhiteSpace(AudioPreference);
         FullscreenPreference = await GetFullscreenPreferenceSafeAsync();
         DoNotAskFullscreenAgain = !string.IsNullOrWhiteSpace(FullscreenPreference);
         await LoadInventoryAsync();
@@ -216,7 +240,7 @@
 
             if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(payload?.Seed))
             {
-                throw new InvalidOperationException(await ExtractErrorDetailAsync(response, "Unable to generate a maze right now."));
+                throw new InvalidOperationException(await ExtractErrorDetailAsync(response, "Unable to initialize a sector right now."));
             }
 
             await BeginRunAsync($"/game?seed={Uri.EscapeDataString(payload.Seed)}&source=new");
@@ -248,7 +272,7 @@
 
             if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(payload?.Seed))
             {
-                throw new InvalidOperationException(await ExtractErrorDetailAsync(response, "Unable to load that saved maze."));
+                throw new InvalidOperationException(await ExtractErrorDetailAsync(response, "Unable to load that mapped sector."));
             }
 
             await BeginRunAsync($"/game?seed={Uri.EscapeDataString(payload.Seed)}&source=load&mapName={Uri.EscapeDataString(loadMazeRequest.MapName)}");
@@ -290,23 +314,7 @@
 
         await JS.InvokeVoidAsync("enigmaGame.setRunLoadout", loadout);
 
-        FullscreenPreference = await GetFullscreenPreferenceSafeAsync();
-        if (string.Equals(FullscreenPreference, "fullscreen", StringComparison.OrdinalIgnoreCase))
-        {
-            await JS.InvokeAsync<bool>("enigmaGame.requestFullscreen", string.Empty);
-            await StartRunNavigationAsync();
-            return;
-        }
-
-        if (string.Equals(FullscreenPreference, "windowed", StringComparison.OrdinalIgnoreCase))
-        {
-            await StartRunNavigationAsync();
-            return;
-        }
-
-        DoNotAskFullscreenAgain = false;
-        IsFullscreenPromptOpen = true;
-        await InvokeAsync(StateHasChanged);
+        await ContinueRunAfterAudioGateAsync();
     }
 
     private async Task EnterFullscreenAndStartAsync()
@@ -340,6 +348,134 @@
         }
 
         await StartRunNavigationAsync();
+    }
+
+    private async Task EnableAudioAndContinueAsync()
+    {
+        if (DoNotAskAudioAgain)
+        {
+            AudioPreference = "enabled";
+            await PersistAudioPreferenceAsync(AudioPreference);
+        }
+        else
+        {
+            AudioPreference = string.Empty;
+            await PersistAudioPreferenceAsync(string.Empty);
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.approveAudioForCurrentRun", true);
+        }
+        catch (JSException)
+        {
+        }
+
+        IsAudioPromptOpen = false;
+        await ContinueRunAfterFullscreenGateAsync();
+    }
+
+    private async Task StartMutedAndContinueAsync()
+    {
+        if (DoNotAskAudioAgain)
+        {
+            AudioPreference = "disabled";
+            await PersistAudioPreferenceAsync(AudioPreference);
+        }
+        else
+        {
+            AudioPreference = string.Empty;
+            await PersistAudioPreferenceAsync(string.Empty);
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("enigmaGame.approveAudioForCurrentRun", false);
+        }
+        catch (JSException)
+        {
+        }
+
+        IsAudioPromptOpen = false;
+        await ContinueRunAfterFullscreenGateAsync();
+    }
+
+    private async Task ContinueRunAfterAudioGateAsync()
+    {
+        AudioPreference = await GetAudioPreferenceSafeAsync();
+        if (string.IsNullOrWhiteSpace(AudioPreference))
+        {
+            DoNotAskAudioAgain = false;
+            IsAudioPromptOpen = true;
+            IsFullscreenPromptOpen = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (string.Equals(AudioPreference, "enabled", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("enigmaGame.approveAudioForCurrentRun", true);
+            }
+            catch (JSException)
+            {
+            }
+        }
+        else
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("enigmaGame.approveAudioForCurrentRun", false);
+            }
+            catch (JSException)
+            {
+            }
+        }
+
+        await ContinueRunAfterFullscreenGateAsync();
+    }
+
+    private async Task ContinueRunAfterFullscreenGateAsync()
+    {
+        FullscreenPreference = await GetFullscreenPreferenceSafeAsync();
+        if (string.Equals(FullscreenPreference, "fullscreen", StringComparison.OrdinalIgnoreCase))
+        {
+            await JS.InvokeAsync<bool>("enigmaGame.requestFullscreen", string.Empty);
+            await StartRunNavigationAsync();
+            return;
+        }
+
+        if (string.Equals(FullscreenPreference, "windowed", StringComparison.OrdinalIgnoreCase))
+        {
+            await StartRunNavigationAsync();
+            return;
+        }
+
+        DoNotAskFullscreenAgain = false;
+        IsFullscreenPromptOpen = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<string> GetAudioPreferenceSafeAsync()
+    {
+        try
+        {
+            return await JS.InvokeAsync<string>("enigmaGame.getAudioPreference");
+        }
+        catch (JSException)
+        {
+            try
+            {
+                return await JS.InvokeAsync<bool>("enigmaGame.getAudioOptOut")
+                    ? "disabled"
+                    : string.Empty;
+            }
+            catch (JSException)
+            {
+                return string.Empty;
+            }
+        }
     }
 
     private async Task<string> GetFullscreenPreferenceSafeAsync()
@@ -394,8 +530,40 @@
         }
     }
 
+    private async Task PersistAudioPreferenceAsync(string mode)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(mode))
+            {
+                await JS.InvokeVoidAsync("enigmaGame.clearAudioPreference");
+                return;
+            }
+
+            await JS.InvokeVoidAsync("enigmaGame.setAudioPreference", mode);
+        }
+        catch (JSException)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync(
+                    "enigmaGame.setAudioOptOut",
+                    string.Equals(mode, "disabled", StringComparison.OrdinalIgnoreCase));
+            }
+            catch (JSException)
+            {
+            }
+        }
+    }
+
     private async Task TryApplyStoredFullscreenAsync()
     {
+        AudioPreference = await GetAudioPreferenceSafeAsync();
+        if (string.IsNullOrWhiteSpace(AudioPreference))
+        {
+            return;
+        }
+
         FullscreenPreference = await GetFullscreenPreferenceSafeAsync();
         if (!string.Equals(FullscreenPreference, "fullscreen", StringComparison.OrdinalIgnoreCase))
         {
@@ -413,6 +581,7 @@
 
     private Task StartRunNavigationAsync()
     {
+        IsAudioPromptOpen = false;
         IsFullscreenPromptOpen = false;
         if (!string.IsNullOrWhiteSpace(PendingGameNavigationUrl))
         {
@@ -494,7 +663,7 @@
         if (string.IsNullOrWhiteSpace(raw))
         {
             return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
-                ? "Maze generation is temporarily rate-limited. Wait a moment, then try again."
+                ? "Sector initialization is temporarily rate-limited. Wait a moment, then try again."
                 : fallback;
         }
 
@@ -530,7 +699,7 @@
         [Required]
         public Difficulty Difficulty { get; set; } = Difficulty.Easy;
 
-        [Range(2, 250, ErrorMessage = "A map's dimensions must be between 2 and 250.")]
+        [Range(2, 250, ErrorMessage = "A sector's dimensions must be between 2 and 250.")]
         public int Size { get; set; } = 4;
     }
 

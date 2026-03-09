@@ -5,8 +5,8 @@
 @inject IJSRuntime JS
 @inject Enigma.Client.Services.EnigmaApiClient Api
 
-<SeoHead Title="Enigma Run Complete | Maze Cleared"
-         Description="Review the completion summary for a finished Enigma maze run."
+<SeoHead Title="Enigma Expedition Complete | Sector Cleared"
+         Description="Review the completion summary for a finished Enigma sector expedition."
          Robots="noindex,nofollow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -16,7 +16,7 @@
     <div class="content">
         <div class="card enigma-game-message">
             <div class="loader"></div>
-            <p>Loading run summary...</p>
+            <p>Loading expedition summary...</p>
         </div>
     </div>
 }
@@ -24,11 +24,11 @@ else if (!IsWin || Summary is null)
 {
     <div class="content">
         <div class="card enigma-game-message">
-            <h1>Run Complete</h1>
-            <p>@(LoadError ?? "No game summary is available for this run.")</p>
+            <h1>Expedition Complete</h1>
+            <p>@(LoadError ?? "No expedition summary is available for this session.")</p>
             <div class="enigma-end-actions">
-                <button class="btn btn-primary" @onclick="GoHome">Main Menu</button>
-                <button class="btn btn-secondary" @onclick="GoPlay">Back to Play</button>
+                <button class="btn btn-primary" @onclick="GoHome">Command Hub</button>
+                <button class="btn btn-secondary" @onclick="GoPlay">Back to Expeditions</button>
             </div>
         </div>
     </div>
@@ -37,11 +37,11 @@ else
 {
     <div class="content enigma-end-page">
         <div class="card enigma-end-card">
-            <span class="enigma-kicker">Escape Logged</span>
-            <h1>Maze Cleared</h1>
+            <span class="enigma-kicker">Expedition Logged</span>
+            <h1>Anomaly Cleared</h1>
             <div class="enigma-end-grid">
                 <div>
-                    <span>Player</span>
+                    <span>Explorer</span>
                     <strong>@Summary.Username</strong>
                 </div>
                 <div>
@@ -60,11 +60,11 @@ else
 
             <div class="enigma-end-grid compact">
                 <div>
-                    <span>Map Source</span>
-                    <strong>@(Summary.SeedExisted || Summary.Source == "load" ? "Existing map" : "Generated seed")</strong>
+                    <span>Sector Source</span>
+                    <strong>@(Summary.SeedExisted || Summary.Source == "load" ? "Existing sector" : "Generated anomaly seed")</strong>
                 </div>
                 <div>
-                    <span>Maze Size</span>
+                    <span>Sector Size</span>
                     <strong>@Summary.Size x @Summary.Size</strong>
                 </div>
                 <div>
@@ -91,8 +91,8 @@ else
                     <div>
                         <span>Ownership</span>
                         <strong>@((Summary.Source != "load" && !Summary.SeedExisted)
-                            ? (Summary.IsSessionOwner ? "Host owns the saved maze" : "Host becomes owner when saved")
-                            : "Map ownership unchanged")</strong>
+                            ? (Summary.IsSessionOwner ? "Host controls the saved sector" : "Host becomes controller when saved")
+                            : "Sector ownership unchanged")</strong>
                     </div>
                     <div>
                         <span>Discovery</span>
@@ -102,14 +102,14 @@ else
             }
 
             <div class="enigma-form-block">
-                <label class="form-label">Map Name</label>
+                <label class="form-label">Sector Name</label>
                 @if (Summary.SeedExisted || Summary.Source == "load")
                 {
                     <input class="form-control" value="@MapName" readonly />
                 }
                 else
                 {
-                    <input class="form-control" @bind="MapName" maxlength="50" placeholder="Enter a name for this maze" />
+                    <input class="form-control" @bind="MapName" maxlength="50" placeholder="Enter a designation for this sector" />
                 }
             </div>
 
@@ -119,7 +119,7 @@ else
                                   Min="1"
                                   Max="10"
                                   @bind-Value="Rating" />
-                <small class="enigma-helper">Required by the backend when submitting or updating a map.</small>
+                <small class="enigma-helper">Required by the backend when submitting or updating a sector.</small>
             </div>
 
             @if (!SubmissionSucceeded && !string.IsNullOrWhiteSpace(StatusMessage))
@@ -131,11 +131,11 @@ else
                 @if (!Summary.IsMultiplayer || Summary.CanSubmitMapRecord)
                 {
                     <button class="btn btn-success" disabled="@IsSubmitting" @onclick="SubmitResultAsync">
-                        @(IsSubmitting ? "Submitting..." : Summary.HasBeenSubmitted ? "Submitted" : "Submit Result")
+                        @(IsSubmitting ? "Submitting..." : Summary.HasBeenSubmitted ? "Submitted" : "Submit Sector Data")
                     </button>
                 }
-                <button class="btn btn-primary" @onclick="RetryMaze">Play Again</button>
-                <button class="btn btn-secondary" @onclick="GoHome">Main Menu</button>
+                <button class="btn btn-primary" @onclick="RetryMaze">Redeploy</button>
+                <button class="btn btn-secondary" @onclick="GoHome">Command Hub</button>
             </div>
         </div>
     </div>
@@ -167,7 +167,7 @@ else
         Summary = await JS.InvokeAsync<GameCompletionSummary?>("enigmaGame.sessionGetJson", CompletionSummaryStorageKey);
         if (Summary is null)
         {
-            LoadError = "Finish a maze from the Game page before visiting the result screen.";
+            LoadError = "Finish a sector from the Game page before visiting the result screen.";
             IsLoading = false;
             await InvokeAsync(StateHasChanged);
             return;
@@ -191,7 +191,7 @@ else
         if (string.IsNullOrWhiteSpace(Summary.Username) || string.Equals(Summary.Username, "Guest", StringComparison.OrdinalIgnoreCase))
         {
             SubmissionSucceeded = false;
-            StatusMessage = "Log in before submitting a completed run.";
+            StatusMessage = "Log in before submitting a completed expedition.";
             return;
         }
 
@@ -205,7 +205,7 @@ else
         if (!Summary.SeedExisted && Summary.Source == "new" && string.IsNullOrWhiteSpace(MapName))
         {
             SubmissionSucceeded = false;
-            StatusMessage = "Map name is required for a newly generated maze.";
+            StatusMessage = "Sector name is required for a newly generated anomaly seed.";
             return;
         }
 
@@ -247,7 +247,7 @@ else
             await JS.InvokeVoidAsync("enigmaGame.clearPendingLossSummary");
             await JS.InvokeVoidAsync("enigmaGame.clearRunLoadout");
             SubmissionSucceeded = true;
-            StatusMessage = "Run submitted successfully.";
+            StatusMessage = "Expedition data submitted successfully.";
         }
         catch (Exception exception)
         {
@@ -276,7 +276,7 @@ else
             time = completionTime,
             rating = Rating,
         });
-        await EnsureSuccessAsync(response, "Unable to save the new map.");
+        await EnsureSuccessAsync(response, "Unable to save the new sector.");
     }
 
     private async Task UpdateExistingMapAsync(TimeOnly completionTime)
@@ -292,7 +292,7 @@ else
             time = completionTime,
             rating = Rating,
         });
-        await EnsureSuccessAsync(response, "Unable to update the existing map.");
+        await EnsureSuccessAsync(response, "Unable to update the existing sector.");
     }
 
     private async Task UpdateUserProgressAsync(bool seedExisted)
@@ -310,7 +310,7 @@ else
             seedExisted,
             mapLost = false,
         });
-        await EnsureSuccessAsync(response, "Unable to update the player progress.");
+        await EnsureSuccessAsync(response, "Unable to update explorer progression.");
     }
 
     private async Task SyncSavedMultiplayerMapAsync()
@@ -325,7 +325,7 @@ else
             sessionId = Summary.MultiplayerSessionId,
             mapName = MapName,
         });
-        await EnsureSuccessAsync(response, "Unable to sync co-op discoverers after saving the map.");
+        await EnsureSuccessAsync(response, "Unable to sync co-op discoverers after saving the sector.");
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, string prefix)

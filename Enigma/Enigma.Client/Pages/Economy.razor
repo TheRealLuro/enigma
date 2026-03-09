@@ -7,8 +7,8 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<SeoHead Title="Enigma Economy | Research Market, Staking, and Council Voting"
-         Description="Track MN reserves, sector circulation, explorer activity, and coordinate marketplace, staking, and council voting from one economy hub."
+<SeoHead Title="Enigma Research Economy | Overview, Analysis, and Council Voting"
+         Description="Track MN reserves, sector circulation, explorer activity, and manage analysis and council voting from one research hub."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -34,13 +34,16 @@ else
             <div>
                 <span class="profile-eyebrow">Research Economy</span>
                 <h1>Anomaly Market Pulse</h1>
-                <p>Monitor MN reserves, sector circulation, explorer activity, and council spend in one place.</p>
+                <p>Monitor MN reserves, sector circulation, explorer activity, and council spend in one place. Exchange trading now runs on its own page.</p>
             </div>
             <div class="economy-banner-meta">
                 @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))
                 {
                     <span class="profile-chip">Snapshot @FormatTimestamp(Overview.GeneratedAt)</span>
                 }
+                <button class="btn btn-secondary" type="button" @onclick='@(() => NavigationManager.NavigateTo("/marketplace"))'>
+                    Exchange
+                </button>
                 <button class="btn btn-secondary" type="button" disabled="@IsLoading" @onclick="ReloadAsync">
                     @(IsLoading ? "Refreshing..." : "Refresh")
                 </button>
@@ -54,9 +57,8 @@ else
 
         <div class="profile-tabbar economy-tabbar">
             <button class="@GetTabClass(OverviewTab)" type="button" data-tour-id="economy-tab-overview" @onclick='@(() => SetActiveTab(OverviewTab))'>Overview</button>
-            <button class="@GetTabClass(MarketplaceTab)" type="button" data-tour-id="economy-tab-marketplace" @onclick='@(() => SetActiveTab(MarketplaceTab))'>Marketplace</button>
-            <button class="@GetTabClass(StakingTab)" type="button" data-tour-id="economy-tab-staking" @onclick='@(() => SetActiveTab(StakingTab))'>Staking</button>
-            <button class="@GetTabClass(VotingTab)" type="button" data-tour-id="economy-tab-voting" @onclick='@(() => SetActiveTab(VotingTab))'>Voting</button>
+            <button class="@GetTabClass(StakingTab)" type="button" data-tour-id="economy-tab-staking" @onclick='@(() => SetActiveTab(StakingTab))'>Analysis</button>
+            <button class="@GetTabClass(VotingTab)" type="button" data-tour-id="economy-tab-voting" @onclick='@(() => SetActiveTab(VotingTab))'>Council Voting</button>
         </div>
 
         @if (ActiveTab == OverviewTab)
@@ -65,15 +67,15 @@ else
                 <article class="economy-kpi-card">
                     <span class="economy-kpi-label">Total MN Supply</span>
                     <strong class="economy-kpi-value" @key="Overview?.GeneratedAt">@((Overview?.MnTotalKnown ?? 0).ToString("N0")) MN</strong>
-                    <span class="economy-kpi-sub">Known wallets plus bank reserve</span>
+                    <span class="economy-kpi-sub">Known explorer reserves plus bank reserve</span>
                 </article>
                 <article class="economy-kpi-card">
-                    <span class="economy-kpi-label">Maps Tracked</span>
+                    <span class="economy-kpi-label">Sectors Tracked</span>
                     <strong class="economy-kpi-value" @key="Overview?.GeneratedAt">@((Overview?.MapsTotal ?? 0).ToString("N0"))</strong>
-                    <span class="economy-kpi-sub">@((Overview?.MapsListed ?? 0).ToString("N0")) listed | @((Overview?.MapsStaked ?? 0).ToString("N0")) staked</span>
+                    <span class="economy-kpi-sub">@((Overview?.MapsListed ?? 0).ToString("N0")) listed | @((Overview?.MapsStaked ?? 0).ToString("N0")) under analysis</span>
                 </article>
                 <article class="economy-kpi-card">
-                    <span class="economy-kpi-label">Players Online</span>
+                    <span class="economy-kpi-label">Explorers Online</span>
                     <strong class="economy-kpi-value" @key="Overview?.GeneratedAt">@((Overview?.UsersOnlineNow ?? 0).ToString("N0"))</strong>
                     <span class="economy-kpi-sub">@((Overview?.UsersActive24h ?? 0).ToString("N0")) active in 24h</span>
                 </article>
@@ -93,7 +95,7 @@ else
                         <div class="economy-donut-legend">
                             <div class="economy-legend-row">
                                 <span class="economy-legend-dot wallets"></span>
-                                <span>Player wallets</span>
+                                <span>Explorer reserve</span>
                                 <strong>@((Overview?.MnPlayerWalletsTotal ?? 0).ToString("N0")) MN (@GetMnWalletShare().ToString("0.##")%)</strong>
                             </div>
                             <div class="economy-legend-row">
@@ -106,29 +108,29 @@ else
                 </article>
 
                 <article class="panel profile-release-panel economy-card">
-                    <span class="profile-eyebrow">Map Supply</span>
-                    <h2>Map Circulation</h2>
+                    <span class="profile-eyebrow">Sector Supply</span>
+                    <h2>Sector Circulation</h2>
                     <div class="economy-donut-layout">
                         <div class="economy-donut economy-donut-maps" style="@GetMapDonutStyle()">
                             <div class="economy-donut-core">
-                                <span>Maps</span>
+                                <span>Sectors</span>
                                 <strong>@((Overview?.MapsTotal ?? 0).ToString("N0"))</strong>
                             </div>
                         </div>
                         <div class="economy-donut-legend">
                             <div class="economy-legend-row">
                                 <span class="economy-legend-dot listed"></span>
-                                <span>Listed maps</span>
+                                <span>Listed sectors</span>
                                 <strong>@GetMapListedCount().ToString("N0") (@GetMapListedShare().ToString("0.##")%)</strong>
                             </div>
                             <div class="economy-legend-row">
                                 <span class="economy-legend-dot staked"></span>
-                                <span>Staked maps</span>
+                                <span>Analyzed sectors</span>
                                 <strong>@GetMapStakedCount().ToString("N0") (@GetMapStakedShare().ToString("0.##")%)</strong>
                             </div>
                             <div class="economy-legend-row">
                                 <span class="economy-legend-dot unlisted"></span>
-                                <span>Unlisted maps</span>
+                                <span>Unlisted sectors</span>
                                 <strong>@GetMapUnlistedCount().ToString("N0") (@GetMapUnlistedShare().ToString("0.##")%)</strong>
                             </div>
                         </div>
@@ -137,7 +139,7 @@ else
                     <div class="economy-progress-stack">
                         <div class="economy-progress-row">
                             <div class="economy-progress-label">
-                                <span>Listed maps</span>
+                                <span>Listed sectors</span>
                                 <strong>@((Overview?.MapsListedPercent ?? 0).ToString("0.##"))%</strong>
                             </div>
                             <div class="economy-progress-bar">
@@ -146,7 +148,7 @@ else
                         </div>
                         <div class="economy-progress-row">
                             <div class="economy-progress-label">
-                                <span>Staked maps</span>
+                                <span>Analyzed sectors</span>
                                 <strong>@((Overview?.MapsStakedPercent ?? 0).ToString("0.##"))%</strong>
                             </div>
                             <div class="economy-progress-bar">
@@ -157,12 +159,12 @@ else
                 </article>
 
                 <article class="panel profile-release-panel economy-card">
-                    <span class="profile-eyebrow">Players</span>
+                    <span class="profile-eyebrow">Explorers</span>
                     <h2>Activity Snapshot</h2>
-                    <div class="economy-stat-line"><span>Total users</span><strong>@((Overview?.UsersTotal ?? 0).ToString("N0"))</strong></div>
+                    <div class="economy-stat-line"><span>Total explorers</span><strong>@((Overview?.UsersTotal ?? 0).ToString("N0"))</strong></div>
                     <div class="economy-stat-line"><span>Online now</span><strong>@((Overview?.UsersOnlineNow ?? 0).ToString("N0"))</strong></div>
                     <div class="economy-stat-line"><span>Active (24h)</span><strong>@((Overview?.UsersActive24h ?? 0).ToString("N0"))</strong></div>
-                    <div class="economy-stat-line"><span>Users staking</span><strong>@((Overview?.StakersTotal ?? 0).ToString("N0"))</strong></div>
+                    <div class="economy-stat-line"><span>Explorers analyzing</span><strong>@((Overview?.StakersTotal ?? 0).ToString("N0"))</strong></div>
 
                     <div class="economy-progress-stack">
                         <div class="economy-progress-row">
@@ -222,7 +224,7 @@ else
                 </article>
 
                 <article class="panel profile-release-panel economy-card">
-                    <span class="profile-eyebrow">Marketplace + Voting</span>
+                    <span class="profile-eyebrow">Exchange + Council</span>
                     <h2>Market Signals</h2>
                     <div class="economy-market-grid">
                         <div class="economy-market-item">
@@ -233,7 +235,7 @@ else
                         <div class="economy-market-item">
                             <span>Average listing ticket</span>
                             <strong>@((Overview?.MarketplaceListingPriceAvg ?? 0).ToString("N2")) MN</strong>
-                            <em>Across @((Overview?.MapsListed ?? 0).ToString("N0")) live listing(s)</em>
+                            <em>Across @((Overview?.MapsListed ?? 0).ToString("N0")) live sector listing(s)</em>
                         </div>
                         <div class="economy-market-item">
                             <span>Governance spend total</span>
@@ -257,11 +259,11 @@ else
                             <strong class="@GetLiquidityHealthClass()">@GetLiquidityHealthLabel()</strong>
                         </div>
                         <div class="economy-health-row">
-                            <span>Player activity</span>
+                            <span>Explorer activity</span>
                             <strong class="@GetActivityHealthClass()">@GetActivityHealthLabel()</strong>
                         </div>
                         <div class="economy-health-row">
-                            <span>Marketplace depth</span>
+                            <span>Exchange depth</span>
                             <strong class="@GetMarketplaceHealthClass()">@GetMarketplaceHealthLabel()</strong>
                         </div>
                         <div class="economy-health-row">
@@ -275,18 +277,18 @@ else
             <section class="panel profile-release-panel economy-faq">
                 <div class="panel-heading">
                     <div>
-                        <span class="profile-eyebrow">Economy FAQ</span>
+                        <span class="profile-eyebrow">Research FAQ</span>
                         <h2>Quick Guide</h2>
                     </div>
                 </div>
                 <details class="economy-faq-collapsible">
                     <summary>How to read this tab</summary>
                     <ol class="staking-faq-list">
-                        <li>MN circulation shows player-held balance and bank-held reserve.</li>
-                        <li>Map circulation shows listed, staked, and currently unlisted maps.</li>
+                        <li>MN circulation shows explorer-held balance and bank-held reserve.</li>
+                        <li>Sector circulation shows listed, analyzed, and currently unlisted sectors.</li>
                         <li>Activity uses two windows: online now and active in the last 24 hours.</li>
                         <li>Market signals track listing value, average listing price, and governance spend.</li>
-                        <li>Use Marketplace, Staking, and Voting subtabs to take direct action from here.</li>
+                        <li>Use Analysis and Council Voting tabs here. Exchange trading now has its own page.</li>
                     </ol>
                     @if (!string.IsNullOrWhiteSpace(Overview?.GeneratedAt))
                     {
@@ -294,10 +296,6 @@ else
                     }
                 </details>
             </section>
-        }
-        else if (ActiveTab == MarketplaceTab)
-        {
-            <Marketplace Embedded="true" />
         }
         else if (ActiveTab == StakingTab)
         {
@@ -314,7 +312,6 @@ else
     [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
 
     private const string OverviewTab = "overview";
-    private const string MarketplaceTab = "marketplace";
     private const string StakingTab = "staking";
     private const string VotingTab = "voting";
 
@@ -340,6 +337,12 @@ else
 
     protected override void OnParametersSet()
     {
+        if (string.Equals((Tab ?? string.Empty).Trim(), "marketplace", StringComparison.OrdinalIgnoreCase))
+        {
+            NavigationManager.NavigateTo("/marketplace", replace: true);
+            return;
+        }
+
         ActiveTab = NormalizeTab(Tab);
     }
 
@@ -498,7 +501,6 @@ else
     {
         return (tab ?? string.Empty).Trim().ToLowerInvariant() switch
         {
-            MarketplaceTab => MarketplaceTab,
             StakingTab => StakingTab,
             VotingTab => VotingTab,
             _ => OverviewTab,

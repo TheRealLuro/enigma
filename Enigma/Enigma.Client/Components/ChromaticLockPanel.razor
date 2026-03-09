@@ -1,0 +1,482 @@
+@using System.Globalization
+@using Enigma.Client.Models.Gameplay
+@inject IJSRuntime JS
+
+<div class="enigma-chromatic-panel-shell @(LockoutActive ? "lockout" : string.Empty)"
+     @onpointermove="HandlePointerMoveAsync"
+     @onpointerup="EndDragAsync"
+     @onpointercancel="EndDragAsync">
+    <div class="enigma-chromatic-panel-stage">
+        <div class="enigma-chromatic-vault-wrap">
+            <div class="enigma-chromatic-target-blob" style="@($"background:{TargetHsl};")"></div>
+            <div class="enigma-chromatic-current-swatch" style="@($"background:{CurrentHsl};")"></div>
+            <div class="enigma-chromatic-lockout-flash @(LockoutActive ? "active" : string.Empty)"></div>
+
+            <svg @ref="_svgRef"
+                 class="enigma-chromatic-vault-svg"
+                 viewBox="0 0 420 420"
+                 aria-hidden="true"
+                 @onpointerdown="HandleSvgPointerDownAsync">
+                <circle class="enigma-chromatic-meter-track" cx="210" cy="210" r="200"></circle>
+                <circle class="enigma-chromatic-meter-arc @MatchBandClass"
+                        cx="210"
+                        cy="210"
+                        r="200"
+                        stroke-dasharray="@MeterCircumferenceText"
+                        stroke-dashoffset="@MeterOffsetText"
+                        transform="rotate(-90 210 210)"></circle>
+
+                <circle class="enigma-chromatic-dial-track"
+                        cx="210"
+                        cy="210"
+                        r="185"></circle>
+                <circle class="enigma-chromatic-dial-fill hue"
+                        cx="210"
+                        cy="210"
+                        r="185"
+                        stroke-dasharray="@HueCircumferenceText"
+                        stroke-dashoffset="@HueOffsetText"
+                        transform="rotate(-90 210 210)"></circle>
+                <circle class="enigma-chromatic-thumb hue"
+                        cx="@HueThumbXText"
+                        cy="@HueThumbYText"
+                        r="9"></circle>
+
+                <circle class="enigma-chromatic-dial-track"
+                        cx="210"
+                        cy="210"
+                        r="147"></circle>
+                <circle class="enigma-chromatic-dial-fill sat"
+                        cx="210"
+                        cy="210"
+                        r="147"
+                        stroke-dasharray="@SatCircumferenceText"
+                        stroke-dashoffset="@SatOffsetText"
+                        transform="rotate(-90 210 210)"></circle>
+                <circle class="enigma-chromatic-thumb sat"
+                        cx="@SatThumbXText"
+                        cy="@SatThumbYText"
+                        r="9"></circle>
+
+                <circle class="enigma-chromatic-dial-track"
+                        cx="210"
+                        cy="210"
+                        r="109"></circle>
+                <circle class="enigma-chromatic-dial-fill light"
+                        cx="210"
+                        cy="210"
+                        r="109"
+                        stroke-dasharray="@LightCircumferenceText"
+                        stroke-dashoffset="@LightOffsetText"
+                        transform="rotate(-90 210 210)"></circle>
+                <circle class="enigma-chromatic-thumb light"
+                        cx="@LightThumbXText"
+                        cy="@LightThumbYText"
+                        r="9"></circle>
+
+                <g class="enigma-chromatic-vault-door @(Solved ? "open" : string.Empty)">
+                    <circle cx="210" cy="210" r="72" class="enigma-chromatic-door-plate"></circle>
+                    <g class="enigma-chromatic-door-spokes">
+                        <line x1="210" y1="148" x2="210" y2="272"></line>
+                        <line x1="148" y1="210" x2="272" y2="210"></line>
+                        <line x1="157" y1="157" x2="263" y2="263"></line>
+                        <line x1="263" y1="157" x2="157" y2="263"></line>
+                    </g>
+                    <circle cx="210" cy="210" r="22" class="enigma-chromatic-door-ring"></circle>
+                    <circle cx="210" cy="210" r="8" class="enigma-chromatic-door-core"></circle>
+                    <circle cx="210" cy="178" r="4" class="enigma-chromatic-door-bolt"></circle>
+                    <circle cx="235" cy="225" r="4" class="enigma-chromatic-door-bolt"></circle>
+                    <circle cx="185" cy="225" r="4" class="enigma-chromatic-door-bolt"></circle>
+                </g>
+            </svg>
+        </div>
+
+        <aside class="enigma-chromatic-side-panel">
+            <div class="enigma-chromatic-title-block">
+                <div class="enigma-chromatic-title">Chromatic<br />Lock</div>
+                <div class="enigma-chromatic-round-label">COLOUR @RoundIndex OF @RoundTotal &middot; @DifficultyLabel</div>
+                <div class="enigma-chromatic-pips">
+                    @foreach (var pip in Pips)
+                    {
+                        <span class="enigma-chromatic-pip @(pip.Solved ? "done" : string.Empty) @(pip.Current ? "current" : string.Empty)"
+                              style="@($"--pip-color:{pip.ColorStyle};")"></span>
+                    }
+                </div>
+            </div>
+
+            <div class="enigma-chromatic-pill-row">
+                <span class="enigma-chromatic-pill active">@DifficultyLabel</span>
+                <span class="enigma-chromatic-pill @(ChromaticReady ? "ready" : string.Empty) @(LockoutActive ? "alert" : string.Empty)">@StateLabel</span>
+                <span class="enigma-chromatic-osc-warning @(Oscillating ? "show" : string.Empty)">TARGET MOVING</span>
+            </div>
+
+            <div class="enigma-chromatic-summary-strip">
+                <div class="enigma-chromatic-summary-card">
+                    <span>TIMER</span>
+                    <strong class="@TimerToneClass">@Math.Max(0, Math.Ceiling(View.TimerRemainingSeconds))</strong>
+                </div>
+                <div class="enigma-chromatic-summary-card">
+                    <span>ROUND</span>
+                    <strong>@($"{RoundIndex}/{RoundTotal}")</strong>
+                </div>
+                <div class="enigma-chromatic-summary-card">
+                    <span>STATE</span>
+                    <strong class="@StateToneClass">@StateLabel</strong>
+                </div>
+            </div>
+
+            <div class="enigma-chromatic-timer-track">
+                <div class="enigma-chromatic-timer-fill @TimerToneClass" style="@($"width:{TimerPercentText};")"></div>
+            </div>
+
+            <div class="enigma-chromatic-channel-stack">
+                @foreach (var channel in Channels)
+                {
+                    <article class="enigma-chromatic-channel-row @(channel.Aligned ? "aligned" : string.Empty)" style="@($"--channel-color:{channel.Color};")">
+                        <span class="label">@channel.Label</span>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="@($"width:{channel.FillWidth};background:{channel.Color};")"></div>
+                        </div>
+                        <span class="value">@channel.ValueText</span>
+                        <span class="delta @channel.DeltaClass">@(DeltaVisible ? channel.DeltaText : string.Empty)</span>
+                    </article>
+                }
+            </div>
+
+            <div class="enigma-chromatic-match-section">
+                <div class="enigma-chromatic-match-head">
+                    <span>COHERENCE / SYNCHRONIZATION</span>
+                    <strong class="@MatchBandClass">@($"{MatchPercent}%")</strong>
+                </div>
+                <div class="enigma-chromatic-match-track">
+                    <div class="enigma-chromatic-match-fill @MatchBandClass" style="@($"width:{MatchPercent}%;")"></div>
+                </div>
+                <div class="enigma-chromatic-hold-track">
+                    <div class="enigma-chromatic-hold-fill" style="@($"width:{HoldPercentText};")"></div>
+                </div>
+            </div>
+
+            <div class="enigma-chromatic-action-row">
+                @if (CommitAction is not null)
+                {
+                    <button class="btn enigma-panel-action tone-commit"
+                            disabled="@(!CommitAction.Value.Enabled)"
+                            @onclick="(() => DispatchAsync(CommitAction.Value.Command))">
+                        Stabilize
+                    </button>
+                }
+                @if (ResetAction is not null)
+                {
+                    <button class="btn enigma-panel-action tone-reset"
+                            disabled="@(!ResetAction.Value.Enabled)"
+                            @onclick="(() => DispatchAsync(ResetAction.Value.Command))">
+                        Reset
+                    </button>
+                }
+                @if (HintAction is not null)
+                {
+                    <button class="btn enigma-panel-action tone-hint"
+                            disabled="@(!HintAction.Value.Enabled)"
+                            @onclick="(() => DispatchAsync(HintAction.Value.Command))">
+                        Hint
+                    </button>
+                }
+            </div>
+        </aside>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required SoloPanelView View { get; set; }
+
+    [Parameter, EditorRequired]
+    public required EventCallback<string> OnAction { get; set; }
+
+    private const double CenterX = 210d;
+    private const double CenterY = 210d;
+    private const double HueRadius = 185d;
+    private const double SaturationRadius = 147d;
+    private const double LightnessRadius = 109d;
+    private const double MeterRadius = 200d;
+
+    private readonly Dictionary<string, int> _lastDragValues = new(StringComparer.OrdinalIgnoreCase);
+    private ElementReference _svgRef;
+    private string? _activeChannel;
+    private long? _activePointerId;
+    private ElementBounds? _svgBounds;
+
+    private readonly record struct PipVm(string ColorStyle, bool Solved, bool Current);
+    private readonly record struct ChannelVm(string Label, string Color, string FillWidth, string ValueText, string DeltaText, string DeltaClass, bool Aligned);
+
+    private sealed class ElementBounds
+    {
+        public double Left { get; set; }
+        public double Top { get; set; }
+        public double Width { get; set; }
+        public double Height { get; set; }
+    }
+
+    private SoloPanelActionItem? CommitAction => FindAction("chroma:commit");
+    private SoloPanelActionItem? ResetAction => FindAction("chroma:reset");
+    private SoloPanelActionItem? HintAction => FindAction("chroma:hint");
+    private bool Solved => View.Status == PuzzleStatus.Solved;
+    private bool LockoutActive => GetBoardInt("chromatic:lockout_active", 0) == 1;
+    private bool ChromaticReady => GetBoardInt("chromatic:ready", 0) == 1;
+    private bool DeltaVisible => GetBoardInt("chromatic:delta_visible", 1) == 1;
+    private bool Oscillating => GetBoardInt("chromatic:oscillate_active", 0) == 1;
+    private bool InputsDisabled => Solved || View.Status is PuzzleStatus.Cooldown or PuzzleStatus.Resetting || LockoutActive;
+    private string DifficultyLabel => GetBoardText("chromatic:difficulty", "MEDIUM");
+    private int RoundIndex => Math.Max(1, GetBoardInt("chromatic:round_index", 1));
+    private int RoundTotal => Math.Max(1, GetBoardInt("chromatic:round_total", 1));
+    private int MatchPercent => Math.Clamp(GetBoardInt("chromatic:match_percent", 0), 0, 100);
+    private double HoldPercent => Math.Clamp(GetBoardDouble("chromatic:hold_percent", 0d), 0d, 100d);
+    private double TimerTotal => Math.Max(1d, GetBoardDouble("chromatic:timer_total", View.TimerRemainingSeconds));
+    private double TimerPercent => Math.Clamp((View.TimerRemainingSeconds / TimerTotal) * 100d, 0d, 100d);
+    private string TimerPercentText => $"{Math.Round(TimerPercent, 2, MidpointRounding.AwayFromZero).ToString("0.##", CultureInfo.InvariantCulture)}%";
+    private string HoldPercentText => $"{Math.Round(HoldPercent, 2, MidpointRounding.AwayFromZero).ToString("0.##", CultureInfo.InvariantCulture)}%";
+    private string CurrentHsl => $"hsl({CurrentHue} {CurrentSaturation}% {CurrentLightness}%)";
+    private string TargetHsl => $"hsl({TargetHue} {TargetSaturation}% {TargetLightness}%)";
+    private string TimerToneClass => TimerPercent <= 15d ? "crit" : TimerPercent <= 30d ? "warn" : string.Empty;
+    private string StateToneClass => Solved || ChromaticReady ? "lock" : LockoutActive ? "crit" : string.Empty;
+    private string StateLabel => Solved ? "OPEN" : LockoutActive ? "LOCKOUT" : ChromaticReady ? "READY" : "TUNING";
+    private string MatchBandClass => MatchPercent >= 89 ? "lock" : MatchPercent >= 60 ? "near" : "base";
+    private double MeterCircumference => 2d * Math.PI * MeterRadius;
+    private string MeterCircumferenceText => MeterCircumference.ToString("0.###", CultureInfo.InvariantCulture);
+    private string MeterOffsetText => GetOffsetText(MeterCircumference, MatchPercent / 100d);
+    private double HueCircumference => 2d * Math.PI * HueRadius;
+    private string HueCircumferenceText => HueCircumference.ToString("0.###", CultureInfo.InvariantCulture);
+    private string HueOffsetText => GetOffsetText(HueCircumference, CurrentHue / 360d);
+    private double SatCircumference => 2d * Math.PI * SaturationRadius;
+    private string SatCircumferenceText => SatCircumference.ToString("0.###", CultureInfo.InvariantCulture);
+    private string SatOffsetText => GetOffsetText(SatCircumference, CurrentSaturation / 100d);
+    private double LightCircumference => 2d * Math.PI * LightnessRadius;
+    private string LightCircumferenceText => LightCircumference.ToString("0.###", CultureInfo.InvariantCulture);
+    private string LightOffsetText => GetOffsetText(LightCircumference, CurrentLightness / 100d);
+    private string HueThumbXText => GetThumbX(HueRadius, CurrentHue).ToString("0.###", CultureInfo.InvariantCulture);
+    private string HueThumbYText => GetThumbY(HueRadius, CurrentHue).ToString("0.###", CultureInfo.InvariantCulture);
+    private string SatThumbXText => GetThumbX(SaturationRadius, CurrentSaturation / 100d * 360d).ToString("0.###", CultureInfo.InvariantCulture);
+    private string SatThumbYText => GetThumbY(SaturationRadius, CurrentSaturation / 100d * 360d).ToString("0.###", CultureInfo.InvariantCulture);
+    private string LightThumbXText => GetThumbX(LightnessRadius, CurrentLightness / 100d * 360d).ToString("0.###", CultureInfo.InvariantCulture);
+    private string LightThumbYText => GetThumbY(LightnessRadius, CurrentLightness / 100d * 360d).ToString("0.###", CultureInfo.InvariantCulture);
+
+    private int CurrentHue => NormalizeHue(GetBoardInt("chromatic:channel:h:current", 180));
+    private int CurrentSaturation => Math.Clamp(GetBoardInt("chromatic:channel:s:current", 50), 0, 100);
+    private int CurrentLightness => Math.Clamp(GetBoardInt("chromatic:channel:l:current", 50), 0, 100);
+    private int TargetHue => NormalizeHue(GetBoardInt("chromatic:channel:h:target", 180));
+    private int TargetSaturation => Math.Clamp(GetBoardInt("chromatic:channel:s:target", 50), 0, 100);
+    private int TargetLightness => Math.Clamp(GetBoardInt("chromatic:channel:l:target", 50), 0, 100);
+
+    private IReadOnlyList<PipVm> Pips =>
+        Enumerable.Range(1, RoundTotal)
+            .Select(index =>
+            {
+                var hue = NormalizeHue(GetBoardInt($"chromatic:round:{index}:h", 180));
+                var saturation = Math.Clamp(GetBoardInt($"chromatic:round:{index}:s", 70), 0, 100);
+                var lightness = Math.Clamp(GetBoardInt($"chromatic:round:{index}:l", 50), 0, 100);
+                return new PipVm(
+                    $"hsl({hue} {saturation}% {lightness}%)",
+                    Solved || GetBoardInt($"chromatic:round:{index}:solved", 0) == 1,
+                    !Solved && index == RoundIndex);
+            })
+            .ToArray();
+
+    private IReadOnlyList<ChannelVm> Channels =>
+    [
+        BuildChannel("HUE", "h", "#e84393"),
+        BuildChannel("SAT", "s", "#00d4ff"),
+        BuildChannel("LGT", "l", "#f5c518"),
+    ];
+
+    private ChannelVm BuildChannel(string label, string key, string color)
+    {
+        var current = key switch
+        {
+            "h" => CurrentHue,
+            "s" => CurrentSaturation,
+            _ => CurrentLightness,
+        };
+
+        var delta = GetBoardInt($"chromatic:channel:{key}:delta", 0);
+        var tolerance = Math.Max(1, GetBoardInt($"chromatic:channel:{key}:tolerance", 1));
+        var aligned = GetBoardInt($"chromatic:channel:{key}:aligned", 0) == 1;
+        var valueText = key == "h"
+            ? $"{current.ToString(CultureInfo.InvariantCulture)} deg"
+            : $"{current.ToString(CultureInfo.InvariantCulture)}%";
+        var fillWidth = key == "h"
+            ? $"{Math.Round((current / 360d) * 100d, 2, MidpointRounding.AwayFromZero).ToString("0.##", CultureInfo.InvariantCulture)}%"
+            : $"{current.ToString(CultureInfo.InvariantCulture)}%";
+        var deltaClass = delta <= tolerance
+            ? "close"
+            : delta <= tolerance * 3
+                ? "mid"
+                : "far";
+        var deltaText = delta == 0
+            ? "OK"
+            : key == "h"
+                ? $"{delta.ToString(CultureInfo.InvariantCulture)} deg"
+                : $"{delta.ToString(CultureInfo.InvariantCulture)}";
+        return new ChannelVm(label, color, fillWidth, valueText, deltaText, deltaClass, aligned);
+    }
+
+    private async Task HandleSvgPointerDownAsync(PointerEventArgs args)
+    {
+        if (InputsDisabled || !OnAction.HasDelegate)
+        {
+            return;
+        }
+
+        _svgBounds = await JS.InvokeAsync<ElementBounds?>("enigmaGame.getElementBounds", _svgRef);
+        if (_svgBounds is null || _svgBounds.Width <= 0d || _svgBounds.Height <= 0d)
+        {
+            return;
+        }
+
+        var localX = (args.ClientX - _svgBounds.Left) * (420d / _svgBounds.Width);
+        var localY = (args.ClientY - _svgBounds.Top) * (420d / _svgBounds.Height);
+        var channel = ResolveChannel(localX, localY);
+        if (channel is null)
+        {
+            return;
+        }
+
+        _activePointerId = args.PointerId;
+        _activeChannel = channel;
+        _lastDragValues.Remove(channel);
+        await JS.InvokeVoidAsync("enigmaGame.capturePointer", _svgRef, args.PointerId);
+        await ApplyPointerValueAsync(localX, localY);
+    }
+
+    private async Task HandlePointerMoveAsync(PointerEventArgs args)
+    {
+        if (_activeChannel is null || _svgBounds is null || InputsDisabled)
+        {
+            return;
+        }
+
+        var localX = (args.ClientX - _svgBounds.Left) * (420d / _svgBounds.Width);
+        var localY = (args.ClientY - _svgBounds.Top) * (420d / _svgBounds.Height);
+        await ApplyPointerValueAsync(localX, localY);
+    }
+
+    private async Task EndDragAsync(PointerEventArgs _)
+    {
+        var pointerId = _activePointerId;
+        _activeChannel = null;
+        _activePointerId = null;
+        _svgBounds = null;
+        if (pointerId is long activePointer)
+        {
+            await JS.InvokeVoidAsync("enigmaGame.releasePointer", _svgRef, activePointer);
+        }
+    }
+
+    private async Task ApplyPointerValueAsync(double localX, double localY)
+    {
+        if (_activeChannel is null)
+        {
+            return;
+        }
+
+        var angle = GetAngle(localX, localY);
+        var value = _activeChannel switch
+        {
+            "h" => NormalizeHue((int)Math.Round(angle)),
+            "s" => Math.Clamp((int)Math.Round((angle / 360d) * 100d), 0, 100),
+            "l" => Math.Clamp((int)Math.Round((angle / 360d) * 100d), 0, 100),
+            _ => -1,
+        };
+
+        if (value < 0)
+        {
+            return;
+        }
+
+        if (_lastDragValues.TryGetValue(_activeChannel, out var lastValue) && lastValue == value)
+        {
+            return;
+        }
+
+        _lastDragValues[_activeChannel] = value;
+        await DispatchAsync($"chroma:set:{_activeChannel}:{value.ToString(CultureInfo.InvariantCulture)}");
+    }
+
+    private SoloPanelActionItem? FindAction(string command) =>
+        View.Actions.FirstOrDefault(action => string.Equals(action.Command, command, StringComparison.OrdinalIgnoreCase));
+
+    private async Task DispatchAsync(string command)
+    {
+        if (!OnAction.HasDelegate || string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        await OnAction.InvokeAsync(command);
+    }
+
+    private int GetBoardInt(string key, int fallback = 0) =>
+        View.Board.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private double GetBoardDouble(string key, double fallback = 0d) =>
+        View.Board.TryGetValue(key, out var value) && double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private string GetBoardText(string key, string fallback = "") =>
+        View.Board.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+
+    private static string GetOffsetText(double circumference, double ratio) =>
+        (circumference - (Math.Clamp(ratio, 0d, 1d) * circumference)).ToString("0.###", CultureInfo.InvariantCulture);
+
+    private static double GetAngle(double x, double y)
+    {
+        var angle = Math.Atan2(y - CenterY, x - CenterX) * 180d / Math.PI + 90d;
+        return angle < 0d ? angle + 360d : angle;
+    }
+
+    private static double GetThumbX(double radius, double angleDegrees)
+    {
+        var radians = (angleDegrees - 90d) * Math.PI / 180d;
+        return CenterX + (radius * Math.Cos(radians));
+    }
+
+    private static double GetThumbY(double radius, double angleDegrees)
+    {
+        var radians = (angleDegrees - 90d) * Math.PI / 180d;
+        return CenterY + (radius * Math.Sin(radians));
+    }
+
+    private static int NormalizeHue(int value)
+    {
+        var normalized = value % 360;
+        return normalized < 0 ? normalized + 360 : normalized;
+    }
+
+    private static string? ResolveChannel(double x, double y)
+    {
+        var distance = Math.Sqrt(Math.Pow(x - CenterX, 2d) + Math.Pow(y - CenterY, 2d));
+        var rings = new[]
+        {
+            (Key: "h", Radius: HueRadius),
+            (Key: "s", Radius: SaturationRadius),
+            (Key: "l", Radius: LightnessRadius),
+        };
+
+        var nearest = rings
+            .Select(ring => new
+            {
+                ring.Key,
+                Distance = Math.Abs(distance - ring.Radius),
+            })
+            .OrderBy(candidate => candidate.Distance)
+            .FirstOrDefault();
+
+        return nearest is not null && nearest.Distance <= 26d
+            ? nearest.Key
+            : null;
+    }
+}

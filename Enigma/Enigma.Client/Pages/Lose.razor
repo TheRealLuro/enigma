@@ -3,8 +3,8 @@
 @inject IJSRuntime JS
 @inject NavigationManager NavigationManager
 
-<SeoHead Title="Enigma Run Lost | Maze Abandoned"
-         Description="Review the loss summary for an abandoned Enigma maze run."
+<SeoHead Title="Enigma Expedition Lost | Sector Abandoned"
+         Description="Review the loss summary for an abandoned Enigma sector expedition."
          Robots="noindex,nofollow"
          OpenGraphType="website"
          SchemaType="WebPage" />
@@ -22,11 +22,11 @@ else if (Summary is null)
 {
     <div class="content">
         <div class="card enigma-game-message">
-            <h1>Run Lost</h1>
-            <p>No lost run summary is available.</p>
+            <h1>Expedition Lost</h1>
+            <p>No lost expedition summary is available.</p>
             <div class="enigma-end-actions">
-                <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/home"))'>Home</button>
-                <button class="btn btn-secondary" @onclick='@(() => NavigationManager.NavigateTo("/play"))'>Play Again</button>
+                <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/home"))'>Command</button>
+                <button class="btn btn-secondary" @onclick='@(() => NavigationManager.NavigateTo("/play"))'>Launch Again</button>
             </div>
         </div>
     </div>
@@ -35,13 +35,13 @@ else
 {
     <div class="content enigma-end-page lose-page-shell">
         <div class="card enigma-end-card lose-card">
-            <span class="enigma-kicker">Run Lost</span>
+            <span class="enigma-kicker">Expedition Lost</span>
             <h1>@(string.IsNullOrWhiteSpace(Summary.MapName) ? "UNKNOWN" : Summary.MapName)</h1>
-            <p class="enigma-game-subline">You left the maze. This run is gone forever.</p>
+            <p class="enigma-game-subline">You left the sector. This expedition is gone forever.</p>
 
             <div class="enigma-end-grid">
                 <div>
-                    <span>Player</span>
+                    <span>Explorer</span>
                     <strong>@Summary.Username</strong>
                 </div>
                 @if (Summary.IsMultiplayer)
@@ -67,11 +67,11 @@ else
 
             <div class="enigma-end-grid compact lose-metric-grid">
                 <div>
-                    <span>Map Value</span>
+                    <span>Sector Value</span>
                     <strong>@Summary.MapValue.ToString("N0") MN</strong>
                 </div>
                 <div>
-                    <span>Forfeited Run Payout</span>
+                    <span>Forfeited Expedition Payout</span>
                     <strong>@Summary.ForfeitedRunPayout.ToString("N0") MN</strong>
                 </div>
                 <div>
@@ -85,11 +85,11 @@ else
             </div>
 
             <div class="enigma-end-actions">
-                <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/home", replace: true))'>Home</button>
-                <button class="btn btn-secondary" @onclick='@(() => NavigationManager.NavigateTo("/play", replace: true))'>Play Again</button>
+                <button class="btn btn-primary" @onclick='@(() => NavigationManager.NavigateTo("/home", replace: true))'>Command</button>
+                <button class="btn btn-secondary" @onclick='@(() => NavigationManager.NavigateTo("/play", replace: true))'>Launch Again</button>
                 @if (!string.IsNullOrWhiteSpace(Summary.MapName) && string.Equals(Summary.Source, "load", StringComparison.OrdinalIgnoreCase))
                 {
-                    <button class="btn btn-secondary" @onclick="ViewMapProfile">View Map on Profile</button>
+                    <button class="btn btn-secondary" @onclick="ViewMapProfile">Open Sector in Console</button>
                 }
             </div>
         </div>

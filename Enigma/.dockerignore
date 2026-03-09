@@ -8,3 +8,11 @@
 **/*.db
 **/*.cache
 **/TestResults
+**/__pycache__
+**/*.pyc
+**/.publish-check
+**/.publish-check2
+**/.publish-test
+**/.build
+**/bin_verify
+**/obj_verify

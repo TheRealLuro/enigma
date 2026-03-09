@@ -8,7 +8,7 @@
 
 @if (!Embedded)
 {
-    <SeoHead Title="Enigma Voting | Research Council"
+    <SeoHead Title="Enigma Council Voting | Research Council"
              Description="Vote in active Research Council sessions using Maze Nuggets with weighted influence."
              Robots="noindex,follow"
              OpenGraphType="website"
@@ -41,14 +41,14 @@ else
             <div>
                 <span class="profile-eyebrow">Research Council</span>
                 <h1>Council Voting</h1>
-                <p>Voting power = MN committed multiplied by your weighted council multiplier.</p>
+                <p>Council power = MN committed multiplied by your weighted council multiplier.</p>
             </div>
             <div class="voting-banner-meta">
                 <span class="profile-chip">Balance @(Session?.MazeNuggets.ToString("N0") ?? "0") MN</span>
                 <span class="profile-chip">@($"Vote Weight x{CurrentVoteMultiplier:0.00}")</span>
                 <span class="profile-chip">@($"Stake x{CurrentStakeComponent:0.00}")</span>
                 <span class="profile-chip">@($"Participation x{CurrentParticipationComponent:0.00}")</span>
-                <span class="profile-chip">@CurrentStakedCount staked map(s)</span>
+                <span class="profile-chip">@CurrentStakedCount analyzed sector(s)</span>
             </div>
         </section>
 
@@ -423,7 +423,7 @@ else
     private string StartDurationUnit { get; set; } = "hours";
     private int StartNumberMin { get; set; } = 1;
     private int StartNumberMax { get; set; } = 10;
-    private string OptionA { get; set; } = "Boost map rewards";
+    private string OptionA { get; set; } = "Boost sector rewards";
     private string OptionB { get; set; } = "Boost item drops";
     private string OptionC { get; set; } = string.Empty;
     private string OptionD { get; set; } = string.Empty;
@@ -701,14 +701,14 @@ else
                 numberMin = voteType == "number_selection" ? (int?)StartNumberMin : null,
                 numberMax = voteType == "number_selection" ? (int?)StartNumberMax : null,
             }),
-            "Voting session started.");
+            "Council session opened.");
     }
 
     private async Task CloseSessionAsync()
     {
         await ExecuteActionAsync(
             async () => await Api.PostJsonAsync("api/auth/voting/session/close", new { }),
-            "Voting session closed.");
+            "Council session closed.");
     }
 
     private async Task SubmitCurrentVoteAsync()

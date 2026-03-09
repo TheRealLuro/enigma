@@ -1,72 +1,94 @@
 @page "/register"
 @using Enigma.Client.Models
 @using Enigma.Client.Models.Gameplay
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Forms
 @inject Enigma.Client.Services.EnigmaApiClient Api
 @inject Enigma.Client.Services.UiNotificationService Notifications
 @using Microsoft.JSInterop
 
-<SeoHead Title="Create Enigma Account | Join the Puzzle Maze Game"
-         Description="Create an Enigma account to play evolving puzzle mazes, collect discovered maps, and join co-op expeditions."
+<SeoHead Title="Create Explorer Account | Join Enigma Command"
+         Description="Create an Enigma account to run anomaly expeditions, collect mapped sectors, and join co-op operations."
          Robots="noindex,follow"
          OpenGraphType="website"
          SchemaType="WebPage"
-         Keywords="create Enigma account, Enigma signup, puzzle maze game register" />
+         Keywords="create explorer account, Enigma command signup, anomaly sector program, A-R-D" />
 
 <div class="content auth-shell seo-auth-shell" style="max-width: 960px; margin-top: 60px;">
     <section class="seo-auth-intro panel">
-        <span class="profile-kicker">Join Enigma</span>
-        <h1>Create Your Explorer Account</h1>
-        <p>Register to generate mazes, discover collectible maps, join co-op runs, and use the Enigma marketplace and leaderboard systems.</p>
+        <span class="profile-kicker">Enigma Corporation</span>
+        <h1>Join Anomaly Research Division (A.R.D)</h1>
+        <p>Register to generate sectors, recover anomaly sector records, join co-op operations, and use the Enigma exchange and ranking systems.</p>
         <div class="seo-inline-links">
-            <a href="/about">About</a>
-            <a href="/how-enigma-works">How It Works</a>
-            <a href="/enigma-game-mechanics">Game Mechanics</a>
-            <a href="/enigma-multiplayer">Multiplayer</a>
+            <a href="/about">Program Brief</a>
+            <a href="/how-enigma-works">Operations Guide</a>
+            <a href="/enigma-game-mechanics">System Mechanics</a>
+            <a href="/enigma-multiplayer">Co-op Operations</a>
         </div>
     </section>
 
     <div class="card p-4 shadow-sm auth-card">
 
-        <h2 class="mb-4 text-center">Create Account</h2>
+        <h2 class="mb-4 text-center">Create Explorer Account</h2>
 
-        <EditForm Model="newUser" OnValidSubmit="OnRegisterClick">
+        <EditForm EditContext="RegisterEditContext" OnValidSubmit="OnRegisterClick" OnInvalidSubmit="OnInvalidRegisterAttempt">
             <DataAnnotationsValidator />
 
             <div class="mb-3">
                 <label class="form-label">Display Name</label>
                 <InputText class="form-control"
                            @bind-Value="newUser.DisplayName"
-                           placeholder="MazeMaster42" />
+                           placeholder="Explorer42" />
+                <ValidationMessage For="() => newUser.DisplayName" />
             </div>
 
             <div class="mb-3">
                 <label class="form-label">Email</label>
-                <InputText class="form-control"
-                           @bind-Value="newUser.Email"
-                           placeholder="you@example.com" />
+                <input class="form-control"
+                       type="email"
+                       value="@newUser.Email"
+                       @oninput="OnEmailInput"
+                       placeholder="you@example.com"
+                       autocomplete="email" />
+                <ValidationMessage For="() => newUser.Email" />
             </div>
 
             <div class="mb-3">
                 <label class="form-label">Password</label>
                 <div class="password-field-wrap">
-                    <InputText type="@(ShowPassword ? "text" : "password")"
-                               class="form-control"
-                               @bind-Value="password"
-                               placeholder="Choose a password" />
+                    <input type="@(ShowPassword ? "text" : "password")"
+                           class="form-control"
+                           @bind="newUser.Password"
+                           @bind:event="oninput"
+                           placeholder="Choose a password" />
                     <button type="button" class="password-toggle-button" @onclick="TogglePasswordVisibility">
                         @(ShowPassword ? "Hide" : "Show")
                     </button>
                 </div>
+                @if (ShouldShowPasswordIssues)
+                {
+                    <div class="password-issue-list" aria-live="polite">
+                        @foreach (var issue in PasswordIssues)
+                        {
+                            <div class="password-issue-item">
+                                <span class="password-issue-icon" aria-hidden="true">!</span>
+                                <span>@issue</span>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
 
             <div class="mb-3">
                 <label class="form-label">Confirm Password</label>
                 <div class="password-field-wrap">
-                    <InputText type="@(ShowPassword ? "text" : "password")"
-                               class="form-control"
-                               @bind-Value="confirmPassword"
-                               placeholder="Repeat your password" />
+                    <input type="@(ShowPassword ? "text" : "password")"
+                           class="form-control"
+                           @bind="newUser.ConfirmPassword"
+                           @bind:event="oninput"
+                           placeholder="Repeat your password" />
                 </div>
+                <ValidationMessage For="() => newUser.ConfirmPassword" />
             </div>
 
             <div class="mb-3">
@@ -105,13 +127,17 @@
     IJSRuntime JS { get; set; } = default!;
 
     RegisterUser newUser = new();
-    string password = string.Empty;
-    string confirmPassword = string.Empty;
+    EditContext RegisterEditContext = default!;
     bool rememberMe;
     bool IsSubmitting;
     bool ShowPassword;
 
     string? errorMessage;
+
+    protected override void OnInitialized()
+    {
+        RegisterEditContext = new EditContext(newUser);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -137,13 +163,6 @@
     {
         errorMessage = null;
 
-        if (password != confirmPassword)
-        {
-            errorMessage = "Passwords do not match.";
-            Notifications.Warning(errorMessage);
-            return;
-        }
-
         IsSubmitting = true;
 
         try
@@ -152,13 +171,13 @@
             {
                 username = newUser.DisplayName ?? string.Empty,
                 email = newUser.Email ?? string.Empty,
-                password,
+                password = newUser.Password ?? string.Empty,
                 rememberMe,
             });
 
             if (!httpResponse.IsSuccessStatusCode)
             {
-                errorMessage = await httpResponse.Content.ReadAsStringAsync();
+                errorMessage = await ExtractErrorDetailAsync(httpResponse, "Sign up failed.");
                 if (!string.IsNullOrWhiteSpace(errorMessage))
                 {
                     Notifications.Warning(errorMessage);
@@ -197,6 +216,11 @@
         }
     }
 
+    private void OnInvalidRegisterAttempt(EditContext _)
+    {
+        errorMessage = null;
+    }
+
     void OnLoginClick()
     {
         NavigationManager.NavigateTo("/");
@@ -205,6 +229,101 @@
     void TogglePasswordVisibility()
     {
         ShowPassword = !ShowPassword;
+    }
+
+    private void OnEmailInput(ChangeEventArgs args)
+    {
+        newUser.Email = args.Value?.ToString() ?? string.Empty;
+        RegisterEditContext.NotifyFieldChanged(FieldIdentifier.Create(() => newUser.Email));
+    }
+
+    private bool IsPasswordLengthValid => CurrentPassword.Length >= 10 && CurrentPassword.Length <= 128;
+    private bool IsPasswordUpperValid => CurrentPassword.Any(char.IsUpper);
+    private bool IsPasswordLowerValid => CurrentPassword.Any(char.IsLower);
+    private bool IsPasswordDigitValid => CurrentPassword.Any(char.IsDigit);
+    private bool IsPasswordSpecialValid => CurrentPassword.Any(static ch => !char.IsLetterOrDigit(ch));
+    private string CurrentPassword => newUser.Password ?? string.Empty;
+    private bool ShouldShowPasswordIssues => !string.IsNullOrWhiteSpace(CurrentPassword) && PasswordIssues.Count > 0;
+    private IReadOnlyList<string> PasswordIssues
+    {
+        get
+        {
+            var issues = new List<string>();
+            if (!IsPasswordLengthValid)
+            {
+                issues.Add("Use 10 to 128 characters.");
+            }
+            if (!IsPasswordUpperValid)
+            {
+                issues.Add("Add at least one uppercase letter.");
+            }
+            if (!IsPasswordLowerValid)
+            {
+                issues.Add("Add at least one lowercase letter.");
+            }
+            if (!IsPasswordDigitValid)
+            {
+                issues.Add("Add at least one number.");
+            }
+            if (!IsPasswordSpecialValid)
+            {
+                issues.Add("Add at least one special character.");
+            }
+            return issues;
+        }
+    }
+
+    private static async Task<string> ExtractErrorDetailAsync(HttpResponseMessage response, string fallback)
+    {
+        var raw = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return fallback;
+        }
+
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(raw);
+            if (document.RootElement.TryGetProperty("detail", out var detailElement))
+            {
+                var detail = detailElement.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? detailElement.GetString()
+                    : detailElement.ToString();
+                if (!string.IsNullOrWhiteSpace(detail))
+                {
+                    return detail;
+                }
+            }
+
+            if (document.RootElement.TryGetProperty("errors", out var errorsElement) &&
+                errorsElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                var lines = new List<string>();
+                foreach (var error in errorsElement.EnumerateArray())
+                {
+                    var field = error.TryGetProperty("field", out var fieldElement) ? fieldElement.GetString() : null;
+                    var message = error.TryGetProperty("message", out var messageElement) ? messageElement.GetString() : null;
+                    if (!string.IsNullOrWhiteSpace(field) && !string.IsNullOrWhiteSpace(message))
+                    {
+                        lines.Add($"{field}: {message}");
+                    }
+                    else if (!string.IsNullOrWhiteSpace(message))
+                    {
+                        lines.Add(message);
+                    }
+                }
+
+                if (lines.Count > 0)
+                {
+                    return string.Join(" | ", lines);
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return raw;
     }
 
     private async Task<bool> GetRememberedSessionStateAsync()
@@ -219,9 +338,76 @@
         }
     }
 
-    public class RegisterUser
+    public class RegisterUser : IValidatableObject
     {
+        [Required(ErrorMessage = "Display name is required.")]
+        [StringLength(32, MinimumLength = 3, ErrorMessage = "Display name must be 3-32 characters.")]
+        [RegularExpression(@"^[A-Za-z0-9][A-Za-z0-9_.-]{2,31}$", ErrorMessage = "Display name can use letters, numbers, ., _, - and must start with a letter/number.")]
         public string DisplayName { get; set; } = "";
+
+        [Required(ErrorMessage = "Email is required.")]
+        [StringLength(254, ErrorMessage = "Email must be 254 characters or less.")]
+        [RegularExpression(@"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,63}$", ErrorMessage = "Enter a valid email in the format name@example.com.")]
         public string Email { get; set; } = "";
+
+        [Required(ErrorMessage = "Password is required.")]
+        [StringLength(128, MinimumLength = 10, ErrorMessage = "Password must be 10-128 characters.")]
+        [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$", ErrorMessage = "Password must include uppercase, lowercase, number, and special character.")]
+        public string Password { get; set; } = "";
+
+        [Required(ErrorMessage = "Confirm your password.")]
+        [Compare(nameof(Password), ErrorMessage = "Passwords must match.")]
+        public string ConfirmPassword { get; set; } = "";
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            var email = (Email ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                yield break;
+            }
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,63}$"))
+            {
+                yield break;
+            }
+
+            if (email.Contains("..", StringComparison.Ordinal))
+            {
+                yield return new ValidationResult("Email cannot contain consecutive dots.", [nameof(Email)]);
+                yield break;
+            }
+
+            var atIndex = email.IndexOf('@');
+            if (atIndex <= 0 || atIndex != email.LastIndexOf('@') || atIndex == email.Length - 1)
+            {
+                yield return new ValidationResult("Email must include one @ and a valid domain.", [nameof(Email)]);
+                yield break;
+            }
+
+            var local = email[..atIndex];
+            var domain = email[(atIndex + 1)..];
+            if (local.StartsWith(".", StringComparison.Ordinal) || local.EndsWith(".", StringComparison.Ordinal))
+            {
+                yield return new ValidationResult("Email local part cannot start or end with a dot.", [nameof(Email)]);
+                yield break;
+            }
+
+            var labels = domain.Split('.', StringSplitOptions.RemoveEmptyEntries);
+            if (labels.Length < 2)
+            {
+                yield return new ValidationResult("Email domain must include a top-level domain (for example, .com).", [nameof(Email)]);
+                yield break;
+            }
+
+            foreach (var label in labels)
+            {
+                if (label.StartsWith("-", StringComparison.Ordinal) || label.EndsWith("-", StringComparison.Ordinal))
+                {
+                    yield return new ValidationResult("Email domain labels cannot start or end with a dash.", [nameof(Email)]);
+                    yield break;
+                }
+            }
+        }
     }
 }

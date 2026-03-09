@@ -1,0 +1,509 @@
+@using System.Globalization
+@using System.Text
+@using Enigma.Client.Models.Gameplay
+
+<div class="enigma-advanced-panel-shell enigma-system-template @FamilyCss @DifficultyCss @DensityCss">
+    <section class="enigma-advanced-stage-card">
+        <header class="enigma-advanced-stage-head">
+            <div>
+                <span class="enigma-kicker">@DifficultyLabel Console</span>
+                <strong>@FamilyTitle</strong>
+                <p>@Description</p>
+            </div>
+            <div class="enigma-advanced-stage-badges">
+                <span class="enigma-advanced-stage-pill">@TargetModeLabel</span>
+                @if (MutatorActive)
+                {
+                    <span class="enigma-advanced-stage-pill muted">@MutatorLabel</span>
+                }
+            </div>
+        </header>
+
+        <div class="enigma-system-template-main">
+            <div class="enigma-system-visual-card">
+                @if (IsDeadReckoning)
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-system-visual-svg" aria-hidden="true">
+                        @for (var index = 0; index < 7; index++)
+                        {
+                            var y = 28 + (index * 30);
+                            <line x1="20" y1="@y" x2="396" y2="@y" class="grid-line" />
+                        }
+                        <polyline points="@BuildPolylinePoints()" class="route-line current" />
+                        @foreach (var point in Controls.Select((control, index) => new { control, index }))
+                        {
+                            <circle cx="@GetPointX(point.index).ToString("0.###", CultureInfo.InvariantCulture)"
+                                    cy="@GetPointY(point.control.Value).ToString("0.###", CultureInfo.InvariantCulture)"
+                                    r="6"
+                                    class="waypoint current" />
+                        }
+                    </svg>
+                }
+                else if (IsGravityWell)
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-system-visual-svg" aria-hidden="true">
+                        @for (var index = 0; index < Controls.Count; index++)
+                        {
+                            <circle cx="@GetOrbitX(index).ToString("0.###", CultureInfo.InvariantCulture)"
+                                    cy="142"
+                                    r="34"
+                                    class="orbital-track" />
+                        }
+                        <polyline points="@BuildGravityPath()" class="route-line current" />
+                        <circle cx="64" cy="196" r="9" class="beam-emitter" />
+                        <circle cx="354" cy="78" r="11" class="receiver-node" />
+                    </svg>
+                }
+                else if (IsEchoChamber)
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-system-visual-svg" aria-hidden="true">
+                        <rect x="36" y="28" width="348" height="198" rx="18" class="beam-frame" />
+                        <polyline points="@BuildEchoPath()" class="beam-path" />
+                        <circle cx="74" cy="132" r="10" class="beam-emitter" />
+                        <circle cx="344" cy="92" r="11" class="receiver-node" />
+                    </svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 420 260" class="enigma-system-visual-svg" aria-hidden="true">
+                        @for (var layer = 0; layer < Math.Max(4, Controls.Count + 1); layer++)
+                        {
+                            var offset = 42 + (layer * 32);
+                            <path d="@BuildFaultPath(offset, layer)"
+                                  class="fault-layer @(layer % 2 == 0 ? "primary" : "secondary")" />
+                        }
+                        <line x1="210" y1="26" x2="210" y2="236" class="fault-seam" />
+                    </svg>
+                }
+            </div>
+
+            <aside class="enigma-advanced-telemetry-panel streamlined">
+                <div class="enigma-system-summary-strip">
+                    <article>
+                        <span>Ready</span>
+                        <strong>@(Ready ? "YES" : "NO")</strong>
+                    </article>
+                    <article>
+                        <span>Exact Locks</span>
+                        <strong>@($"{LockedControls}/{Controls.Count}")</strong>
+                    </article>
+                    <article>
+                        <span>Telemetry</span>
+                        <strong>@($"{AlignedMetrics}/{Metrics.Count}")</strong>
+                    </article>
+                    <article>
+                        <span>Timer</span>
+                        <strong>@($"{Math.Max(0, Math.Ceiling(View.TimerRemainingSeconds)):0}s")</strong>
+                    </article>
+                </div>
+
+                <div class="enigma-advanced-status-card enigma-system-status-card">
+                    <div class="enigma-system-status-head">
+                        <div>
+                            <span class="enigma-kicker">Telemetry</span>
+                            <strong>@Headline</strong>
+                        </div>
+                        @if (MutatorActive)
+                        {
+                            <span class="enigma-system-mutator-chip">@MutatorLabel</span>
+                        }
+                    </div>
+                    <p>@View.StatusText</p>
+                    @if (TelemetryStableButUnlocked)
+                    {
+                        <small class="enigma-system-lock-note">Telemetry is in band, but one or more exact control locks are still off target.</small>
+                    }
+                    @if (LeadClues.Count > 0)
+                    {
+                        <div class="enigma-system-lead-clues">
+                            @foreach (var clue in LeadClues)
+                            {
+                                <article class="enigma-system-clue-card">@clue</article>
+                            }
+                        </div>
+                    }
+                    @if (MutatorActive)
+                    {
+                        <small class="enigma-system-mutator-note">@MutatorDescription</small>
+                    }
+                </div>
+
+                @if (PrimaryMetrics.Count > 0)
+                {
+                    <div class="enigma-system-metric-strip">
+                        @foreach (var metric in PrimaryMetrics)
+                        {
+                            <article class="enigma-system-metric-card compact @(metric.Aligned ? "aligned" : string.Empty)">
+                                <span>@metric.Label</span>
+                                <strong>@metric.ValueText</strong>
+                                <small>@metric.TargetText</small>
+                            </article>
+                        }
+                    </div>
+                }
+
+                @if (SecondaryMetrics.Count > 0 || OverflowClues.Count > 0)
+                {
+                    <details class="enigma-system-analysis-drawer">
+                        <summary>Detailed analysis</summary>
+
+                        @if (SecondaryMetrics.Count > 0)
+                        {
+                            <div class="enigma-system-metric-stack">
+                                @foreach (var metric in SecondaryMetrics)
+                                {
+                                    <article class="enigma-system-metric-card @(metric.Aligned ? "aligned" : string.Empty)">
+                                        <span>@metric.Label</span>
+                                        <strong>@metric.ValueText</strong>
+                                        <small>@metric.TargetText</small>
+                                    </article>
+                                }
+                            </div>
+                        }
+
+                        @if (OverflowClues.Count > 0)
+                        {
+                            <div class="enigma-system-clue-stack">
+                                @foreach (var clue in OverflowClues)
+                                {
+                                    <article class="enigma-system-clue-card">@clue</article>
+                                }
+                            </div>
+                        }
+                    </details>
+                }
+            </aside>
+        </div>
+    </section>
+
+    <section class="enigma-system-control-bank streamlined">
+        @foreach (var control in Controls)
+        {
+            <article class="enigma-system-control-card streamlined @(control.Aligned ? "aligned" : string.Empty)">
+                <header>
+                    <div class="enigma-system-control-heading">
+                        <span>@control.Label</span>
+                        <small>@(control.TargetVisible ? control.TargetText : "Aggregate target")</small>
+                    </div>
+                    <div class="enigma-system-control-reading">
+                        <strong>@control.Value</strong>
+                        <span>@($"{control.Key.ToUpperInvariant()} · {control.StateText}")</span>
+                    </div>
+                </header>
+
+                <div class="enigma-system-control-inputs">
+                    <div class="enigma-system-control-track">
+                        <div class="fill" style="@($"width:{control.Value}%;")"></div>
+                        @if (control.TargetVisible)
+                        {
+                            @if (control.ExactTarget && control.TargetValue is not null)
+                            {
+                                <span class="marker" style="@($"left:{control.TargetValue.Value}%;")"></span>
+                            }
+                            else if (control.TargetMin is not null && control.TargetMax is not null)
+                            {
+                                <span class="band" style="@($"left:{control.TargetMin.Value}%;width:{Math.Max(0, control.TargetMax.Value - control.TargetMin.Value)}%;")"></span>
+                            }
+                        }
+                        <input type="range"
+                               min="0"
+                               max="100"
+                               step="@InputStep"
+                               value="@control.Value"
+                               disabled="@InputsDisabled"
+                               @oninput="((ChangeEventArgs args) => DispatchValueAsync(control.Key, args.Value))" />
+                    </div>
+
+                    <div class="enigma-dial-bank-controls refined">
+                        <button class="btn enigma-panel-action tone-dial"
+                                disabled="@InputsDisabled"
+                                @onclick="(() => DispatchNudgeAsync(control.Key, -InputStep))">
+                            Down
+                        </button>
+                        <button class="btn enigma-panel-action tone-dial"
+                                disabled="@InputsDisabled"
+                                @onclick="(() => DispatchNudgeAsync(control.Key, InputStep))">
+                            Up
+                        </button>
+                    </div>
+                </div>
+            </article>
+        }
+    </section>
+
+    <div class="enigma-advanced-action-row">
+        @if (CommitAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-commit"
+                    disabled="@(!CommitAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(CommitAction.Value.Command))">
+                Commit
+            </button>
+        }
+        @if (ResetAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-reset"
+                    disabled="@(!ResetAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(ResetAction.Value.Command))">
+                Reset
+            </button>
+        }
+        @if (HintAction is not null)
+        {
+            <button class="btn enigma-panel-action tone-hint"
+                    disabled="@(!HintAction.Value.Enabled)"
+                    @onclick="(() => DispatchAsync(HintAction.Value.Command))">
+                Hint
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required SoloPanelView View { get; set; }
+
+    [Parameter, EditorRequired]
+    public required EventCallback<string> OnAction { get; set; }
+
+    private readonly record struct SystemControlVm(
+        string Key,
+        string Label,
+        int Value,
+        bool Aligned,
+        bool TargetVisible,
+        bool ExactTarget,
+        int? TargetValue,
+        int? TargetMin,
+        int? TargetMax,
+        string TargetText,
+        string StateText);
+
+    private readonly record struct SystemMetricVm(string Label, bool Aligned, string ValueText, string TargetText);
+
+    private string FamilyCss => $"family-{View.FamilyId}";
+    private string DifficultyCss => $"diff-{GetBoardText("visual:difficulty", "medium")}";
+    private string DensityCss => $"density-{GetBoardText("visual:density", "balanced")}";
+    private string DifficultyLabel => GetBoardText("visual:difficulty_label", "MEDIUM");
+    private string FamilyTitle => GetBoardText("visual:family_title", View.FamilyId.Replace('_', ' '));
+    private string Description => GetBoardText("system:description", "Stabilize the coupled system.");
+    private string Headline => GetBoardText("system:headline", "System Telemetry");
+    private string TargetModeLabel => GetBoardText("system:target_mode", "direct").ToUpperInvariant();
+    private string CommandPrefix => GetBoardText("system:command_prefix", "system");
+    private int InputStep => Math.Max(1, GetBoardInt("system:input_step", 1));
+    private bool Ready => GetBoardInt("system:ready", 0) == 1;
+    private bool MutatorActive => GetBoardInt("mutator:active", 0) == 1;
+    private string MutatorLabel => GetBoardText("mutator:label", string.Empty);
+    private string MutatorDescription => GetBoardText("mutator:desc", string.Empty);
+    private bool InputsDisabled => View.Status is PuzzleStatus.Solved or PuzzleStatus.Cooldown or PuzzleStatus.Resetting;
+    private bool IsDeadReckoning => string.Equals(View.FamilyId, "dead_reckoning", StringComparison.OrdinalIgnoreCase);
+    private bool IsGravityWell => string.Equals(View.FamilyId, "gravity_well", StringComparison.OrdinalIgnoreCase);
+    private bool IsEchoChamber => string.Equals(View.FamilyId, "echo_chamber", StringComparison.OrdinalIgnoreCase);
+    private int AlignedMetrics => Metrics.Count(metric => metric.Aligned);
+    private int LockedControls => Math.Clamp(GetBoardInt("system:locked_count", Controls.Count(control => control.Aligned)), 0, Controls.Count);
+    private bool TelemetryStableButUnlocked => Metrics.Count > 0 && AlignedMetrics == Metrics.Count && LockedControls < Controls.Count;
+    private SoloPanelActionItem? CommitAction => FindAction($"{CommandPrefix}:commit");
+    private SoloPanelActionItem? ResetAction => FindAction($"{CommandPrefix}:reset");
+    private SoloPanelActionItem? HintAction => FindAction($"{CommandPrefix}:hint");
+
+    private IReadOnlyList<SystemControlVm> Controls =>
+        Enumerable.Range(1, GetBoardInt("system:control_count", 0))
+            .Select(index => BuildControlVm($"k{index}"))
+            .ToArray();
+
+    private IReadOnlyList<SystemMetricVm> Metrics =>
+        View.Board.Keys
+            .Where(key => key.StartsWith("system:metric:", StringComparison.OrdinalIgnoreCase) &&
+                          key.EndsWith(":label", StringComparison.OrdinalIgnoreCase))
+            .Select(key => key["system:metric:".Length..^":label".Length])
+            .OrderBy(key => key, StringComparer.Ordinal)
+            .Select(BuildMetricVm)
+            .ToArray();
+
+    private IReadOnlyList<string> Clues =>
+        Enumerable.Range(1, GetBoardInt("system:clue_count", 0))
+            .Select(index => GetBoardText($"system:clue:{index}", string.Empty))
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToArray();
+
+    private IReadOnlyList<SystemMetricVm> PrimaryMetrics => Metrics.Take(3).ToArray();
+
+    private IReadOnlyList<SystemMetricVm> SecondaryMetrics => Metrics.Skip(3).ToArray();
+
+    private IReadOnlyList<string> LeadClues => Clues.Take(2).ToArray();
+
+    private IReadOnlyList<string> OverflowClues => Clues.Skip(2).ToArray();
+
+    private SystemControlVm BuildControlVm(string key)
+    {
+        var value = Math.Clamp(GetBoardInt($"system:control:{key}:value", 0), 0, 100);
+        var targetVisible = GetBoardInt($"system:control:{key}:target_visible", 0) == 1;
+        var exactTarget = GetBoardInt($"system:control:{key}:target_exact", 0) == 1;
+        int? targetValue = targetVisible && exactTarget ? GetBoardInt($"system:control:{key}:target", 0) : null;
+        int? targetMin = targetVisible ? GetBoardInt($"system:control:{key}:target_min", 0) : null;
+        int? targetMax = targetVisible ? GetBoardInt($"system:control:{key}:target_max", 0) : null;
+        var targetText = exactTarget && targetValue is not null
+            ? $"Target {targetValue.Value}"
+            : targetVisible && targetMin is not null && targetMax is not null
+                ? $"Band {targetMin.Value}-{targetMax.Value}"
+                : "Aggregate target only";
+        var aligned = GetBoardInt($"system:control:{key}:aligned", 0) == 1;
+        return new SystemControlVm(
+            Key: key,
+            Label: GetBoardText($"system:control:{key}:label", key.ToUpperInvariant()),
+            Value: value,
+            Aligned: aligned,
+            TargetVisible: targetVisible,
+            ExactTarget: exactTarget,
+            TargetValue: targetValue,
+            TargetMin: targetMin,
+            TargetMax: targetMax,
+            TargetText: targetText,
+            StateText: aligned ? "locked" : "off target");
+    }
+
+    private SystemMetricVm BuildMetricVm(string key)
+    {
+        var value = GetBoardText($"system:metric:{key}:value", "0.0");
+        var unit = GetBoardText($"system:metric:{key}:unit", string.Empty);
+        var min = GetBoardText($"system:metric:{key}:min", "0.0");
+        var max = GetBoardText($"system:metric:{key}:max", "0.0");
+        var valueText = string.IsNullOrWhiteSpace(unit) ? value : $"{value} {unit}";
+        var targetText = string.IsNullOrWhiteSpace(unit)
+            ? $"Band {min}-{max}"
+            : $"Band {min}-{max} {unit}";
+        return new SystemMetricVm(
+            Label: GetBoardText($"system:metric:{key}:label", key.ToUpperInvariant()),
+            Aligned: GetBoardInt($"system:metric:{key}:aligned", 0) == 1,
+            ValueText: valueText,
+            TargetText: targetText);
+    }
+
+    private SoloPanelActionItem? FindAction(string command) =>
+        View.Actions.FirstOrDefault(action => string.Equals(action.Command, command, StringComparison.OrdinalIgnoreCase));
+
+    private async Task DispatchAsync(string? command)
+    {
+        if (!OnAction.HasDelegate || string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        await OnAction.InvokeAsync(command);
+    }
+
+    private Task DispatchValueAsync(string key, object? rawValue)
+    {
+        if (rawValue is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var text = Convert.ToString(rawValue, CultureInfo.InvariantCulture);
+        if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return Task.CompletedTask;
+        }
+
+        var value = Math.Clamp(parsed, 0, 100);
+        return DispatchAsync($"{CommandPrefix}:set:{key}:{value.ToString(CultureInfo.InvariantCulture)}");
+    }
+
+    private Task DispatchNudgeAsync(string key, int delta)
+    {
+        var current = GetBoardInt($"system:control:{key}:value", 0);
+        var value = Math.Clamp(current + delta, 0, 100);
+        return DispatchAsync($"{CommandPrefix}:set:{key}:{value.ToString(CultureInfo.InvariantCulture)}");
+    }
+
+    private string BuildPolylinePoints()
+    {
+        var builder = new StringBuilder();
+        for (var index = 0; index < Controls.Count; index++)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(GetPointX(index).ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(',')
+                .Append(GetPointY(Controls[index].Value).ToString("0.###", CultureInfo.InvariantCulture));
+        }
+
+        return builder.ToString();
+    }
+
+    private double GetPointX(int index) => 34d + (index * (352d / Math.Max(1, Controls.Count - 1)));
+
+    private double GetPointY(int value) => 214d - ((value / 100d) * 156d);
+
+    private string BuildGravityPath()
+    {
+        var builder = new StringBuilder("64,196 ");
+        for (var index = 0; index < Controls.Count; index++)
+        {
+            builder.Append(GetOrbitX(index).ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(',')
+                .Append(GetOrbitY(index, Controls[index].Value).ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(' ');
+        }
+
+        builder.Append("354,78");
+        return builder.ToString();
+    }
+
+    private double GetOrbitX(int index) => 108d + (index * (220d / Math.Max(1, Controls.Count - 1)));
+
+    private double GetOrbitY(int index, int value) => 168d - ((value / 100d) * (54d - (index * 4d)));
+
+    private string BuildEchoPath()
+    {
+        var builder = new StringBuilder("74,132 ");
+        for (var index = 0; index < Controls.Count; index++)
+        {
+            var x = 116d + (index * (186d / Math.Max(1, Controls.Count - 1)));
+            var y = index % 2 == 0
+                ? 44d + ((Controls[index].Value / 100d) * 64d)
+                : 214d - ((Controls[index].Value / 100d) * 74d);
+            builder.Append(x.ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(',')
+                .Append(y.ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(' ');
+        }
+
+        builder.Append("344,92");
+        return builder.ToString();
+    }
+
+    private string BuildFaultPath(double offset, int layer)
+    {
+        var builder = new StringBuilder();
+        builder.Append("M 22 ")
+            .Append(offset.ToString("0.###", CultureInfo.InvariantCulture));
+
+        for (var index = 0; index < Controls.Count; index++)
+        {
+            var x = 72d + (index * (290d / Math.Max(1, Controls.Count - 1)));
+            var y = offset + ((Controls[index].Value / 100d) * ((layer % 2 == 0 ? -16d : 16d) + (index * 1.8d)));
+            builder.Append(" L ")
+                .Append(x.ToString("0.###", CultureInfo.InvariantCulture))
+                .Append(' ')
+                .Append(y.ToString("0.###", CultureInfo.InvariantCulture));
+        }
+
+        builder.Append(" L 398 ")
+            .Append((offset + (layer % 2 == 0 ? -8d : 8d)).ToString("0.###", CultureInfo.InvariantCulture));
+        return builder.ToString();
+    }
+
+    private int GetBoardInt(string key, int fallback = 0) =>
+        View.Board.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+
+    private string GetBoardText(string key, string fallback = "") =>
+        View.Board.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : fallback;
+}

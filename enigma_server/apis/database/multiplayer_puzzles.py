@@ -1,176 +1,157 @@
 from __future__ import annotations
 
 
-CO_OP_PUZZLE_CATALOG = {
-    "easy": {
-        "p": {
-            "name": "Pressure Systems",
-            "description": "Two plates. Both players must stand on their own plate simultaneously.",
-            "core_mechanic": "Simple coordination",
-        },
-        "q": {
-            "name": "Synchronized Reaction",
-            "description": "Both players stop their pulse meters within half a second of each other.",
-            "core_mechanic": "Shared timing",
-        },
-        "r": {
-            "name": "Divided Knowledge Riddle",
-            "description": "One player sees the question and the other sees the choices.",
-            "core_mechanic": "Split information",
-        },
-        "s": {
-            "name": "Split Memory Sequence",
-            "description": "Player one sees the first half of the sequence and player two sees the second half.",
-            "core_mechanic": "Combined recall",
-        },
-        "t": {
-            "name": "Dual Grid Rotation",
-            "description": "Each player rotates half of the grid to connect a shared path.",
-            "core_mechanic": "Shared board logic",
-        },
-        "u": {
-            "name": "Opposing Pattern Input",
-            "description": "Player one enters the shown pattern and player two enters the reverse.",
-            "core_mechanic": "Mirrored input",
-        },
-        "v": {
-            "name": "Flow Transfer Network",
-            "description": "Opening a valve on one side changes flow for the other side.",
-            "core_mechanic": "Cross-board balancing",
-        },
-        "w": {
-            "name": "Distributed Weight Balance",
-            "description": "Each player places weights so the combined total hits the target.",
-            "core_mechanic": "Shared arithmetic",
-        },
-        "x": {
-            "name": "Binary Echo System",
-            "description": "Both players must reach the same binary output.",
-            "core_mechanic": "Cooperative bit matching",
-        },
-        "y": {
-            "name": "Crossing Signal Lines",
-            "description": "Each player routes half the lines without causing a shared crossing.",
-            "core_mechanic": "Split routing",
-        },
-        "z": {
-            "name": "Spatial Sync Zones",
-            "description": "Both players must stand in the correct zones at the same time.",
-            "core_mechanic": "Movement sync",
-        },
+CO_OP_PUZZLE_KEY_ORDER = ["p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+
+_FAMILIES = {
+    "p": {
+        "family_id": "split_signal",
+        "name": "Split Signal",
+        "core_mechanic": "Asymmetric waveform alignment",
+        "mechanic_type": "Split control",
+        "accent_color": "#06B6D4",
     },
-    "medium": {
-        "p": {
-            "name": "Pressure Systems",
-            "description": "Three plates appear but only two are valid, and player roles affect which plates can be activated.",
-            "core_mechanic": "Role-based coordination",
-        },
-        "q": {
-            "name": "Synchronized Reaction",
-            "description": "Meters move at different speeds and both stops must land in the target together.",
-            "core_mechanic": "Asymmetric timing",
-        },
-        "r": {
-            "name": "Divided Knowledge Riddle",
-            "description": "Each player sees partial clues and must reconcile contradictions.",
-            "core_mechanic": "Cooperative deduction",
-        },
-        "s": {
-            "name": "Split Memory Sequence",
-            "description": "Both players see distorted versions of one sequence and must reconstruct the truth.",
-            "core_mechanic": "Shared correction",
-        },
-        "t": {
-            "name": "Dual Grid Rotation",
-            "description": "Rotating a tile on one board rotates a mirrored tile on the other board.",
-            "core_mechanic": "Mirrored transforms",
-        },
-        "u": {
-            "name": "Opposing Pattern Input",
-            "description": "The pattern rule is hidden and players must infer whether it is mirrored or inverted.",
-            "core_mechanic": "Rule discovery",
-        },
-        "v": {
-            "name": "Flow Transfer Network",
-            "description": "Flow must be balanced between both players' rooms or the puzzle resets.",
-            "core_mechanic": "Shared conservation",
-        },
-        "w": {
-            "name": "Distributed Weight Balance",
-            "description": "Weights multiply differently for each player, forcing communication to solve the equation.",
-            "core_mechanic": "Split multipliers",
-        },
-        "x": {
-            "name": "Binary Echo System",
-            "description": "One player flips bits while the other sees output only and must guide the solve.",
-            "core_mechanic": "Distributed logic",
-        },
-        "y": {
-            "name": "Crossing Signal Lines",
-            "description": "Drawing a line on one side blocks a route on the other side.",
-            "core_mechanic": "Cross-board constraints",
-        },
-        "z": {
-            "name": "Spatial Sync Zones",
-            "description": "Zones activate in opposite order for each player and must be timed together.",
-            "core_mechanic": "Opposed sequencing",
-        },
+    "q": {
+        "family_id": "pressure_exchange",
+        "name": "Pressure Exchange",
+        "core_mechanic": "Divided valve control",
+        "mechanic_type": "Shared simulation",
+        "accent_color": "#A855F7",
     },
-    "hard": {
-        "p": {
-            "name": "Pressure Systems",
-            "description": "Four resonance plates interact and both players may need to swap mid-charge to reach harmonic equilibrium.",
-            "core_mechanic": "Nonlinear cooperation",
-        },
-        "q": {
-            "name": "Synchronized Reaction",
-            "description": "Player one sees the target window while player two sees the pulse. Neither player has the full picture alone.",
-            "core_mechanic": "Information asymmetry",
-        },
-        "r": {
-            "name": "Divided Knowledge Riddle",
-            "description": "Each player sees different truth-lie statements and only the merged view is solvable.",
-            "core_mechanic": "Combined truth assignment",
-        },
-        "s": {
-            "name": "Split Memory Sequence",
-            "description": "Two overlapping sequences appear and each player sees different interference patterns.",
-            "core_mechanic": "Interference filtering",
-        },
-        "t": {
-            "name": "Dual Grid Rotation",
-            "description": "Boards are rotated relative to each other, so each rotation must be mentally transformed.",
-            "core_mechanic": "Rotational cooperation",
-        },
-        "u": {
-            "name": "Opposing Pattern Input",
-            "description": "Player one sees the transformation rule while player two sees the pattern to transform.",
-            "core_mechanic": "Split transform logic",
-        },
-        "v": {
-            "name": "Flow Transfer Network",
-            "description": "A hidden conservation law spans both rooms and must be deduced through shared experimentation.",
-            "core_mechanic": "Shared hidden system",
-        },
-        "w": {
-            "name": "Distributed Weight Balance",
-            "description": "Pads on one board change multipliers on the other board, turning the puzzle into cooperative algebra.",
-            "core_mechanic": "Cross-board equations",
-        },
-        "x": {
-            "name": "Binary Echo System",
-            "description": "Each player sees different transformation operators and must jointly compute the target state.",
-            "core_mechanic": "Distributed computation",
-        },
-        "y": {
-            "name": "Crossing Signal Lines",
-            "description": "One player sees true intersections while the other sees false ones and must separate signal from noise.",
-            "core_mechanic": "Topological misdirection",
-        },
-        "z": {
-            "name": "Spatial Sync Zones",
-            "description": "Each zone changes the next required zone for the other player based on last movement.",
-            "core_mechanic": "Recursive coordination",
-        },
+    "r": {
+        "family_id": "bridge_builder",
+        "name": "Bridge Builder",
+        "core_mechanic": "Split construction zones",
+        "mechanic_type": "Joint topology",
+        "accent_color": "#F97316",
+    },
+    "s": {
+        "family_id": "mirror_minds",
+        "name": "Mirror Minds",
+        "core_mechanic": "Asymmetric memory reconstruction",
+        "mechanic_type": "Deduction grid",
+        "accent_color": "#EC4899",
+    },
+    "t": {
+        "family_id": "flood_control",
+        "name": "Flood Control",
+        "core_mechanic": "Gates versus pumps",
+        "mechanic_type": "Real-time balancing",
+        "accent_color": "#34D399",
+    },
+    "u": {
+        "family_id": "cipher_relay",
+        "name": "Cipher Relay",
+        "core_mechanic": "Sequential shared decode",
+        "mechanic_type": "Relay dependency",
+        "accent_color": "#818CF8",
+    },
+    "v": {
+        "family_id": "gravity_tandem",
+        "name": "Gravity Tandem",
+        "core_mechanic": "Direction plus thrust coupling",
+        "mechanic_type": "Split simulation input",
+        "accent_color": "#FB923C",
+    },
+    "w": {
+        "family_id": "tidal_lock",
+        "name": "Tidal Lock",
+        "core_mechanic": "Synchronized moving window catches",
+        "mechanic_type": "Timing cooperation",
+        "accent_color": "#38BDF8",
+    },
+    "x": {
+        "family_id": "strata_shift",
+        "name": "Strata Shift",
+        "core_mechanic": "Interleaved layer alignment",
+        "mechanic_type": "Role-interleaved transforms",
+        "accent_color": "#C084FC",
+    },
+    "y": {
+        "family_id": "echo_sync",
+        "name": "Echo Sync",
+        "core_mechanic": "Timing and frequency resonance",
+        "mechanic_type": "Temporal + spectral sync",
+        "accent_color": "#4ADE80",
+    },
+    "z": {
+        "family_id": "temporal_weave",
+        "name": "Temporal Weave",
+        "core_mechanic": "Cross-timeline dependency grid",
+        "mechanic_type": "Temporal logic",
+        "accent_color": "#F87171",
     },
 }
+
+_DESCRIPTIONS = {
+    "easy": {
+        "p": "Owner tunes frequency while guest tunes amplitude. Lock both channels inside tolerance together.",
+        "q": "Owner opens intake valves and guest releases pressure. Hold every tank in the safe band together.",
+        "r": "Each player controls half the bridge segments. Activate the shared stable path.",
+        "s": "Each player reconstructs mirrored memory cells from partial truth. Align both halves.",
+        "t": "Owner shapes flood flow with gates while guest drains with pumps. Protect all critical cells.",
+        "u": "Owner controls shift and guest controls column relay order. Commit matching decode settings.",
+        "v": "Owner sets heading, guest sets thrust. Launch with both settings aligned to the target orbit.",
+        "w": "Catch moving tidal windows together. Both players must pulse inside the same lock window.",
+        "x": "Owner and guest adjust alternating strata layers. Align every layer to its target offset.",
+        "y": "Guest tunes resonance frequency while owner fires pulse timing. Build synchronized resonances.",
+        "z": "Past and present grids are linked. Fill both timelines without triggering paradox resets.",
+    },
+    "medium": {
+        "p": "Signal tolerance narrows and lock discipline tightens.",
+        "q": "More tanks and stronger drift require tighter communication.",
+        "r": "More beam nodes and decoy toggles increase shared planning depth.",
+        "s": "Larger mirrored memory arrays require cleaner pattern language.",
+        "t": "Flood dynamics accelerate and safe margins shrink.",
+        "u": "Relay decode adds stricter lock ordering and tighter commit windows.",
+        "v": "Trajectory target tolerance tightens and launch mistakes reset progress.",
+        "w": "More catches are required with narrower synchronization tolerance.",
+        "x": "Layer count increases and alignment tolerance tightens.",
+        "y": "Resonance windows tighten and required streak depth increases.",
+        "z": "Temporal links multiply and contradiction recovery is stricter.",
+    },
+    "hard": {
+        "p": "Near-exact lock with strict desync penalties.",
+        "q": "High drift and minimal tolerance; overflow triggers fast rollback.",
+        "r": "Dense bridge topology with near-valid traps.",
+        "s": "Large mirrored arrays with little error margin.",
+        "t": "Fast flood pressure and strict failure recovery.",
+        "u": "Strict lock sequence with low tolerance for decode mismatch.",
+        "v": "Precise launch synchronization with minimal target tolerance.",
+        "w": "Frame-tight capture windows and higher streak requirements.",
+        "x": "Maximum strata density and strict alignment checks.",
+        "y": "Strict timing/frequency resonance without slack.",
+        "z": "High-density weave with strict paradox discipline.",
+    },
+}
+
+
+def _build_catalog() -> dict[str, dict[str, dict[str, object]]]:
+    catalog: dict[str, dict[str, dict[str, object]]] = {}
+    for difficulty, descriptions in _DESCRIPTIONS.items():
+        tier: dict[str, dict[str, object]] = {}
+        for key in CO_OP_PUZZLE_KEY_ORDER:
+            family = _FAMILIES[key]
+            tier[key] = {
+                "schema_version": 2,
+                "family_id": family["family_id"],
+                "name": family["name"],
+                "description": descriptions[key],
+                "core_mechanic": family["core_mechanic"],
+                "mechanic_type": family["mechanic_type"],
+                "accent_color": family["accent_color"],
+                "difficulty_tuning": {
+                    "easy": "full feedback, wider tolerance",
+                    "medium": "partial information, tighter tolerance",
+                    "hard": "strict timing and minimal tolerance",
+                },
+            }
+        catalog[difficulty] = tier
+    return catalog
+
+
+CO_OP_PUZZLE_CATALOG_V2 = _build_catalog()
+
+# In-place upgrade: keep legacy export names pointing at the same updated catalog.
+CO_OP_PUZZLE_CATALOG = CO_OP_PUZZLE_CATALOG_V2
+CO_OP_PUZZLE_CATALOG_V1 = CO_OP_PUZZLE_CATALOG_V2

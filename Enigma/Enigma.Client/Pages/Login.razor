@@ -6,38 +6,38 @@
 @inject Enigma.Client.Services.UiNotificationService Notifications
 @using Microsoft.JSInterop
 
-<SeoHead Title="Enigma Puzzle Game | Solve Evolving Mazes"
-         Description="Enigma is an evolving puzzle maze game with solo runs, co-op expeditions, collectible maps, and a player-driven marketplace."
+<SeoHead Title="Enigma Command Access | Explorer Sign In"
+         Description="Access Enigma Command to run solo expeditions, join co-op operations, collect sectors, and use the live anomaly exchange."
          OpenGraphType="website"
          SchemaType="VideoGame"
-         Keywords="Enigma puzzle game, evolving maze game, co-op puzzle maze, collectible maps"
+         Keywords="Enigma anomaly research division, explorer command, anomaly sectors, co-op expeditions"
          SchemaProperties="@(new Dictionary<string, object?> { ["genre"] = "Puzzle", ["applicationCategory"] = "Game", ["operatingSystem"] = "Any", ["publisher"] = "Enigma" })" />
 
 <div class="content auth-shell seo-auth-shell" style="max-width: 960px; margin-top: 60px;">
     <section class="seo-auth-intro panel">
-        <span class="profile-kicker">Puzzle Maze Game</span>
-        <h1>Enigma</h1>
-        <p>Explore evolving mazes, solve room-based puzzles, discover collectible maps, and use the live economy for marketplace trading, map analysis rewards, and council voting.</p>
+        <span class="profile-kicker">Enigma Corporation</span>
+        <h1>Anomaly Research Division (A.R.D)</h1>
+        <p>Explore evolving sectors, solve room-based puzzles, recover anomaly sector records, and use the live economy for exchange trading, analysis rewards, and council voting.</p>
         <div class="seo-inline-links">
-            <a href="/about">About</a>
-            <a href="/how-enigma-works">How It Works</a>
-            <a href="/enigma-game-mechanics">Game Mechanics</a>
-            <a href="/enigma-multiplayer">Multiplayer</a>
+            <a href="/about">Program Brief</a>
+            <a href="/how-enigma-works">Operations Guide</a>
+            <a href="/enigma-game-mechanics">System Mechanics</a>
+            <a href="/enigma-multiplayer">Co-op Operations</a>
         </div>
     </section>
 
     <div class="card p-4 shadow-sm auth-card">
 
-        <h2 class="mb-4 text-center">Sign In</h2>
+        <h2 class="mb-4 text-center">Access Explorer Command</h2>
 
         <EditForm Model="user" OnValidSubmit="OnLoginClick">
             <DataAnnotationsValidator />
 
             <div class="mb-3">
-                <label class="form-label">Username</label>
+                <label class="form-label">Callsign</label>
                 <InputText class="form-control"
                            @bind-Value="user.Username"
-                           placeholder="your_username" />
+                           placeholder="your_callsign" />
             </div>
 
             <div class="mb-3">
@@ -59,13 +59,13 @@
                                    class="form-check-input"
                                    id="remember" />
                     <label for="remember" class="form-check-label ms-1">
-                        Remember me
+                        Keep me signed in
                     </label>
                 </div>
             </div>
 
             <button type="submit" class="btn btn-primary w-100" disabled="@IsSubmitting">
-                @(IsSubmitting ? "Logging in..." : "Login")
+                @(IsSubmitting ? "Authenticating..." : "Enter Command")
             </button>
         </EditForm>
 
