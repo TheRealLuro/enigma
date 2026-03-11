@@ -78,6 +78,7 @@
                             }
                         </div>
                     }
+                    <ValidationMessage For="() => newUser.Password" />
                 </div>
 
                 <div class="mb-3">
@@ -254,7 +255,8 @@
 
     private void OnInvalidRegisterAttempt(EditContext _)
     {
-        errorMessage = null;
+        errorMessage = "Please fix the highlighted signup fields before requesting a verification code.";
+        Notifications.Warning(errorMessage);
     }
 
     private async Task OnVerifyCodeAsync()
@@ -361,7 +363,8 @@
 
     private void OnInvalidVerifyAttempt(EditContext _)
     {
-        errorMessage = null;
+        errorMessage = "Enter a valid 6-digit verification code before continuing.";
+        Notifications.Warning(errorMessage);
     }
 
     private void ReturnToRegistrationForm()

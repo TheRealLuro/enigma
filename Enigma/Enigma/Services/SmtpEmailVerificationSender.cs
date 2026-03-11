@@ -1,11 +1,19 @@
 using System.Net;
 using System.Net.Mail;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace Enigma;
 
 public sealed class SmtpEmailVerificationSender : IEmailVerificationSender
 {
+    private readonly ILogger<SmtpEmailVerificationSender> _logger;
+
+    public SmtpEmailVerificationSender(ILogger<SmtpEmailVerificationSender> logger)
+    {
+        _logger = logger;
+    }
+
     public async Task SendVerificationCodeAsync(
         string username,
         string email,
@@ -14,6 +22,8 @@ public sealed class SmtpEmailVerificationSender : IEmailVerificationSender
         EmailVerificationOptions options,
         CancellationToken cancellationToken)
     {
+        var maskedEmail = MaskEmail(email);
+
         using var message = new MailMessage
         {
             From = new MailAddress(options.FromEmail, string.IsNullOrWhiteSpace(options.FromName) ? options.FromEmail : options.FromName),
@@ -40,8 +50,29 @@ public sealed class SmtpEmailVerificationSender : IEmailVerificationSender
                 : new NetworkCredential(options.SmtpUsername, NormalizePassword(options)),
         };
 
+        _logger.LogInformation(
+            "Sending verification email to {MaskedEmail} via {SmtpHost}:{SmtpPort} with SSL {UseSsl}.",
+            maskedEmail,
+            options.SmtpHost,
+            options.SmtpPort,
+            options.UseSsl);
+
         cancellationToken.ThrowIfCancellationRequested();
-        await client.SendMailAsync(message, cancellationToken);
+        try
+        {
+            await client.SendMailAsync(message, cancellationToken);
+            _logger.LogInformation("Verification email accepted by SMTP server for {MaskedEmail}.", maskedEmail);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Verification email send failed for {MaskedEmail} via {SmtpHost}:{SmtpPort}.",
+                maskedEmail,
+                options.SmtpHost,
+                options.SmtpPort);
+            throw;
+        }
     }
 
     private static string NormalizePassword(EmailVerificationOptions options)
@@ -61,5 +92,19 @@ public sealed class SmtpEmailVerificationSender : IEmailVerificationSender
         }
 
         return password;
+    }
+
+    private static string MaskEmail(string email)
+    {
+        var atIndex = email.IndexOf('@');
+        if (atIndex <= 1)
+        {
+            return email;
+        }
+
+        var local = email[..atIndex];
+        var domain = email[atIndex..];
+        var visibleCount = Math.Min(2, local.Length);
+        return $"{local[..visibleCount]}***{domain}";
     }
 }
