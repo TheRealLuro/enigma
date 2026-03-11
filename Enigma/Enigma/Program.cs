@@ -110,7 +110,9 @@ else if (isManagedProxyHost)
 
 builder.Services.AddAntiforgery(options =>
 {
-    options.Cookie.Name = "Enigma.Antiforgery";
+    // Version the antiforgery cookie so browsers stop sending tokens that were
+    // encrypted with a pre-fix key ring from earlier deployments.
+    options.Cookie.Name = "Enigma.Antiforgery.v2";
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
