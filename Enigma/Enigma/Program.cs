@@ -63,7 +63,7 @@ builder.Services.AddScoped<UiNotificationService>();
 builder.Services.AddScoped<DeviceCompatibilityService>();
 builder.Services.AddMemoryCache();
 builder.Services.Configure<EmailVerificationOptions>(builder.Configuration.GetSection(EmailVerificationOptions.SectionName));
-builder.Services.AddSingleton<IEmailVerificationSender, SmtpEmailVerificationSender>();
+builder.Services.AddSingleton<IEmailVerificationSender, GmailApiEmailVerificationSender>();
 builder.Services.AddSingleton<PendingSignUpVerificationService>();
 builder.Services.AddControllers();
 builder.Services.Configure<ForwardedHeadersOptions>(options =>

@@ -315,9 +315,12 @@ If you did not request this message, you can safely ignore it.
 
     private static void EnsureEmailConfiguration(EmailVerificationOptions options)
     {
-        if (string.IsNullOrWhiteSpace(options.SmtpHost) || string.IsNullOrWhiteSpace(options.FromEmail))
+        if (string.IsNullOrWhiteSpace(options.GmailClientId)
+            || string.IsNullOrWhiteSpace(options.GmailClientSecret)
+            || string.IsNullOrWhiteSpace(options.GmailRefreshToken)
+            || string.IsNullOrWhiteSpace(options.FromEmail))
         {
-            throw new InvalidOperationException("Email verification is not configured. Set EmailVerification:SmtpHost and EmailVerification:FromEmail, plus the related SMTP settings, in appsettings, environment variables, or user secrets before allowing signup.");
+            throw new InvalidOperationException("Email verification is not configured. Set EmailVerification:GmailClientId, EmailVerification:GmailClientSecret, EmailVerification:GmailRefreshToken, and EmailVerification:FromEmail in appsettings, environment variables, or user secrets before allowing signup.");
         }
     }
 

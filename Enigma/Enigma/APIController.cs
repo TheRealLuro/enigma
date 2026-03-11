@@ -236,6 +236,14 @@ public class APIController : ControllerBase
         {
             return BuildEmailDeliveryFailureResponse(exception);
         }
+        catch (TaskCanceledException)
+        {
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new
+            {
+                status = "error",
+                detail = "Verification email timed out while contacting the SMTP provider. Check outbound SMTP access from the host and try again.",
+            });
+        }
     }
 
     [HttpPost("session/signup/verify")]
@@ -336,6 +344,14 @@ public class APIController : ControllerBase
         catch (SmtpException exception)
         {
             return BuildEmailDeliveryFailureResponse(exception);
+        }
+        catch (TaskCanceledException)
+        {
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new
+            {
+                status = "error",
+                detail = "Verification email timed out while contacting the SMTP provider. Check outbound SMTP access from the host and try again.",
+            });
         }
     }
 

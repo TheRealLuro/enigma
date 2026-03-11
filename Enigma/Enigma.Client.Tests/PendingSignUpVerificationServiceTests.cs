@@ -76,7 +76,9 @@ public sealed class PendingSignUpVerificationServiceTests
         var sender = new FakeEmailVerificationSender();
         var options = new EmailVerificationOptions
         {
-            SmtpHost = string.Empty,
+            GmailClientId = string.Empty,
+            GmailClientSecret = string.Empty,
+            GmailRefreshToken = string.Empty,
             FromEmail = string.Empty,
         };
         var service = CreateService(sender, options, preserveProvidedValues: true);
@@ -117,11 +119,9 @@ public sealed class PendingSignUpVerificationServiceTests
             dataProtectionProvider,
             new TestOptionsMonitor<EmailVerificationOptions>(new EmailVerificationOptions
             {
-                SmtpHost = preserveProvidedValues ? options.SmtpHost : (string.IsNullOrWhiteSpace(options.SmtpHost) ? "smtp.example.com" : options.SmtpHost),
-                SmtpPort = options.SmtpPort,
-                SmtpUsername = options.SmtpUsername,
-                SmtpPassword = options.SmtpPassword,
-                UseSsl = options.UseSsl,
+                GmailClientId = preserveProvidedValues ? options.GmailClientId : (string.IsNullOrWhiteSpace(options.GmailClientId) ? "gmail-client-id" : options.GmailClientId),
+                GmailClientSecret = preserveProvidedValues ? options.GmailClientSecret : (string.IsNullOrWhiteSpace(options.GmailClientSecret) ? "gmail-client-secret" : options.GmailClientSecret),
+                GmailRefreshToken = preserveProvidedValues ? options.GmailRefreshToken : (string.IsNullOrWhiteSpace(options.GmailRefreshToken) ? "gmail-refresh-token" : options.GmailRefreshToken),
                 FromEmail = preserveProvidedValues ? options.FromEmail : (string.IsNullOrWhiteSpace(options.FromEmail) ? "security@enigma.test" : options.FromEmail),
                 FromName = string.IsNullOrWhiteSpace(options.FromName) ? "Enigma Corporation" : options.FromName,
                 CodeLength = options.CodeLength <= 0 ? 6 : options.CodeLength,
