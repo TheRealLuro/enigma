@@ -77,19 +77,35 @@ var dataProtectionBuilder = builder.Services
     .AddDataProtection()
     .SetApplicationName("Enigma");
 
-var dataProtectionKeysPath =
+var configuredDataProtectionKeysPath =
     builder.Configuration["DataProtection:KeysPath"]
     ?? Environment.GetEnvironmentVariable("ENIGMA_DATA_PROTECTION_KEYS_PATH");
-
-if (string.IsNullOrWhiteSpace(dataProtectionKeysPath) && Directory.Exists("/var/data"))
-{
-    dataProtectionKeysPath = "/var/data/enigma-dp-keys";
-}
+var dataProtectionKeysPath = ResolveDataProtectionKeysPath(configuredDataProtectionKeysPath, isManagedProxyHost);
+string? dataProtectionStartupWarning = null;
 
 if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 {
-    Directory.CreateDirectory(dataProtectionKeysPath);
-    dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+    try
+    {
+        Directory.CreateDirectory(dataProtectionKeysPath);
+        dataProtectionBuilder.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+
+        if (isManagedProxyHost && string.IsNullOrWhiteSpace(configuredDataProtectionKeysPath))
+        {
+            dataProtectionStartupWarning =
+                $"Using default data-protection key path '{dataProtectionKeysPath}'. Attach your Render persistent disk there, or set DataProtection:KeysPath / ENIGMA_DATA_PROTECTION_KEYS_PATH to a mounted directory, so auth cookies and antiforgery tokens survive restarts.";
+        }
+    }
+    catch (Exception exception)
+    {
+        dataProtectionStartupWarning =
+            $"Failed to persist data-protection keys to '{dataProtectionKeysPath}'. Falling back to ephemeral container storage, which will break auth cookies and antiforgery tokens after restarts. {exception.Message}";
+    }
+}
+else if (isManagedProxyHost)
+{
+    dataProtectionStartupWarning =
+        "No data-protection key path is configured. Set DataProtection:KeysPath or ENIGMA_DATA_PROTECTION_KEYS_PATH to a persistent mounted directory so auth cookies and antiforgery tokens survive restarts.";
 }
 
 builder.Services.AddAntiforgery(options =>
@@ -142,6 +158,11 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+if (!string.IsNullOrWhiteSpace(dataProtectionStartupWarning))
+{
+    app.Logger.LogWarning("{Message}", dataProtectionStartupWarning);
+}
+
 // Configure the HTTP request pipeline.
 if (enableWasmDebugging)
 {
@@ -188,26 +209,7 @@ Sitemap: {baseUrl}/sitemap.xml
 app.MapGet("/sitemap.xml", (HttpContext context) =>
 {
     var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}".TrimEnd('/');
-    var publicPaths = new[]
-    {
-        "/",
-        "/lore",
-        "/about",
-        "/how-enigma-works",
-        "/enigma-game-mechanics",
-        "/enigma-multiplayer",
-    };
-
-    var document = new XDocument(
-        new XElement("urlset",
-            new XAttribute(XNamespace.Xmlns + "xsi", "http://www.w3.org/2001/XMLSchema-instance"),
-            new XAttribute("xmlns", "http://www.sitemaps.org/schemas/sitemap/0.9"),
-            publicPaths.Select(path =>
-                new XElement("url",
-                    new XElement("loc", $"{baseUrl}{path}"),
-                    new XElement("changefreq", path == "/" ? "weekly" : "monthly"),
-                    new XElement("priority", path == "/" ? "1.0" : "0.8")))));
-
+    var document = BuildSitemapDocument(baseUrl);
     return Results.Text(document.ToString(SaveOptions.DisableFormatting), "application/xml");
 });
 
@@ -294,6 +296,45 @@ static Uri BuildBackendSocketUri(string baseUrl, string relativePath)
         Scheme = absolute.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ? "wss" : "ws",
     };
     return builder.Uri;
+}
+
+static string? ResolveDataProtectionKeysPath(string? configuredPath, bool isManagedProxyHost)
+{
+    if (!string.IsNullOrWhiteSpace(configuredPath))
+    {
+        return configuredPath;
+    }
+
+    if (isManagedProxyHost)
+    {
+        // Render services use an ephemeral filesystem by default. Prefer a stable
+        // mount point so a persistent disk at /var/data works without extra config.
+        return "/var/data/enigma-dp-keys";
+    }
+
+    return null;
+}
+
+static XDocument BuildSitemapDocument(string baseUrl)
+{
+    var sitemap = XNamespace.Get("http://www.sitemaps.org/schemas/sitemap/0.9");
+    var publicPaths = new[]
+    {
+        "/",
+        "/lore",
+        "/about",
+        "/how-enigma-works",
+        "/enigma-game-mechanics",
+        "/enigma-multiplayer",
+    };
+
+    return new XDocument(
+        new XElement(sitemap + "urlset",
+            publicPaths.Select(path =>
+                new XElement(sitemap + "url",
+                    new XElement(sitemap + "loc", $"{baseUrl}{path}"),
+                    new XElement(sitemap + "changefreq", path == "/" ? "weekly" : "monthly"),
+                    new XElement(sitemap + "priority", path == "/" ? "1.0" : "0.8")))));
 }
 
 static async Task RelayWebSocketAsync(WebSocket source, WebSocket destination, CancellationToken cancellationToken)
