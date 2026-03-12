@@ -9,6 +9,8 @@ public partial class Game
 {
     private static readonly TimeSpan CoopStateSyncInterval = TimeSpan.FromMilliseconds(33);
     private static readonly TimeSpan CoopPollInterval = TimeSpan.FromMilliseconds(150);
+    private const double CoopPeerSnapDistance = 220d;
+    private const double CoopPeerInterpolationRate = 14d;
 
     private DateTime _lastCoopStateSyncUtc = DateTime.MinValue;
     private DateTime _lastCoopPollUtc = DateTime.MinValue;
@@ -21,6 +23,11 @@ public partial class Game
     private bool _coopFinishRequested;
     private bool _isOnBlackHole;
     private bool _coopSocketOpen;
+    private double _coopOtherPlayerRenderX;
+    private double _coopOtherPlayerRenderY;
+    private double _coopOtherPlayerTargetX;
+    private double _coopOtherPlayerTargetY;
+    private bool _coopOtherPlayerRenderInitialized;
 
     [SupplyParameterFromQuery(Name = "coop")]
     public string? Coop { get; set; }
@@ -53,7 +60,7 @@ public partial class Game
             return string.Empty;
         }
 
-        var (x, y) = NormalizeCoopPosition(CoopOtherPlayer.Position);
+        var (x, y) = GetRenderedCoopOtherPlayerPosition();
         return $"left: {ToPositionPercentX(x, PlayerSize)}%; top: {ToPercentY(y)}%; width: {ToLengthPercentX(PlayerSize)}%; height: {ToPercentY(PlayerSize)}%;";
     }
 
@@ -64,7 +71,7 @@ public partial class Game
             return string.Empty;
         }
 
-        var (x, normalizedY) = NormalizeCoopPosition(CoopOtherPlayer.Position);
+        var (x, normalizedY) = GetRenderedCoopOtherPlayerPosition();
         var y = Math.Clamp(normalizedY - 42d, 0d, RoomSize - PlayerSize);
         return $"left: {ToPositionPercentX(x, PlayerSize)}%; top: {ToPercentY(y)}%;";
     }
@@ -115,6 +122,7 @@ public partial class Game
         _coopFinishRequested = false;
         _isOnBlackHole = false;
         _coopSocketOpen = false;
+        ResetCoopPeerRenderState();
     }
 
     private async Task InitializeCoopAsync()
@@ -356,17 +364,19 @@ public partial class Game
 
     private void ApplyCoopSession(MultiplayerSessionState session, bool forcePosition = false)
     {
+        var previousRoom = _coopSession?.CurrentRoom;
         _coopSession = session;
-        _coopMoveRequestInFlight = false;
-        _coopPuzzleActionInFlight = false;
 
         if (ParsedSeed is null)
         {
+            SyncCoopPeerRenderState(session.OtherPlayer, snap: true);
             return;
         }
 
         var nextPoint = new GridPoint(session.CurrentRoom.X, session.CurrentRoom.Y);
-        var roomChanged = CurrentRoom?.Coordinates != nextPoint;
+        var roomChanged = CurrentRoom?.Coordinates != nextPoint ||
+            previousRoom?.X != session.CurrentRoom.X ||
+            previousRoom?.Y != session.CurrentRoom.Y;
         if (roomChanged && ParsedSeed.TryGetRoom(nextPoint, out var nextRoom))
         {
             CurrentRoom = nextRoom;
@@ -390,6 +400,7 @@ public partial class Game
             _isOnBlackHole = session.You.IsOnBlackHole;
         }
 
+        SyncCoopPeerRenderState(session.OtherPlayer, snap: roomChanged || forcePosition);
         SyncCurrentRoomProgressFromSession();
     }
 
@@ -539,6 +550,20 @@ public partial class Game
             return;
         }
 
+        if (string.Equals(message.Type, "position", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCoopPositionUpdate(message);
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (string.Equals(message.Type, "puzzle_state", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyCoopPuzzleStateUpdate(message);
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
         if (!string.Equals(message.Type, "session", StringComparison.OrdinalIgnoreCase) || message.Session is null)
         {
             return;
@@ -550,6 +575,8 @@ public partial class Game
         }
 
         ApplyCoopSession(message.Session);
+        _coopMoveRequestInFlight = false;
+        _coopPuzzleActionInFlight = false;
 
         if (string.Equals(message.Session.Status, "completed", StringComparison.OrdinalIgnoreCase) && message.Session.Completion is not null)
         {
@@ -579,6 +606,161 @@ public partial class Game
         }
 
         return InvokeAsync(StateHasChanged);
+    }
+
+    private (double X, double Y) GetRenderedCoopOtherPlayerPosition()
+    {
+        if (CoopOtherPlayer is null)
+        {
+            return (0d, 0d);
+        }
+
+        if (!_coopOtherPlayerRenderInitialized)
+        {
+            SyncCoopPeerRenderState(CoopOtherPlayer, snap: true);
+        }
+
+        return (_coopOtherPlayerRenderX, _coopOtherPlayerRenderY);
+    }
+
+    private void ResetCoopPeerRenderState()
+    {
+        _coopOtherPlayerRenderInitialized = false;
+        _coopOtherPlayerRenderX = 0d;
+        _coopOtherPlayerRenderY = 0d;
+        _coopOtherPlayerTargetX = 0d;
+        _coopOtherPlayerTargetY = 0d;
+    }
+
+    private void SyncCoopPeerRenderState(MultiplayerPlayerState? player, bool snap)
+    {
+        if (player is null)
+        {
+            ResetCoopPeerRenderState();
+            return;
+        }
+
+        var (x, y) = NormalizeCoopPosition(player.Position);
+        _coopOtherPlayerTargetX = x;
+        _coopOtherPlayerTargetY = y;
+
+        var dx = _coopOtherPlayerRenderX - x;
+        var dy = _coopOtherPlayerRenderY - y;
+        var distance = Math.Sqrt((dx * dx) + (dy * dy));
+        if (!_coopOtherPlayerRenderInitialized || snap || distance >= CoopPeerSnapDistance)
+        {
+            _coopOtherPlayerRenderX = x;
+            _coopOtherPlayerRenderY = y;
+            _coopOtherPlayerRenderInitialized = true;
+        }
+    }
+
+    private void UpdateCoopPeerInterpolation(double deltaTime)
+    {
+        if (!IsCoopRun || CoopOtherPlayer is null || !_coopOtherPlayerRenderInitialized)
+        {
+            return;
+        }
+
+        var alpha = 1d - Math.Exp(-CoopPeerInterpolationRate * Math.Max(0d, deltaTime));
+        _coopOtherPlayerRenderX += (_coopOtherPlayerTargetX - _coopOtherPlayerRenderX) * alpha;
+        _coopOtherPlayerRenderY += (_coopOtherPlayerTargetY - _coopOtherPlayerRenderY) * alpha;
+
+        if (Math.Abs(_coopOtherPlayerTargetX - _coopOtherPlayerRenderX) <= 0.25d)
+        {
+            _coopOtherPlayerRenderX = _coopOtherPlayerTargetX;
+        }
+
+        if (Math.Abs(_coopOtherPlayerTargetY - _coopOtherPlayerRenderY) <= 0.25d)
+        {
+            _coopOtherPlayerRenderY = _coopOtherPlayerTargetY;
+        }
+    }
+
+    private void ApplyCoopPositionUpdate(MultiplayerSocketEnvelope message)
+    {
+        if (_coopSession is null ||
+            message.Room is null ||
+            message.Position is null ||
+            string.IsNullOrWhiteSpace(message.Username))
+        {
+            return;
+        }
+
+        if (_coopSession.CurrentRoom.X != message.Room.X || _coopSession.CurrentRoom.Y != message.Room.Y)
+        {
+            return;
+        }
+
+        if (message.TeamGold.HasValue)
+        {
+            _coopSession.TeamGold = message.TeamGold.Value;
+        }
+
+        if (message.CurrentRoomProgress is not null)
+        {
+            _coopSession.CurrentRoomProgress = message.CurrentRoomProgress;
+        }
+
+        var isLocalPlayer = string.Equals(message.Username, Username, StringComparison.OrdinalIgnoreCase);
+        MultiplayerPlayerState targetPlayer;
+        if (isLocalPlayer)
+        {
+            _coopSession.You ??= new MultiplayerPlayerState { Username = Username };
+            targetPlayer = _coopSession.You;
+        }
+        else
+        {
+            _coopSession.OtherPlayer ??= new MultiplayerPlayerState { Username = message.Username };
+            _coopSession.OtherPlayerVisible = true;
+            targetPlayer = _coopSession.OtherPlayer;
+        }
+
+        targetPlayer.Username = message.Username;
+        targetPlayer.Room = message.Room;
+        targetPlayer.Position = message.Position;
+        if (!string.IsNullOrWhiteSpace(message.Facing))
+        {
+            targetPlayer.Facing = message.Facing;
+        }
+
+        if (message.IsOnBlackHole.HasValue)
+        {
+            targetPlayer.IsOnBlackHole = message.IsOnBlackHole.Value;
+        }
+
+        if (!isLocalPlayer)
+        {
+            SyncCoopPeerRenderState(targetPlayer, snap: false);
+        }
+
+        SyncCurrentRoomProgressFromSession();
+    }
+
+    private void ApplyCoopPuzzleStateUpdate(MultiplayerSocketEnvelope message)
+    {
+        if (_coopSession is null)
+        {
+            return;
+        }
+
+        if (message.TeamGold.HasValue)
+        {
+            _coopSession.TeamGold = message.TeamGold.Value;
+        }
+
+        if (message.CurrentRoomProgress is not null)
+        {
+            _coopSession.CurrentRoomProgress = message.CurrentRoomProgress;
+        }
+
+        if (message.CurrentRoomPuzzle is not null)
+        {
+            _coopSession.CurrentRoomPuzzle = message.CurrentRoomPuzzle;
+        }
+
+        _coopPuzzleActionInFlight = false;
+        SyncCurrentRoomProgressFromSession();
     }
 
     private async Task CompleteCoopRunAsync(MultiplayerCompletionData completion)

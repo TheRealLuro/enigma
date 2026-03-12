@@ -323,6 +323,7 @@ public partial class Profile : IAsyncDisposable
         EmailForm.CurrentPassword = string.Empty;
         PasswordForm = new PasswordFormModel();
         DeleteForm = new DeleteFormModel();
+        ResetPendingAccountChangeFlows();
 
         var profileImage = ProfileData.ProfileImage;
         AvatarMapName = profileImage?.MapName is { Length: > 0 } currentMapName
@@ -716,18 +717,7 @@ public partial class Profile : IAsyncDisposable
     }
     private async Task UpdateEmailAsync()
     {
-        await ExecuteActionAsync(
-            () => Api.PutJsonAsync("api/auth/account/email", new
-            {
-                currentPassword = EmailForm.CurrentPassword,
-                newEmail = EmailForm.NewEmail,
-            }),
-            async response =>
-            {
-                var message = await RefreshSessionFromUserResponseAsync(response, "Contact email updated.");
-                EmailForm.CurrentPassword = string.Empty;
-                return message;
-            });
+        await BeginEmailChangeVerificationAsync();
     }
 
     private async Task UpdateUsernameAsync()
@@ -804,18 +794,7 @@ public partial class Profile : IAsyncDisposable
             return;
         }
 
-        await ExecuteActionAsync(
-            () => Api.PutJsonAsync("api/auth/account/password", new
-            {
-                currentPassword = PasswordForm.CurrentPassword,
-                newPassword = PasswordForm.NewPassword,
-            }),
-            async response =>
-            {
-                var message = await RefreshSessionFromUserResponseAsync(response, "Access key updated.");
-                PasswordForm = new PasswordFormModel();
-                return message;
-            });
+        await BeginPasswordChangeVerificationAsync();
     }
 
     private async Task UpdateAvatarAsync()

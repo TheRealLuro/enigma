@@ -28,8 +28,6 @@ from .multiplayer_runtime import (
     ensure_current_room_puzzle_state_v2,
     serialize_current_room_puzzle as serialize_current_room_puzzle_v1,
     serialize_current_room_puzzle_v2,
-    update_position_puzzle_state as update_position_puzzle_state_v1,
-    update_position_puzzle_state_v2,
 )
 from .redis_store import (
     COMPLETED_SESSION_TTL_SECONDS,
@@ -50,9 +48,11 @@ router = APIRouter(prefix="/database/multiplayer")
 _SESSION_SOCKETS: dict[str, list[tuple[str, WebSocket]]] = {}
 _PENDING_SOCKET_ABANDON_TASKS: dict[tuple[str, str], asyncio.Task[None]] = {}
 _SESSION_LAST_PERSISTED_AT: dict[str, float] = {}
+_SESSION_LAST_PUZZLE_BROADCAST_AT: dict[str, float] = {}
 SOCKET_ABANDON_GRACE_SECONDS = 8.0
 SESSION_PERSIST_MIN_INTERVAL_SECONDS = 0.20
 HEARTBEAT_PERSIST_MIN_INTERVAL_SECONDS = 1.50
+PUZZLE_SNAPSHOT_INTERVAL_SECONDS = 0.10
 ROOM_SIZE = 1080.0
 PLAYER_SIZE = 60.0
 SPAWN_EDGE_INSET = 6.0
@@ -81,14 +81,6 @@ def _ensure_current_room_puzzle_state_by_protocol(session: dict[str, Any]) -> di
 def _serialize_current_room_puzzle_by_protocol(session: dict[str, Any], username: str) -> dict[str, Any]:
     protocol = _ensure_runtime_protocol_defaults(session)
     return serialize_current_room_puzzle_v2(session, username) if protocol == "v2" else serialize_current_room_puzzle_v1(session, username)
-
-
-def _update_position_puzzle_state_by_protocol(session: dict[str, Any]) -> None:
-    protocol = _ensure_runtime_protocol_defaults(session)
-    if protocol == "v2":
-        update_position_puzzle_state_v2(session)
-    else:
-        update_position_puzzle_state_v1(session)
 
 
 def _apply_puzzle_action_by_protocol(session: dict[str, Any], username: str, action: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -209,6 +201,7 @@ def _clear_session_persist_marker(session_id: str) -> None:
     if not normalized_session_id:
         return
     _SESSION_LAST_PERSISTED_AT.pop(normalized_session_id, None)
+    _SESSION_LAST_PUZZLE_BROADCAST_AT.pop(normalized_session_id, None)
 
 
 def _position_payload(x: float, y: float) -> dict[str, Any]:
@@ -567,6 +560,94 @@ async def _broadcast_ws_session(
             _schedule_socket_abandon(session_id, username)
 
 
+def _build_ws_position_payload(session: dict[str, Any], username: str) -> dict[str, Any]:
+    player = _assert_session_member(session, username)
+    return {
+        "type": "position",
+        "status": "success",
+        "username": username,
+        "room": player.get("room"),
+        "position": player.get("position"),
+        "facing": player.get("facing"),
+        "is_on_black_hole": bool(player.get("is_on_black_hole")),
+        "team_gold": int(session.get("team_gold", 0) or 0),
+        "current_room_progress": _get_room_progress(session, _room_key(session)),
+    }
+
+
+async def _broadcast_ws_position_update(session: dict[str, Any], username: str) -> None:
+    session_id = str(session.get("session_id") or "").strip()
+    if not session_id:
+        return
+
+    sockets = list(_SESSION_SOCKETS.get(session_id, []))
+    if not sockets:
+        return
+
+    payload = _build_ws_position_payload(session, username)
+    dead_sockets: list[WebSocket] = []
+    for socket_username, websocket in sockets:
+        if not await _send_ws_payload(websocket, payload):
+            dead_sockets.append(websocket)
+
+    for websocket in dead_sockets:
+        for socket_username in _unregister_session_socket(session_id, websocket):
+            _schedule_socket_abandon(session_id, socket_username)
+
+
+def _should_broadcast_puzzle_snapshot(session: dict[str, Any], *, force: bool = False) -> bool:
+    session_id = str(session.get("session_id") or "").strip()
+    if not session_id:
+        return False
+
+    players = session.get("players", {})
+    if len(players) != 2 or not session.get("guest_username"):
+        return False
+
+    if str(session.get("status") or "").strip().lower() != "active":
+        return False
+
+    room_progress = _get_room_progress(session, _room_key(session))
+    if room_progress.get("puzzle_solved"):
+        return False
+
+    now = time.monotonic()
+    if not force:
+        last_broadcast = _SESSION_LAST_PUZZLE_BROADCAST_AT.get(session_id, 0.0)
+        if now - last_broadcast < PUZZLE_SNAPSHOT_INTERVAL_SECONDS:
+            return False
+
+    _SESSION_LAST_PUZZLE_BROADCAST_AT[session_id] = now
+    return True
+
+
+async def _broadcast_ws_puzzle_snapshot(session: dict[str, Any], *, force: bool = False) -> None:
+    if not _should_broadcast_puzzle_snapshot(session, force=force):
+        return
+
+    session_id = str(session.get("session_id") or "").strip()
+    sockets = list(_SESSION_SOCKETS.get(session_id, []))
+    if not sockets:
+        return
+
+    room_progress = _get_room_progress(session, _room_key(session))
+    dead_sockets: list[WebSocket] = []
+    for username, websocket in sockets:
+        payload = {
+            "type": "puzzle_state",
+            "status": "success",
+            "team_gold": int(session.get("team_gold", 0) or 0),
+            "current_room_progress": room_progress,
+            "current_room_puzzle": _serialize_current_room_puzzle_by_protocol(session, username),
+        }
+        if not await _send_ws_payload(websocket, payload):
+            dead_sockets.append(websocket)
+
+    for websocket in dead_sockets:
+        for socket_username in _unregister_session_socket(session_id, websocket):
+            _schedule_socket_abandon(session_id, socket_username)
+
+
 def _broadcast_ws_session_from_thread(
     session: dict[str, Any],
     room_moved: bool = False,
@@ -918,7 +999,6 @@ def _update_multiplayer_state_locked(session: dict[str, Any], payload: Multiplay
     room_state = session.get("room_lookup", {}).get(room_key) or {}
     room_progress = _get_room_progress(session, room_key)
     team_gold = int(session.get("team_gold", 0) or 0)
-    _update_position_puzzle_state_by_protocol(session)
     _finalize_room_puzzle_progress(session, room_key)
 
     if payload.puzzle_solved and not room_progress.get("puzzle_solved"):
@@ -1435,6 +1515,8 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
             message_type = str(message.get("type") or "").strip().lower()
             room_moved = False
             completion: dict[str, Any] | None = None
+            position_update_username: str | None = None
+            broadcast_puzzle_snapshot = False
 
             try:
                 with session_lock(session_id):
@@ -1466,6 +1548,8 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
                         )
                         _update_multiplayer_state_locked(session, payload)
                         _persist_session_state(session_id, session)
+                        position_update_username = normalized_username
+                        broadcast_puzzle_snapshot = True
                     elif message_type == "puzzle_action":
                         payload = MultiplayerPuzzleActionPayload.model_validate(
                             {
@@ -1519,6 +1603,12 @@ async def multiplayer_session_ws(websocket: WebSocket, session_id: str, username
 
             if message_type in {"ping", "heartbeat"}:
                 await _send_ws_payload(websocket, {"type": "pong", "status": "success"})
+                continue
+
+            if position_update_username:
+                await _broadcast_ws_position_update(session, position_update_username)
+                if broadcast_puzzle_snapshot:
+                    await _broadcast_ws_puzzle_snapshot(session)
                 continue
 
             await _broadcast_ws_session(session, room_moved, completion)

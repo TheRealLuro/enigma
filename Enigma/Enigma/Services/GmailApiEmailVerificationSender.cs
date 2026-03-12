@@ -27,14 +27,11 @@ public sealed class GmailApiEmailVerificationSender : IEmailVerificationSender
     }
 
     public async Task SendVerificationCodeAsync(
-        string username,
-        string email,
-        string code,
-        DateTimeOffset expiresAtUtc,
+        EmailVerificationMessage message,
         EmailVerificationOptions options,
         CancellationToken cancellationToken)
     {
-        var maskedEmail = MaskEmail(email);
+        var maskedEmail = MaskEmail(message.Email);
         _logger.LogInformation(
             "Sending verification email to {MaskedEmail} via Gmail API as {FromEmail}.",
             maskedEmail,
@@ -46,7 +43,7 @@ public sealed class GmailApiEmailVerificationSender : IEmailVerificationSender
         try
         {
             var accessToken = await GetAccessTokenAsync(options, timeoutCancellation.Token);
-            var rawMessage = BuildRawMessage(username, email, code, expiresAtUtc, options);
+            var rawMessage = BuildRawMessage(message, options);
 
             using var client = _httpClientFactory.CreateClient();
             using var sendRequest = new HttpRequestMessage(HttpMethod.Post, GmailSendEndpoint)
@@ -136,25 +133,20 @@ public sealed class GmailApiEmailVerificationSender : IEmailVerificationSender
     }
 
     private static string BuildRawMessage(
-        string username,
-        string email,
-        string code,
-        DateTimeOffset expiresAtUtc,
+        EmailVerificationMessage message,
         EmailVerificationOptions options)
     {
         var boundary = $"enigma-{Guid.NewGuid():N}";
         var from = new MailAddress(
             options.FromEmail,
             string.IsNullOrWhiteSpace(options.FromName) ? options.FromEmail : options.FromName);
-        var to = new MailAddress(email);
-        var plainTextBody = PendingSignUpVerificationService.BuildPlainTextBody(username, code, expiresAtUtc);
-        var htmlBody = PendingSignUpVerificationService.BuildHtmlBody(username, code, expiresAtUtc, options);
+        var to = new MailAddress(message.Email);
 
         var mime = string.Join("\r\n", new[]
         {
             $"From: {from}",
             $"To: {to.Address}",
-            "Subject: Your Enigma verification code",
+            $"Subject: {message.Subject}",
             "MIME-Version: 1.0",
             $"Content-Type: multipart/alternative; boundary=\"{boundary}\"",
             string.Empty,
@@ -162,13 +154,13 @@ public sealed class GmailApiEmailVerificationSender : IEmailVerificationSender
             "Content-Type: text/plain; charset=utf-8",
             "Content-Transfer-Encoding: base64",
             string.Empty,
-            ToMimeBase64(plainTextBody),
+            ToMimeBase64(message.PlainTextBody),
             string.Empty,
             $"--{boundary}",
             "Content-Type: text/html; charset=utf-8",
             "Content-Transfer-Encoding: base64",
             string.Empty,
-            ToMimeBase64(htmlBody),
+            ToMimeBase64(message.HtmlBody),
             string.Empty,
             $"--{boundary}--",
             string.Empty,

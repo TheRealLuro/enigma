@@ -285,6 +285,30 @@ public sealed class MultiplayerSocketEnvelope
 
     [JsonPropertyName("completion")]
     public MultiplayerCompletionData? Completion { get; set; }
+
+    [JsonPropertyName("username")]
+    public string? Username { get; set; }
+
+    [JsonPropertyName("room")]
+    public MultiplayerRoomState? Room { get; set; }
+
+    [JsonPropertyName("position")]
+    public MultiplayerPlayerPosition? Position { get; set; }
+
+    [JsonPropertyName("facing")]
+    public string? Facing { get; set; }
+
+    [JsonPropertyName("is_on_black_hole")]
+    public bool? IsOnBlackHole { get; set; }
+
+    [JsonPropertyName("team_gold")]
+    public int? TeamGold { get; set; }
+
+    [JsonPropertyName("current_room_progress")]
+    public MultiplayerRoomProgress? CurrentRoomProgress { get; set; }
+
+    [JsonPropertyName("current_room_puzzle")]
+    public MultiplayerRoomPuzzleState? CurrentRoomPuzzle { get; set; }
 }
 
 public sealed class MultiplayerRoomPuzzleState

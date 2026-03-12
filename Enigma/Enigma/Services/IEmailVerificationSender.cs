@@ -3,10 +3,7 @@ namespace Enigma;
 public interface IEmailVerificationSender
 {
     Task SendVerificationCodeAsync(
-        string username,
-        string email,
-        string code,
-        DateTimeOffset expiresAtUtc,
+        EmailVerificationMessage message,
         EmailVerificationOptions options,
         CancellationToken cancellationToken);
 }

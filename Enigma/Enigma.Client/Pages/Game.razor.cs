@@ -2226,6 +2226,7 @@ public partial class Game : ComponentBase, IAsyncDisposable
         }
 
         UpdateMovement(deltaTime);
+        UpdateCoopPeerInterpolation(deltaTime);
 
         if (!IsCoopRun)
         {

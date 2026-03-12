@@ -115,6 +115,9 @@
                         <span> Code expires @VerificationExpiryDisplay.</span>
                     }
                 </p>
+                <p class="signup-verification-copy">
+                    If the code does not arrive within a minute, check your spam or junk folder. If you find it there, please mark it as not spam so future Enigma verification emails are more likely to reach your inbox.
+                </p>
 
                 <EditForm EditContext="VerifyEditContext" OnValidSubmit="OnVerifyCodeAsync" OnInvalidSubmit="OnInvalidVerifyAttempt">
                     <DataAnnotationsValidator />

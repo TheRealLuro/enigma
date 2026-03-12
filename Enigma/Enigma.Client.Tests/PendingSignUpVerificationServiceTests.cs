@@ -137,19 +137,16 @@ public sealed class PendingSignUpVerificationServiceTests
         public List<SentMessage> Messages { get; } = [];
 
         public Task SendVerificationCodeAsync(
-            string username,
-            string email,
-            string code,
-            DateTimeOffset expiresAtUtc,
+            EmailVerificationMessage message,
             EmailVerificationOptions options,
             CancellationToken cancellationToken)
         {
-            Messages.Add(new SentMessage(username, email, code, expiresAtUtc));
+            Messages.Add(new SentMessage(message.Username, message.Email, message.CodeFromBody(), message.Subject, message.PlainTextBody));
             return Task.CompletedTask;
         }
     }
 
-    private sealed record SentMessage(string Username, string Email, string Code, DateTimeOffset ExpiresAtUtc);
+    private sealed record SentMessage(string Username, string Email, string Code, string Subject, string PlainTextBody);
 
     private sealed class TestOptionsMonitor<TOptions>(TOptions currentValue) : IOptionsMonitor<TOptions>
     {
@@ -158,5 +155,16 @@ public sealed class PendingSignUpVerificationServiceTests
         public TOptions Get(string? name) => CurrentValue;
 
         public IDisposable? OnChange(Action<TOptions, string?> listener) => null;
+    }
+}
+
+internal static class EmailVerificationMessageTestExtensions
+{
+    public static string CodeFromBody(this EmailVerificationMessage message)
+    {
+        return message.PlainTextBody
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(static line => line.Length == 6 && line.All(char.IsDigit))
+            ?? string.Empty;
     }
 }

@@ -459,22 +459,57 @@ else
                 </section>
                 <section class="panel profile-release-panel profile-settings-panel">
                     <div class="panel-heading"><div><span class="profile-eyebrow">Signal Routing</span><h2>Update Contact Email</h2></div></div>
-                    <EditForm FormName="ProfileEmailForm" Model="EmailForm" OnValidSubmit="UpdateEmailAsync" class="profile-settings-form">
-                        <DataAnnotationsValidator />
-                        <div><label class="form-label">New Email</label><InputText class="form-control" @bind-Value="EmailForm.NewEmail" /><ValidationMessage For="() => EmailForm.NewEmail" /></div>
-                        <div><label class="form-label">Current Password</label><div class="password-field-wrap"><InputText class="form-control" type="@(ShowEmailPassword ? "text" : "password")" @bind-Value="EmailForm.CurrentPassword" /><button class="password-toggle-button" type="button" @onclick="() => ShowEmailPassword = !ShowEmailPassword">@(ShowEmailPassword ? "Hide" : "Show")</button></div><ValidationMessage For="() => EmailForm.CurrentPassword" /></div>
-                        <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">@(IsActionBusy ? "Saving..." : "Save Email")</button>
-                    </EditForm>
+                    @if (!PendingEmailChange.HasPendingRequest)
+                    {
+                        <EditForm FormName="ProfileEmailForm" Model="EmailForm" OnValidSubmit="UpdateEmailAsync" class="profile-settings-form">
+                            <DataAnnotationsValidator />
+                            <p class="profile-settings-copy">For extra security, Enigma will send one code to your current email and one code to the new email. Both codes must be confirmed before the contact email changes.</p>
+                            <div><label class="form-label">New Email</label><InputText class="form-control" @bind-Value="EmailForm.NewEmail" /><ValidationMessage For="() => EmailForm.NewEmail" /></div>
+                            <div><label class="form-label">Current Password</label><div class="password-field-wrap"><InputText class="form-control" type="@(ShowEmailPassword ? "text" : "password")" @bind-Value="EmailForm.CurrentPassword" /><button class="password-toggle-button" type="button" @onclick="() => ShowEmailPassword = !ShowEmailPassword">@(ShowEmailPassword ? "Hide" : "Show")</button></div><ValidationMessage For="() => EmailForm.CurrentPassword" /></div>
+                            <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">@(IsActionBusy ? "Sending..." : "Send Verification Codes")</button>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <div class="profile-settings-form">
+                            <p class="profile-settings-copy">Enter the 6-digit codes sent to <strong>@PendingEmailChange.CurrentEmailHint</strong> and <strong>@PendingEmailChange.NewEmailHint</strong> to finish updating your contact email.</p>
+                            <div class="empty-state-inline">Codes expire around @FormatVerificationExpiry(PendingEmailChange.ExpiresAtUtc). If either email does not arrive within a minute, check spam or junk and mark it as not spam.</div>
+                            <div><label class="form-label">Current Email Code</label><InputText class="form-control" @bind-Value="PendingEmailChange.CurrentEmailCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /></div>
+                            <div><label class="form-label">New Email Code</label><InputText class="form-control" @bind-Value="PendingEmailChange.NewEmailCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /></div>
+                            <div class="profile-settings-actions-row">
+                                <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="VerifyPendingEmailChangeAsync">@(IsActionBusy ? "Verifying..." : "Confirm Email Change")</button>
+                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="ResendPendingEmailChangeAsync">@(IsActionBusy ? "Resending..." : "Resend Both Codes")</button>
+                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="CancelPendingEmailChange">Start Over</button>
+                            </div>
+                        </div>
+                    }
                 </section>
                 <section class="panel profile-release-panel profile-settings-panel">
                     <div class="panel-heading"><div><span class="profile-eyebrow">Access Security</span><h2>Update Access Key</h2></div></div>
-                    <EditForm FormName="ProfilePasswordForm" Model="PasswordForm" OnValidSubmit="UpdatePasswordAsync" class="profile-settings-form">
-                        <DataAnnotationsValidator />
-                        <div><label class="form-label">Current Password</label><div class="password-field-wrap"><InputText class="form-control" type="@(ShowPasswordFields ? "text" : "password")" @bind-Value="PasswordForm.CurrentPassword" /><button class="password-toggle-button" type="button" @onclick="() => ShowPasswordFields = !ShowPasswordFields">@(ShowPasswordFields ? "Hide" : "Show")</button></div><ValidationMessage For="() => PasswordForm.CurrentPassword" /></div>
-                        <div><label class="form-label">New Password</label><InputText class="form-control" type="@(ShowPasswordFields ? "text" : "password")" @bind-Value="PasswordForm.NewPassword" /><ValidationMessage For="() => PasswordForm.NewPassword" /></div>
-                        <div><label class="form-label">Confirm Password</label><InputText class="form-control" type="@(ShowPasswordFields ? "text" : "password")" @bind-Value="PasswordForm.ConfirmPassword" /><ValidationMessage For="() => PasswordForm.ConfirmPassword" /></div>
-                        <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">@(IsActionBusy ? "Updating..." : "Update Password")</button>
-                    </EditForm>
+                    @if (!PendingPasswordChange.HasPendingRequest)
+                    {
+                        <EditForm FormName="ProfilePasswordForm" Model="PasswordForm" OnValidSubmit="UpdatePasswordAsync" class="profile-settings-form">
+                            <DataAnnotationsValidator />
+                            <p class="profile-settings-copy">Before your access key changes, Enigma will send a 6-digit confirmation code to your current verified email.</p>
+                            <div><label class="form-label">Current Password</label><div class="password-field-wrap"><InputText class="form-control" type="@(ShowPasswordFields ? "text" : "password")" @bind-Value="PasswordForm.CurrentPassword" /><button class="password-toggle-button" type="button" @onclick="() => ShowPasswordFields = !ShowPasswordFields">@(ShowPasswordFields ? "Hide" : "Show")</button></div><ValidationMessage For="() => PasswordForm.CurrentPassword" /></div>
+                            <div><label class="form-label">New Password</label><InputText class="form-control" type="@(ShowPasswordFields ? "text" : "password")" @bind-Value="PasswordForm.NewPassword" /><ValidationMessage For="() => PasswordForm.NewPassword" /></div>
+                            <div><label class="form-label">Confirm Password</label><InputText class="form-control" type="@(ShowPasswordFields ? "text" : "password")" @bind-Value="PasswordForm.ConfirmPassword" /><ValidationMessage For="() => PasswordForm.ConfirmPassword" /></div>
+                            <button class="btn btn-primary" type="submit" disabled="@IsActionBusy">@(IsActionBusy ? "Sending..." : "Send Verification Code")</button>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <div class="profile-settings-form">
+                            <p class="profile-settings-copy">Enter the 6-digit code sent to <strong>@PendingPasswordChange.EmailHint</strong> to finish updating your access key.</p>
+                            <div class="empty-state-inline">This code expires around @FormatVerificationExpiry(PendingPasswordChange.ExpiresAtUtc). If it does not arrive within a minute, check spam or junk and mark it as not spam.</div>
+                            <div><label class="form-label">Verification Code</label><InputText class="form-control" @bind-Value="PendingPasswordChange.Code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" /></div>
+                            <div class="profile-settings-actions-row">
+                                <button class="btn btn-primary" type="button" disabled="@IsActionBusy" @onclick="VerifyPendingPasswordChangeAsync">@(IsActionBusy ? "Verifying..." : "Confirm Password Change")</button>
+                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="ResendPendingPasswordChangeAsync">@(IsActionBusy ? "Resending..." : "Resend Code")</button>
+                                <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="CancelPendingPasswordChange">Start Over</button>
+                            </div>
+                        </div>
+                    }
                 </section>
                 <section class="panel profile-release-panel profile-settings-panel">
                     <div class="panel-heading"><div><span class="profile-eyebrow">Avatar</span><h2>Explorer Portrait</h2></div></div>

@@ -694,14 +694,13 @@ public partial class Game
 
     private async Task SubmitCoopPuzzleActionAsync(string action, object? args = null)
     {
-        if (_coopPuzzleActionInFlight || string.IsNullOrWhiteSpace(CoopSessionId))
+        if (string.IsNullOrWhiteSpace(CoopSessionId))
         {
             return;
         }
 
         if (IsCoopSocketOpen)
         {
-            _coopPuzzleActionInFlight = true;
             var sent = await JS.InvokeAsync<bool>("enigmaGame.sendCoopSocketMessage", new object?[]
             {
                 new
@@ -716,8 +715,11 @@ public partial class Game
             {
                 return;
             }
+        }
 
-            _coopPuzzleActionInFlight = false;
+        if (_coopPuzzleActionInFlight)
+        {
+            return;
         }
 
         _coopPuzzleActionInFlight = true;

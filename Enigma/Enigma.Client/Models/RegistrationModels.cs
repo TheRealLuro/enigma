@@ -21,6 +21,27 @@ public sealed class SignUpVerificationChallengeResponse
     public string? Detail { get; set; }
 }
 
+public sealed class EmailChangeVerificationChallengeResponse
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("verification_request_id")]
+    public string VerificationRequestId { get; set; } = string.Empty;
+
+    [JsonPropertyName("current_email_hint")]
+    public string CurrentEmailHint { get; set; } = string.Empty;
+
+    [JsonPropertyName("new_email_hint")]
+    public string NewEmailHint { get; set; } = string.Empty;
+
+    [JsonPropertyName("expires_at_utc")]
+    public string ExpiresAtUtc { get; set; } = string.Empty;
+
+    [JsonPropertyName("detail")]
+    public string? Detail { get; set; }
+}
+
 public sealed class SignUpVerificationRequest
 {
     [JsonPropertyName("verificationRequestId")]

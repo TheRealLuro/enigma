@@ -17,14 +17,17 @@ public class APIController : ControllerBase
     private readonly string _backendBaseUrl;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly PendingSignUpVerificationService _pendingSignUpVerificationService;
+    private readonly PendingAccountChangeVerificationService _pendingAccountChangeVerificationService;
 
     public APIController(
         IConfiguration configuration,
         IHttpClientFactory httpClientFactory,
-        PendingSignUpVerificationService pendingSignUpVerificationService)
+        PendingSignUpVerificationService pendingSignUpVerificationService,
+        PendingAccountChangeVerificationService pendingAccountChangeVerificationService)
     {
         _httpClientFactory = httpClientFactory;
         _pendingSignUpVerificationService = pendingSignUpVerificationService;
+        _pendingAccountChangeVerificationService = pendingAccountChangeVerificationService;
         _backendBaseUrl =
             configuration["Backend:BaseUrl"]
             ?? Environment.GetEnvironmentVariable("ENIGMA_BACKEND_URL")
@@ -157,6 +160,54 @@ public class APIController : ControllerBase
         });
     }
 
+    private static IActionResult BuildVerificationEmailTimeoutResponse()
+    {
+        return new ObjectResult(new
+        {
+            status = "error",
+            detail = "Verification email timed out while contacting the email provider. Try again in a moment.",
+        })
+        {
+            StatusCode = StatusCodes.Status504GatewayTimeout,
+        };
+    }
+
+    private async Task<(string? Email, IActionResult? Failure)> GetAuthenticatedEmailAsync(HttpClient client, string username)
+    {
+        using var response = await client.GetAsync($"database/users/account?username={Esc(username)}&include_maps=false");
+        if (!response.IsSuccessStatusCode)
+        {
+            return (null, await RelayAsync(response));
+        }
+
+        var content = await ReadContentAsync(response);
+        LoginResponse? payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<LoginResponse>(content);
+        }
+        catch (JsonException)
+        {
+            return (null, StatusCode(StatusCodes.Status502BadGateway, new
+            {
+                status = "error",
+                detail = "Current account details could not be loaded.",
+            }));
+        }
+
+        var email = payload?.User?.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return (null, StatusCode(StatusCodes.Status502BadGateway, new
+            {
+                status = "error",
+                detail = "Current account email is unavailable. Refresh your session and try again.",
+            }));
+        }
+
+        return (email, null);
+    }
+
     [HttpPost("session/login")]
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] SessionLoginRequest request)
@@ -238,11 +289,7 @@ public class APIController : ControllerBase
         }
         catch (TaskCanceledException)
         {
-            return StatusCode(StatusCodes.Status504GatewayTimeout, new
-            {
-                status = "error",
-                detail = "Verification email timed out while contacting the SMTP provider. Check outbound SMTP access from the host and try again.",
-            });
+            return BuildVerificationEmailTimeoutResponse();
         }
     }
 
@@ -347,11 +394,7 @@ public class APIController : ControllerBase
         }
         catch (TaskCanceledException)
         {
-            return StatusCode(StatusCodes.Status504GatewayTimeout, new
-            {
-                status = "error",
-                detail = "Verification email timed out while contacting the SMTP provider. Check outbound SMTP access from the host and try again.",
-            });
+            return BuildVerificationEmailTimeoutResponse();
         }
     }
 
@@ -560,18 +603,180 @@ public class APIController : ControllerBase
     }
 
     [Authorize]
-    [HttpPut("account/email")]
-    public async Task<IActionResult> UpdateEmail([FromBody] UpdateEmailRequest request)
+    [HttpPost("account/email/change/begin")]
+    public async Task<IActionResult> BeginEmailChange([FromBody] UpdateEmailRequest request)
     {
-        using var client = CreateClient();
-        var username = RequireAuthenticatedUsername();
-        using var response = await client.PutAsJsonAsync("database/users/update_email", new
+        var requestedEmail = (request.NewEmail ?? string.Empty).Trim();
+        var emailIssues = RegistrationValidationRules.ValidateEmail(requestedEmail);
+        if (emailIssues.Count > 0)
         {
-            username,
-            current_password = request.CurrentPassword,
-            new_email = request.NewEmail,
-        });
-        return await RelayAsync(response);
+            return BuildValidationFailureResponse(emailIssues, "Email validation failed.");
+        }
+
+        try
+        {
+            using var client = CreateClient();
+            var username = RequireAuthenticatedUsername();
+            var (currentEmail, currentEmailFailure) = await GetAuthenticatedEmailAsync(client, username);
+            if (currentEmailFailure is not null)
+            {
+                return currentEmailFailure;
+            }
+
+            if (string.Equals(currentEmail, requestedEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new
+                {
+                    status = "error",
+                    detail = "Choose a different contact email.",
+                });
+            }
+
+            using var prepareResponse = await client.PostAsJsonAsync("database/users/prepare_update_email", new
+            {
+                username,
+                current_password = request.CurrentPassword,
+                new_email = requestedEmail,
+            });
+
+            if (!prepareResponse.IsSuccessStatusCode)
+            {
+                return await RelayAsync(prepareResponse);
+            }
+
+            var challenge = await _pendingAccountChangeVerificationService.CreateEmailChangeChallengeAsync(
+                username,
+                currentEmail!,
+                requestedEmail,
+                request.CurrentPassword,
+                HttpContext.RequestAborted);
+
+            return Ok(new EmailChangeVerificationChallengeResponse
+            {
+                Status = "verification_required",
+                VerificationRequestId = challenge.VerificationRequestId,
+                CurrentEmailHint = challenge.CurrentEmailHint,
+                NewEmailHint = challenge.NewEmailHint,
+                ExpiresAtUtc = challenge.ExpiresAtUtc.UtcDateTime.ToString("O"),
+                Detail = "Verification codes sent.",
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                status = "error",
+                detail = exception.Message,
+            });
+        }
+        catch (SmtpException exception)
+        {
+            return BuildEmailDeliveryFailureResponse(exception);
+        }
+        catch (TaskCanceledException)
+        {
+            return BuildVerificationEmailTimeoutResponse();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UriFormatException)
+        {
+            return BuildBackendFailureResponse(ex);
+        }
+    }
+
+    [Authorize]
+    [HttpPost("account/email/change/verify")]
+    public async Task<IActionResult> VerifyEmailChange([FromBody] VerifyEmailChangeRequest request)
+    {
+        var currentIssues = RegistrationValidationRules.ValidateVerificationCode(request.CurrentEmailCode)
+            .Select(issue => new ApiValidationIssue
+            {
+                Field = nameof(request.CurrentEmailCode),
+                Message = issue.Message,
+            });
+        var newIssues = RegistrationValidationRules.ValidateVerificationCode(request.NewEmailCode)
+            .Select(issue => new ApiValidationIssue
+            {
+                Field = nameof(request.NewEmailCode),
+                Message = issue.Message,
+            });
+        var issues = currentIssues.Concat(newIssues).ToList();
+        if (issues.Count > 0)
+        {
+            return BuildValidationFailureResponse(issues, "Verification code is invalid.");
+        }
+
+        var validation = _pendingAccountChangeVerificationService.ValidateEmailChangeChallenge(
+            request.VerificationRequestId,
+            request.CurrentEmailCode,
+            request.NewEmailCode);
+        if (!validation.Succeeded || validation.Payload is null)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = validation.Error ?? "Verification failed.",
+            });
+        }
+
+        try
+        {
+            using var client = CreateClient();
+            using var response = await client.PutAsJsonAsync("database/users/update_email", new
+            {
+                username = validation.Payload.Username,
+                current_password = validation.Payload.CurrentPassword,
+                new_email = validation.Payload.NewEmail,
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                _pendingAccountChangeVerificationService.RemoveEmailChangeChallenge(request.VerificationRequestId);
+            }
+
+            return await RelayAsync(response);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            return BuildBackendFailureResponse(ex);
+        }
+    }
+
+    [Authorize]
+    [HttpPost("account/email/change/resend")]
+    public async Task<IActionResult> ResendEmailChangeCode([FromBody] ResendAccountChangeVerificationRequest request)
+    {
+        try
+        {
+            var challenge = await _pendingAccountChangeVerificationService.ResendEmailChangeChallengeAsync(
+                request.VerificationRequestId,
+                HttpContext.RequestAborted);
+
+            return Ok(new EmailChangeVerificationChallengeResponse
+            {
+                Status = "verification_required",
+                VerificationRequestId = challenge.VerificationRequestId,
+                CurrentEmailHint = challenge.CurrentEmailHint,
+                NewEmailHint = challenge.NewEmailHint,
+                ExpiresAtUtc = challenge.ExpiresAtUtc.UtcDateTime.ToString("O"),
+                Detail = "Verification codes resent.",
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = exception.Message,
+            });
+        }
+        catch (SmtpException exception)
+        {
+            return BuildEmailDeliveryFailureResponse(exception);
+        }
+        catch (TaskCanceledException)
+        {
+            return BuildVerificationEmailTimeoutResponse();
+        }
     }
 
     [Authorize]
@@ -627,18 +832,155 @@ public class APIController : ControllerBase
     }
 
     [Authorize]
-    [HttpPut("account/password")]
-    public async Task<IActionResult> UpdatePassword([FromBody] UpdatePasswordRequest request)
+    [HttpPost("account/password/change/begin")]
+    public async Task<IActionResult> BeginPasswordChange([FromBody] UpdatePasswordRequest request)
     {
-        using var client = CreateClient();
-        var username = RequireAuthenticatedUsername();
-        using var response = await client.PutAsJsonAsync("database/users/update_password", new
+        var issues = RegistrationValidationRules.ValidatePassword(request.NewPassword);
+        if (issues.Count > 0)
         {
-            username,
-            current_password = request.CurrentPassword,
-            new_password = request.NewPassword,
-        });
-        return await RelayAsync(response);
+            return BuildValidationFailureResponse(issues, "Password validation failed.");
+        }
+
+        try
+        {
+            using var client = CreateClient();
+            var username = RequireAuthenticatedUsername();
+            using var prepareResponse = await client.PostAsJsonAsync("database/users/prepare_update_password", new
+            {
+                username,
+                current_password = request.CurrentPassword,
+                new_password = request.NewPassword,
+            });
+
+            if (!prepareResponse.IsSuccessStatusCode)
+            {
+                return await RelayAsync(prepareResponse);
+            }
+
+            var (currentEmail, currentEmailFailure) = await GetAuthenticatedEmailAsync(client, username);
+            if (currentEmailFailure is not null)
+            {
+                return currentEmailFailure;
+            }
+
+            var challenge = await _pendingAccountChangeVerificationService.CreatePasswordChangeChallengeAsync(
+                username,
+                currentEmail!,
+                request.CurrentPassword,
+                request.NewPassword,
+                HttpContext.RequestAborted);
+
+            return Ok(new SignUpVerificationChallengeResponse
+            {
+                Status = "verification_required",
+                VerificationRequestId = challenge.VerificationRequestId,
+                EmailHint = challenge.EmailHint,
+                ExpiresAtUtc = challenge.ExpiresAtUtc.UtcDateTime.ToString("O"),
+                Detail = "Verification code sent.",
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                status = "error",
+                detail = exception.Message,
+            });
+        }
+        catch (SmtpException exception)
+        {
+            return BuildEmailDeliveryFailureResponse(exception);
+        }
+        catch (TaskCanceledException)
+        {
+            return BuildVerificationEmailTimeoutResponse();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UriFormatException)
+        {
+            return BuildBackendFailureResponse(ex);
+        }
+    }
+
+    [Authorize]
+    [HttpPost("account/password/change/verify")]
+    public async Task<IActionResult> VerifyPasswordChange([FromBody] VerifyPasswordChangeRequest request)
+    {
+        var codeIssues = RegistrationValidationRules.ValidateVerificationCode(request.Code);
+        if (codeIssues.Count > 0)
+        {
+            return BuildValidationFailureResponse(codeIssues, "Verification code is invalid.");
+        }
+
+        var validation = _pendingAccountChangeVerificationService.ValidatePasswordChangeChallenge(
+            request.VerificationRequestId,
+            request.Code);
+        if (!validation.Succeeded || validation.Payload is null)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = validation.Error ?? "Verification failed.",
+            });
+        }
+
+        try
+        {
+            using var client = CreateClient();
+            using var response = await client.PutAsJsonAsync("database/users/update_password", new
+            {
+                username = validation.Payload.Username,
+                current_password = validation.Payload.CurrentPassword,
+                new_password = validation.Payload.NewPassword,
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                _pendingAccountChangeVerificationService.RemovePasswordChangeChallenge(request.VerificationRequestId);
+            }
+
+            return await RelayAsync(response);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException)
+        {
+            return BuildBackendFailureResponse(ex);
+        }
+    }
+
+    [Authorize]
+    [HttpPost("account/password/change/resend")]
+    public async Task<IActionResult> ResendPasswordChangeCode([FromBody] ResendAccountChangeVerificationRequest request)
+    {
+        try
+        {
+            var challenge = await _pendingAccountChangeVerificationService.ResendPasswordChangeChallengeAsync(
+                request.VerificationRequestId,
+                HttpContext.RequestAborted);
+
+            return Ok(new SignUpVerificationChallengeResponse
+            {
+                Status = "verification_required",
+                VerificationRequestId = challenge.VerificationRequestId,
+                EmailHint = challenge.EmailHint,
+                ExpiresAtUtc = challenge.ExpiresAtUtc.UtcDateTime.ToString("O"),
+                Detail = "Verification code resent.",
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return BadRequest(new
+            {
+                status = "error",
+                detail = exception.Message,
+            });
+        }
+        catch (SmtpException exception)
+        {
+            return BuildEmailDeliveryFailureResponse(exception);
+        }
+        catch (TaskCanceledException)
+        {
+            return BuildVerificationEmailTimeoutResponse();
+        }
     }
 
     [Authorize]
@@ -1209,6 +1551,24 @@ public sealed class UpdatePasswordRequest
 {
     public string CurrentPassword { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
+}
+
+public sealed class VerifyPasswordChangeRequest
+{
+    public string VerificationRequestId { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}
+
+public sealed class VerifyEmailChangeRequest
+{
+    public string VerificationRequestId { get; set; } = string.Empty;
+    public string CurrentEmailCode { get; set; } = string.Empty;
+    public string NewEmailCode { get; set; } = string.Empty;
+}
+
+public sealed class ResendAccountChangeVerificationRequest
+{
+    public string VerificationRequestId { get; set; } = string.Empty;
 }
 
 public sealed class UpdateAvatarRequest

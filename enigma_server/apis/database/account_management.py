@@ -462,6 +462,22 @@ def update_email(request: Request, payload: UpdateEmailPayload):
     return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
 
 
+@router.post("/prepare_update_email")
+@limiter.limit("10/minute")
+def prepare_update_email(request: Request, payload: UpdateEmailPayload):
+    current_username = validate_login_username(payload.username, field_name="username")
+    user = _sync_user(current_username)
+    _verify_password(user, payload.current_password)
+
+    next_email = validate_email_address(payload.new_email, field_name="new_email")
+    normalized = normalize_email(next_email)
+    existing = users_collection.find_one({"email_normalized": normalized, "username": {"$ne": current_username}})
+    if existing:
+        raise HTTPException(status_code=409, detail="Email is already in use")
+
+    return {"status": "success", "email": next_email}
+
+
 @router.put("/update_password")
 @limiter.limit("10/minute")
 def update_password(request: Request, payload: UpdatePasswordPayload):
@@ -475,6 +491,16 @@ def update_password(request: Request, payload: UpdatePasswordPayload):
 
     refreshed = _sync_user(current_username)
     return {"status": "success", "user": serialize_session_user(refreshed, maps_collection)}
+
+
+@router.post("/prepare_update_password")
+@limiter.limit("10/minute")
+def prepare_update_password(request: Request, payload: UpdatePasswordPayload):
+    current_username = validate_login_username(payload.username, field_name="username")
+    user = _sync_user(current_username)
+    _verify_password(user, payload.current_password)
+    validate_password_strength(payload.new_password, field_name="new_password")
+    return {"status": "success"}
 
 
 @router.put("/update_username")

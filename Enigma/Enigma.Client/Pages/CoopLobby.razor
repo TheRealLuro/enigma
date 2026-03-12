@@ -48,7 +48,7 @@ else
         <section class="coop-banner" data-tour-id="coop-banner">
             <div>
                 <span class="profile-kicker">Co-op Command</span>
-                <h1>Dual Operation</h1>
+                <h1>Two-Explorer Operation</h1>
             </div>
             <div class="play-header-actions">
                 <button class="btn btn-secondary" type="button" disabled="@IsActionBusy" @onclick="RefreshSessionSummaryAsync">Refresh Command</button>
@@ -277,7 +277,7 @@ else
                         <section class="coop-invite-section">
                             <div class="coop-invite-section-head">
                                 <span class="profile-eyebrow">Invite</span>
-                                <strong>Bring a contact into this expedition</strong>
+                                <strong>Bring one contact into this two-explorer expedition</strong>
                             </div>
                             @if (InviteCandidates.Count == 0)
                             {
@@ -330,7 +330,7 @@ else
                         </button>
                     </div>
 
-                    <div class="empty-state-inline coop-session-note">The sector starts once both explorers are present and ready. Movement and room changes stay synchronized after entry.</div>
+                    <div class="empty-state-inline coop-session-note">This co-op mode is built for exactly two explorers. The sector starts once both are present and ready, and movement and room changes stay synchronized after entry.</div>
                 </section>
 
             </div>
